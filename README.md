@@ -14,6 +14,13 @@
 
 **ClusterScope** — 轻量级 Linux GPU 集群监控平台。终端仪表盘 + 分布式采集,普通用户即可运行,**无需 root**。
 
+<p align="center">
+  <a href="https://github.com/Iamtianyuyang/ClusterScope/releases"><img alt="Release" src="https://img.shields.io/badge/release-v0.1.0-2aa198"></a>
+  <a href="https://github.com/Iamtianyuyang/ClusterScope/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20x86__64-lightgrey">
+  <img alt="No root" src="https://img.shields.io/badge/root-not%20required-success">
+</p>
+
 - **Agent**:部署在每台 GPU 节点,通过 **NVML** 采集 GPU 利用率/显存/温度/功耗/进程,`/proc` 尽力读取进程用户名与命令行(权限不足自动降级)
 - **Server**:聚合所有节点,提供 REST API,持久化到 PostgreSQL
 - **TUI**:ratatui 终端仪表盘 —— 多节点横向一屏总览、GPU 表格、GPU 进程面板
@@ -38,7 +45,17 @@
 
 ## 快速开始
 
-### 1. 编译
+### 1. 获取二进制
+
+**方式 A:直接下载 Release 包(推荐)**
+
+```bash
+curl -L -O https://github.com/Iamtianyuyang/ClusterScope/releases/download/v0.1.0/clusterscope-v0.1.0-linux-x86_64.tar.gz
+tar xzf clusterscope-v0.1.0-linux-x86_64.tar.gz
+# 得到 clusterscope-agent / clusterscope-server / clusterscope-tui
+```
+
+**方式 B:源码编译**
 
 ```bash
 cargo build --release
@@ -80,21 +97,27 @@ if [ -z "$TMUX" ] && [ -n "$PS1" ]; then clusterscope-tui; fi
 ## TUI
 
 ```
- ClusterScope     3 nodes · 18 GPUs · 1 busy · 0 jobs     ! 1 alert     LIVE · 2s
+ ClusterScope     3 nodes · 18 GPUs · 13 busy · 0 jobs     ! 1 alert     LIVE · 1s
 Overview   Jobs   Alerts
-──────────────────────────────────────────────────────────────────────────────
-┌ node-01 ─────────────┐ ┌ node-02 ─────────────┐ ┌ node-03 ─────────────┐
-│● ONLINE                 │ │● ONLINE                 │ │● ONLINE                 │
-│ GPU  UTIL      VRAM TEMP│ │ GPU  UTIL      VRAM TEMP│ │ GPU  UTIL      VRAM TEMP│
-│  0         0% 10M/45G 31°│ │  0         0% 10M/45G 30°│ │ >0 ██████100% 29.5G/45G 74°│
-│  1         0% 10M/45G 31°│ │  1         0% 10M/45G 30°│ │  1         0% 13M/45G 28°│
-│  …                       │ │  …                       │ │  …                       │
-│ CPU  0%  MEM  6%  GPU 0% │ │ CPU  0%  MEM  6%  GPU 0% │ │ CPU  0%  MEM 14%  GPU17%│
-│ 192.168.1.10 · 6 GPU … │ │ 192.168.1.11 · 6 GPU … │ │ 192.168.1.12 · 6 GPU…│
-└──────────────────────────┘ └──────────────────────────┘ └────────────────────────┘
-──────────────────────────────────────────────────────────────────────────────
-PID      USER      SM     VRAM     CPU    COMMAND
-2312230  tianyuy…   —      29.5G    0%     python main.py
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+┌ node-01 ─────────────────────────────────────────────────┐┌ node-02 ─────────────────────────────────────────────────┐┌ node-03 ─────────────────────────────────────────────────┐
+│● ONLINE                                                     ││● ONLINE                                                     ││● ONLINE                                                     │
+│ GPU  UTIL      VRAM   TEMP                                  ││ GPU  UTIL      VRAM   TEMP                                  ││ GPU  UTIL      VRAM   TEMP                                  │
+│  0  ██████ 95% 10.0G/45G 42°                                ││  0  ██████ 98% 10.0G/45G 42°                                ││ >0  ██████100% 37.5G/45G 76°                                │
+│  1  ██████ 98% 10.0G/45G 41°                                ││  1  ██████ 98% 10.0G/45G 41°                                ││  1          0% 13M/45G 29°                                  │
+│  2  ██████ 98% 10.0G/45G 40°                                ││  2          0% 13M/45G 28°                                  ││  2  ██████ 98% 10.0G/45G 39°                                │
+│  3  ██████ 98% 10.0G/45G 41°                                ││  3          0% 13M/45G 28°                                  ││  3  ██████ 96% 10.0G/45G 39°                                │
+│  4  ██████ 98% 10.0G/45G 41°                                ││  4          0% 13M/45G 30°                                  ││  4  ██████ 98% 10.0G/45G 40°                                │
+│  5  ██████ 98% 10.0G/45G 38°                                ││  5          0% 13M/45G 28°                                  ││  5  ██████ 98% 10.0G/45G 37°                                │
+│ CPU  0%     MEM 17% █   GPU 98% ███                         ││ CPU  0%     MEM 10%     GPU 33% █                           ││ CPU  0%     MEM 22% █   GPU 82% ██                          │
+│ 192.168.1.10 · 6 GPU · load 2.4                           ││ 192.168.1.11 · 6 GPU · load 1.0                           ││ 192.168.1.12 · 6 GPU · load 3.8                           │
+│                                                             ││                                                             ││                                                             │
+│                                                             ││                                                             ││                                                             │
+│                                                             ││                                                             ││                                                             │
+│                                                             ││                                                             ││                                                             │
+│                                                             ││                                                             ││                                                             │
+└─────────────────────────────────────────────────────────────┘└─────────────────────────────────────────────────────────────┘└─────────────────────────────────────────────────────────────┘
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ```
 
 | 快捷键 | 功能 |
