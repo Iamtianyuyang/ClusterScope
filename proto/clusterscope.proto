@@ -429,6 +429,9 @@ service AgentService {
     // Server streaming: job status updates from server to agent
     rpc WatchJobStatus(stream JobStatusUpdate) returns (stream JobStatusUpdate);
     
+    // Unary: agent reports a job status change (running/succeeded/failed/...)
+    rpc UpdateJobStatus(JobStatusUpdate) returns (JobStatusUpdate);
+    
     // Server streaming: agent sends heartbeat
     rpc Heartbeat(stream NodeHeartbeat) returns (stream HeartbeatAck);
     

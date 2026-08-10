@@ -3292,6 +3292,7 @@ dependencies = [
  "rustls",
  "rustls-pemfile",
  "rustls-pki-types",
+ "scheduler",
  "serde",
  "serde_json",
  "serde_yaml",

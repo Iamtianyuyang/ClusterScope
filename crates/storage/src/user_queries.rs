@@ -70,8 +70,7 @@ pub async fn update_user(
         r#"
         UPDATE users SET
             role = COALESCE($2, role),
-            enabled = COALESCE($3, enabled),
-            updated_at = NOW()
+            enabled = COALESCE($3, enabled)
         WHERE user_id = $1
         "#,
     )
@@ -113,19 +112,26 @@ pub async fn record_login(pool: &PgPool, user_id: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn record_failed_login(pool: &PgPool, username: &str) -> Result<()> {
+pub async fn record_failed_login(
+    pool: &PgPool,
+    username: &str,
+    max_attempts: i32,
+    lockout_secs: i64,
+) -> Result<()> {
     sqlx::query(
         r#"
         UPDATE users SET
             failed_login_attempts = failed_login_attempts + 1,
             locked_until = CASE
-                WHEN failed_login_attempts + 1 >= 5 THEN NOW() + INTERVAL '5 minutes'
+                WHEN failed_login_attempts + 1 >= $2 THEN NOW() + make_interval(secs => $3)
                 ELSE locked_until
             END
         WHERE username = $1
         "#,
     )
     .bind(username)
+    .bind(max_attempts)
+    .bind(lockout_secs)
     .execute(pool)
     .await
     .context("Failed to record failed login")?;

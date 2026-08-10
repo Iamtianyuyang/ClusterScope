@@ -3,7 +3,7 @@
 
 grpc_addr: "0.0.0.0:50051"
 http_addr: "0.0.0.0:8080"
-ws_addr: "0.0.0.0:8081"
+# WebSocket is served on http_addr (same port as the REST API).
 
 postgres_url: "postgresql://clusterscope:clusterscope@localhost:5432/clusterscope"
 # redis_url: "redis://localhost:6379"   # optional, currently unused

@@ -1,11 +1,10 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     Json,
 };
 use chrono::Utc;
-use common::auth::{self, Claims};
-use protocol::*;
+use common::auth::{self, Claims, UserRole};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -54,6 +53,8 @@ pub async fn login(
         storage::user_queries::record_failed_login(
             state.database.pool(),
             &req.username,
+            state.config.max_login_attempts as i32,
+            state.config.lockout_duration_secs as i64,
         ).await.ok();
         return Err(StatusCode::UNAUTHORIZED);
     }
@@ -203,7 +204,9 @@ pub async fn get_metrics_history(
     State(state): State<Arc<AppState>>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    let node_id = params.get("node_id").map(|s| s.as_str());
+    let node_id = params.get("node_id")
+        .filter(|s| !s.is_empty())
+        .ok_or(StatusCode::BAD_REQUEST)?;
     let start_time: i64 = params.get("start_time_ms")
         .and_then(|s| s.parse().ok())
         .ok_or(StatusCode::BAD_REQUEST)?;
@@ -213,7 +216,7 @@ pub async fn get_metrics_history(
 
     let reports = storage::queries::get_metrics_history(
         state.database.pool(),
-        node_id.unwrap_or(""),
+        node_id,
         start_time,
         end_time,
         10000,
@@ -227,9 +230,10 @@ pub async fn get_metrics_history(
 
 pub async fn create_job(
     State(state): State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
     Json(req): Json<JobCreateRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    let claims = extract_claims(&state)?;
+
 
     let job_id = Uuid::new_v4().to_string();
     let env: HashMap<String, String> = req.environment.into_iter()
@@ -327,8 +331,9 @@ pub async fn get_job(
 pub async fn stop_job(
     State(state): State<Arc<AppState>>,
     Path(job_id): Path<String>,
+    Extension(claims): Extension<Claims>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    let claims = extract_claims(&state)?;
+
 
     storage::job_queries::update_job_status(
         state.database.pool(),
@@ -383,10 +388,11 @@ pub async fn get_job_logs(
 
 pub async fn create_alert_rule(
     State(state): State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let rule_id = Uuid::new_v4().to_string();
-    let claims = extract_claims(&state)?;
+
 
     let name = req.get("name").and_then(|v| v.as_str()).unwrap_or("");
     let metric = req.get("metric").and_then(|v| v.as_str()).unwrap_or("");
@@ -436,7 +442,9 @@ pub async fn list_alert_rules(
 pub async fn delete_alert_rule(
     State(state): State<Arc<AppState>>,
     Path(rule_id): Path<String>,
+
 ) -> Result<StatusCode, StatusCode> {
+
     storage::alert_queries::delete_alert_rule(
         state.database.pool(),
         &rule_id,
@@ -473,7 +481,9 @@ pub async fn acknowledge_alert(
     State(state): State<Arc<AppState>>,
     Path(rule_id): Path<String>,
     Json(req): Json<serde_json::Value>,
+
 ) -> Result<StatusCode, StatusCode> {
+
     let node_id = req.get("node_id").and_then(|v| v.as_str()).unwrap_or("");
     let gpu_uuid = req.get("gpu_uuid").and_then(|v| v.as_str()).unwrap_or("");
 
@@ -488,7 +498,9 @@ pub async fn acknowledge_alert(
 pub async fn create_user(
     State(state): State<Arc<AppState>>,
     Json(req): Json<serde_json::Value>,
+
 ) -> Result<Json<serde_json::Value>, StatusCode> {
+
     let username = req.get("username").and_then(|v| v.as_str()).ok_or(StatusCode::BAD_REQUEST)?;
     let password = req.get("password").and_then(|v| v.as_str()).ok_or(StatusCode::BAD_REQUEST)?;
     let role = req.get("role").and_then(|v| v.as_str()).unwrap_or("viewer");
@@ -515,7 +527,9 @@ pub async fn create_user(
 
 pub async fn list_users(
     State(state): State<Arc<AppState>>,
+
 ) -> Result<Json<Vec<storage::models::UserRow>>, StatusCode> {
+
     let users = storage::user_queries::list_users(
         state.database.pool(),
     ).await
@@ -527,7 +541,9 @@ pub async fn list_users(
 pub async fn get_user(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
-) -> Result<Json<storage::models::UserRow>, StatusCode> {
+
+) -> Result<Json<serde_json::Value>, StatusCode> {
+
     let user = storage::user_queries::get_user_by_id(
         state.database.pool(),
         &id,
@@ -535,14 +551,27 @@ pub async fn get_user(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::NOT_FOUND)?;
 
-    Ok(Json(user))
+    // Never expose the password hash.
+    Ok(Json(serde_json::json!({
+        "user_id": user.user_id,
+        "username": user.username,
+        "email": user.email,
+        "role": user.role,
+        "enabled": user.enabled,
+        "created_at": user.created_at,
+        "last_login_at": user.last_login_at,
+        "failed_login_attempts": user.failed_login_attempts,
+        "locked_until": user.locked_until,
+    })))
 }
 
 pub async fn update_user(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
     Json(req): Json<serde_json::Value>,
+
 ) -> Result<StatusCode, StatusCode> {
+
     let role = req.get("role").and_then(|v| v.as_str());
     let enabled = req.get("enabled").and_then(|v| v.as_bool());
 
@@ -560,7 +589,9 @@ pub async fn update_user(
 pub async fn delete_user(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
+
 ) -> Result<StatusCode, StatusCode> {
+
     storage::user_queries::delete_user(
         state.database.pool(),
         &id,
@@ -654,12 +685,12 @@ pub async fn get_prometheus_metrics(
 
 // ===== Helpers =====
 
-fn extract_claims(_state: &Arc<AppState>) -> Result<Claims, StatusCode> {
-    Ok(Claims {
-        sub: "system".to_string(),
-        role: "admin".to_string(),
-        exp: 0,
-        iat: 0,
-        jti: String::new(),
-    })
+/// Role-based authorization helper used by the auth middleware.
+pub fn check_role(claims: &Claims, allowed: &[&str]) -> Result<(), StatusCode> {
+    let role = UserRole::from_str(&claims.role).unwrap_or(UserRole::Viewer);
+    if allowed.contains(&role.to_str()) {
+        Ok(())
+    } else {
+        Err(StatusCode::FORBIDDEN)
+    }
 }

@@ -81,23 +81,46 @@ const NodeDetailPage: React.FC = () => {
     title: { text: 'CPU Usage', left: 'center', textStyle: { color: '#fff', fontSize: 14 } },
     tooltip: { trigger: 'axis' as const },
     grid: { left: 30, right: 30, bottom: 30, top: 50 },
-    xAxis: { type: 'category' as const, data: [], axisLabel: { color: '#aaa' } },
+    xAxis: {
+      type: 'category' as const,
+      data: history.map((h: any) => dayjs(h.timestamp_ms).format('HH:mm')),
+      axisLabel: { color: '#aaa' },
+    },
     yAxis: { type: 'value' as const, max: 100, axisLabel: { color: '#aaa', formatter: '{value}%' } },
-    series: [{ data: [], type: 'line', smooth: true, areaStyle: { opacity: 0.3 }, itemStyle: { color: '#1890ff' } }],
+    series: [{
+      data: history.map((h: any) => h.cpu_usage_percent ?? 0),
+      type: 'line',
+      smooth: true,
+      areaStyle: { opacity: 0.3 },
+      itemStyle: { color: '#1890ff' },
+    }],
   }
+
+  // The server stores GPU metrics under `gpu_metrics` (DB column name).
+  const gpuSeries = (() => {
+    const gpuCount = history.reduce(
+      (max: number, h: any) => Math.max(max, (h.gpu_metrics || []).length),
+      0,
+    )
+    return Array.from({ length: gpuCount }, (_, i) => ({
+      name: `GPU ${i}`,
+      data: history.map((h: any) => h.gpu_metrics?.[i]?.utilization_gpu ?? 0),
+      type: 'line',
+      smooth: true,
+    }))
+  })()
 
   const gpuOption = {
     title: { text: 'GPU Utilization', left: 'center', textStyle: { color: '#fff', fontSize: 14 } },
     tooltip: { trigger: 'axis' as const },
     grid: { left: 30, right: 30, bottom: 30, top: 50 },
-    xAxis: { type: 'category' as const, data: [], axisLabel: { color: '#aaa' } },
+    xAxis: {
+      type: 'category' as const,
+      data: history.map((h: any) => dayjs(h.timestamp_ms).format('HH:mm')),
+      axisLabel: { color: '#aaa' },
+    },
     yAxis: { type: 'value' as const, max: 100, axisLabel: { color: '#aaa', formatter: '{value}%' } },
-    series: history.map((h: any, i: number) => ({
-      name: `GPU ${i}`,
-      data: h.gpus?.map((g: any) => g.utilization_gpu || 0) || [],
-      type: 'line',
-      smooth: true,
-    })),
+    series: gpuSeries,
   }
 
   const tabItems = [
@@ -127,7 +150,7 @@ const NodeDetailPage: React.FC = () => {
       </div>
     )},
     { key: 'gpus', label: 'GPUs', children: (
-      <Table columns={gpuColumns} dataSource={metrics?.gpus || []} rowKey="index" pagination={false} size="small" style={{ background: '#1a1f2e' }} />
+      <Table columns={gpuColumns} dataSource={metrics?.gpu_metrics || []} rowKey="index" pagination={false} size="small" style={{ background: '#1a1f2e' }} />
     )},
     { key: 'processes', label: 'Processes', children: (
       <Table columns={processColumns} dataSource={metrics?.gpu_processes || []} rowKey="pid" pagination={false} size="small" />

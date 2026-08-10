@@ -238,7 +238,7 @@ pub fn draw(f: &mut Frame, app: &AppState) {
             Constraint::Length(1), // nav
             Constraint::Length(1), // divider
             Constraint::Min(8),    // nodes
-            Constraint::Length(1), // process header
+            Constraint::Length(2), // process header (title + divider)
             Constraint::Min(3),    // process table
             Constraint::Length(1), // footer
         ])
@@ -278,11 +278,13 @@ fn draw_topbar(f: &mut Frame, app: &AppState, area: Rect) {
             Style::default().fg(DIM),
         ),
     ];
-    if app.rules.is_empty() {
+    if app.rules.is_empty() && app.events.is_empty() {
         spans.push(Span::styled("     0 alerts", Style::default().fg(DIM)));
     } else {
+        // `events` holds the active (pending/firing) alerts from the server.
+        let active = app.events.len();
         spans.push(Span::styled(
-            format!("     ! {} alert", app.rules.len()),
+            format!("     ! {} alert{}", active, if active == 1 { "" } else { "s" }),
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
         ));
     }
@@ -518,7 +520,7 @@ fn node_panel(f: &mut Frame, app: &AppState, node: &Node, area: Rect, selected: 
 // ---- Process panel ----
 
 fn draw_process(f: &mut Frame, app: &AppState, header_area: Rect, table_area: Rect) {
-    // header: "Processes" + selected node/gpu
+    // header: "Processes" + selected node/gpu, then a divider line
     let sel_node = app.nodes.get(app.selected_node);
     let (node_label, gpu_label) = match sel_node {
         Some(n) => {
@@ -528,20 +530,19 @@ fn draw_process(f: &mut Frame, app: &AppState, header_area: Rect, table_area: Re
         None => ("-".to_string(), "-".to_string()),
     };
     f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(" Processes", Style::default().fg(NORMAL).add_modifier(Modifier::BOLD)),
-            Span::styled(
-                format!("      {} / GPU {}", node_label, gpu_label),
+        Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled(" Processes", Style::default().fg(NORMAL).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    format!("      {} / GPU {}", node_label, gpu_label),
+                    Style::default().fg(DIM),
+                ),
+            ]),
+            Line::from(Span::styled(
+                "─".repeat(header_area.width as usize),
                 Style::default().fg(DIM),
-            ),
-        ])),
-        header_area,
-    );
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            "─".repeat(header_area.width as usize),
-            Style::default().fg(DIM),
-        ))),
+            )),
+        ]),
         header_area,
     );
 

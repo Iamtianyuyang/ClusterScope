@@ -1,37 +1,93 @@
 use anyhow::{Context, Result};
 use common::config::AgentConfig;
-use protocol::{AgentServiceClient, Job, JobLogEntry};
-use std::collections::HashMap;
-use std::os::unix::process::CommandExt;
-use std::path::PathBuf;
-use tokio::io::AsyncReadExt;
+use protocol::{AgentServiceClient, Job, JobLogEntry, JobStatus, JobStatusUpdate};
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::Arc;
+use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
-use tokio_stream::StreamExt;
+use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 
-/// Execute a job on the agent node
+/// Shared runtime state for jobs executed by this agent: process group leader
+/// PIDs (for cancellation) and a set of job ids that were cancelled.
+pub struct JobRuntime {
+    /// job_id -> process group leader pid
+    pub pids: Arc<Mutex<HashMap<String, i32>>>,
+    /// job ids cancelled by the server (kill was requested or will be)
+    pub cancelled: Arc<Mutex<HashSet<String>>>,
+}
+
+impl JobRuntime {
+    pub fn new() -> Self {
+        Self {
+            pids: Arc::new(Mutex::new(HashMap::new())),
+            cancelled: Arc::new(Mutex::new(HashSet::new())),
+        }
+    }
+
+    /// Send SIGTERM to the process group of a running job (if any).
+    /// Returns true when the job was running and got the signal.
+    pub async fn request_cancel(&self, job_id: &str) -> bool {
+        self.cancelled.lock().await.insert(job_id.to_string());
+        let pids = self.pids.lock().await;
+        if let Some(&pid) = pids.get(job_id) {
+            unsafe {
+                libc::kill(-(pid as i32), libc::SIGTERM);
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    pub async fn is_cancelled(&self, job_id: &str) -> bool {
+        self.cancelled.lock().await.contains(job_id)
+    }
+}
+
+/// Report a job status transition to the server (best effort).
+async fn report_status(
+    client: &mut AgentServiceClient<tonic::transport::Channel>,
+    job_id: &str,
+    status: JobStatus,
+    message: &str,
+) {
+    let _ = client.update_job_status(JobStatusUpdate {
+        job_id: job_id.to_string(),
+        status: status as i32,
+        message: message.to_string(),
+    }).await;
+}
+
+/// Execute a job on the agent node and report status transitions to the server.
 pub async fn execute_job(
     config: &AgentConfig,
     job: Job,
     client: &mut AgentServiceClient<tonic::transport::Channel>,
+    runtime: &JobRuntime,
 ) -> Result<()> {
     let job_id = job.job_id.clone();
     let executable = job.executable.clone();
     let arguments = job.arguments.clone();
     let working_dir = job.working_directory.clone();
     let env: HashMap<String, String> = job.environment.clone();
-    
+
     info!(job_id = %job_id, executable = %executable, "Starting job");
-    
+
+    // Abort early when the job was cancelled before we spawned it.
+    if runtime.is_cancelled(&job_id).await {
+        info!(job_id = %job_id, "Job cancelled before start");
+        report_status(client, &job_id, JobStatus::Cancelled, "cancelled before start").await;
+        return Ok(());
+    }
+
     // Create log directory
     let log_dir = config.log_dir.join(&job_id);
     tokio::fs::create_dir_all(&log_dir)
         .await
         .with_context(|| format!("Failed to create log dir for job {}", job_id))?;
-    
-    let _stdout_path = log_dir.join("stdout.log");
-    let _stderr_path = log_dir.join("stderr.log");
-    
+
     // Start process
     let mut cmd = Command::new(&executable);
     cmd.args(&arguments)
@@ -40,7 +96,7 @@ pub async fn execute_job(
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
-    
+
     // Set process group
     unsafe {
         cmd.pre_exec(|| {
@@ -48,96 +104,129 @@ pub async fn execute_job(
             Ok(())
         });
     }
-    
-    let mut process = cmd.spawn()
-        .with_context(|| format!("Failed to spawn process: {}", executable))?;
-    
+
+    let mut process = match cmd.spawn() {
+        Ok(p) => p,
+        Err(e) => {
+            error!(job_id = %job_id, error = %e, "Failed to spawn process");
+            report_status(client, &job_id, JobStatus::Failed, &format!("spawn failed: {}", e)).await;
+            return Ok(());
+        }
+    };
+
     let pid = process.id().unwrap_or(0);
     let mut process_stdout = process.stdout.take().expect("stdout piped");
     let mut process_stderr = process.stderr.take().expect("stderr piped");
     info!(job_id = %job_id, pid = pid, "Process spawned");
-    
+
+    // Register the process group so cancellation can reach it.
+    runtime.pids.lock().await.insert(job_id.clone(), pid as i32);
+
+    // If a cancel arrived between the early check and now, kill immediately.
+    if runtime.is_cancelled(&job_id).await {
+        unsafe {
+            libc::kill(-(pid as i32), libc::SIGTERM);
+        }
+        warn!(job_id = %job_id, "Cancel raced spawn — killing process group");
+    }
+
+    // Report running.
+    report_status(client, &job_id, JobStatus::Running, "").await;
+
+    // Global, monotonically increasing offset shared by stdout+stderr so the
+    // server-side UNIQUE(job_id, log_offset) never collides between streams.
+    let log_offset = Arc::new(AtomicI64::new(0));
+
     // Stream stdout and stderr to files and gRPC
     let stdout_task = {
         let log_dir = log_dir.clone();
         let job_id = job_id.clone();
+        let offset = log_offset.clone();
         let mut client = client.clone();
         tokio::spawn(async move {
-            stream_output(&mut process_stdout, &log_dir, &job_id, false, &mut client).await
+            stream_output(&mut process_stdout, &log_dir, &job_id, false, &offset, &mut client).await
         })
     };
-    
+
     let stderr_task = {
         let log_dir = log_dir.clone();
         let job_id = job_id.clone();
+        let offset = log_offset.clone();
         let mut client = client.clone();
         tokio::spawn(async move {
-            stream_output(&mut process_stderr, &log_dir, &job_id, true, &mut client).await
+            stream_output(&mut process_stderr, &log_dir, &job_id, true, &offset, &mut client).await
         })
     };
-    
+
     // Wait for process to finish
     let wait_result = process.wait().await;
-    
+
+    runtime.pids.lock().await.remove(&job_id);
+
+    // Stop streaming
+    stdout_task.abort();
+    stderr_task.abort();
+    let _ = tokio::join!(stdout_task, stderr_task);
+
     match wait_result {
         Ok(status) => {
             let exit_code = status.code().unwrap_or(-1);
             info!(job_id = %job_id, pid = pid, exit_code, "Job finished");
-            
-            // Stop streaming
-            stdout_task.abort();
-            stderr_task.abort();
-            
-            // Wait for stream tasks to finish
-            let _ = tokio::join!(stdout_task, stderr_task);
-            
-            // Save final log offset
-            Ok(())
+
+            let (final_status, message) = if runtime.is_cancelled(&job_id).await {
+                (JobStatus::Cancelled, format!("cancelled (exit {})", exit_code))
+            } else if exit_code == 0 {
+                (JobStatus::Succeeded, String::new())
+            } else {
+                (JobStatus::Failed, format!("exit code {}", exit_code))
+            };
+            let _ = report_status(client, &job_id, final_status, &message).await;
         }
         Err(e) => {
             error!(job_id = %job_id, pid = pid, error = %e, "Process wait failed");
-            Ok(())
+            report_status(client, &job_id, JobStatus::Failed, &format!("wait failed: {}", e)).await;
         }
     }
+
+    Ok(())
 }
 
 async fn stream_output<R>(
     reader: &mut R,
-    log_dir: &PathBuf,
+    log_dir: &std::path::Path,
     job_id: &str,
     is_stderr: bool,
+    log_offset: &AtomicI64,
     client: &mut AgentServiceClient<tonic::transport::Channel>,
 ) -> Result<()>
 where
     R: tokio::io::AsyncRead + Unpin,
 {
-    use tokio::io::AsyncBufReadExt;
     let mut buf_reader = tokio::io::BufReader::new(reader);
-    let mut log_offset = 0i64;
     let mut file = tokio::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(log_dir.join(if is_stderr { "stderr.log" } else { "stdout.log" }))
         .await?;
-    
+
     loop {
         let mut line = String::new();
         match buf_reader.read_line(&mut line).await {
             Ok(0) => break, // EOF
             Ok(_) => {
+                let offset = log_offset.fetch_add(1, Ordering::SeqCst);
                 let entry = JobLogEntry {
                     job_id: job_id.to_string(),
                     log_data: line.clone(),
                     is_stderr,
                     timestamp: chrono::Utc::now().timestamp_millis() as i64,
-                    log_offset,
+                    log_offset: offset,
                 };
-                log_offset += 1;
-                
+
                 // Write to file
                 use tokio::io::AsyncWriteExt;
                 file.write_all(line.as_bytes()).await?;
-                
+
                 // Send to server (best effort)
                 let _ = client.report_job_logs(tokio_stream::iter(vec![entry])).await;
             }
@@ -147,6 +236,6 @@ where
             }
         }
     }
-    
+
     Ok(())
 }

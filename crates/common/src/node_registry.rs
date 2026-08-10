@@ -112,6 +112,14 @@ impl RegistryManager {
         }
     }
     
+    /// Update the GPU count learned from the latest metrics report.
+    pub fn update_gpu_count(&self, node_id: &str, gpu_count: u32) {
+        let mut nodes = self.nodes.write();
+        if let Some(entry) = nodes.get_mut(node_id) {
+            entry.gpu_count = gpu_count;
+        }
+    }
+    
     pub fn get(&self, node_id: &str) -> Option<NodeEntry> {
         self.nodes.read().get(node_id).cloned()
     }

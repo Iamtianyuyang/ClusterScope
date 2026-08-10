@@ -133,7 +133,8 @@ pub struct AlertEvent {
     pub node_id: String,
     #[serde(default)]
     pub gpu_uuid: String,
-    #[serde(default)]
+    /// DB column is `new_state`; keep `state` for compatibility.
+    #[serde(default, alias = "new_state")]
     pub state: String,
     #[serde(default)]
     pub current_value: f64,

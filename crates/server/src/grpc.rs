@@ -1,4 +1,6 @@
 use crate::AppState;
+use common::alert::{AlertEvent, AlertRule, AlertSeverity, AlertState};
+use common::job::{status_from_str, JobStatus};
 use protocol::*;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -13,6 +15,65 @@ pub struct AgentServiceImpl {
 impl AgentServiceImpl {
     pub fn new(state: Arc<AppState>) -> Self {
         Self { state }
+    }
+}
+
+/// Map a proto JobStatus integer (1..=8) to the DB status string.
+pub(crate) fn status_int_to_str(s: i32) -> Option<&'static str> {
+    Some(match s {
+        1 => "queued",
+        2 => "starting",
+        3 => "running",
+        4 => "stopping",
+        5 => "succeeded",
+        6 => "failed",
+        7 => "cancelled",
+        8 => "lost",
+        _ => return None,
+    })
+}
+
+/// Convert a DB alert rule row into the in-memory rule used by the alert engine.
+pub(crate) fn alert_rule_from_row(row: &storage::models::AlertRuleRow) -> Option<AlertRule> {
+    let operator = match row.operator.as_str() {
+        "gt" => common::alert::AlertOperator::Gt,
+        "gte" => common::alert::AlertOperator::Gte,
+        "lt" => common::alert::AlertOperator::Lt,
+        "lte" => common::alert::AlertOperator::Lte,
+        "eq" => common::alert::AlertOperator::Eq,
+        "neq" => common::alert::AlertOperator::Neq,
+        _ => return None,
+    };
+    let severity = match row.severity.as_str() {
+        "info" => AlertSeverity::Info,
+        "critical" => AlertSeverity::Critical,
+        _ => AlertSeverity::Warning,
+    };
+    Some(AlertRule {
+        rule_id: row.rule_id.clone(),
+        name: row.name.clone(),
+        description: row.description.clone().unwrap_or_default(),
+        metric: row.metric.clone(),
+        operator,
+        threshold: row.threshold,
+        duration_seconds: row.duration_seconds.max(0) as u64,
+        severity,
+        node_id: row.node_id.clone(),
+        gpu_uuids: serde_json::from_value(row.gpu_uuids.clone()).unwrap_or_default(),
+        labels: serde_json::from_value(row.labels.clone()).unwrap_or_default(),
+        enabled: row.enabled,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        created_by: row.created_by.clone(),
+    })
+}
+
+fn alert_state_str(s: AlertState) -> &'static str {
+    match s {
+        AlertState::Normal => "normal",
+        AlertState::Pending => "pending",
+        AlertState::Firing => "firing",
+        AlertState::Resolved => "resolved",
     }
 }
 
@@ -83,6 +144,17 @@ impl AgentService for AgentServiceImpl {
                 let sequence = report.sequence;
                 state.node_registry.update_last_seen(&node_id, chrono::Utc::now());
 
+                // Learn GPU count from the report (keeps node_info + registry current).
+                let gpu_count = report.gpus.len() as u32;
+                if gpu_count > 0 {
+                    state.node_registry.update_gpu_count(&node_id, gpu_count);
+                    if let Err(e) = storage::queries::update_node_gpu_count(
+                        state.database.pool(), &node_id, gpu_count as i32,
+                    ).await {
+                        warn!(error = %e, "Failed to update node gpu_count");
+                    }
+                }
+
                 let cache_key = format!("{}:{}", node_id, sequence);
                 let is_new = {
                     let mut seen = state.seen_reports.write();
@@ -97,6 +169,9 @@ impl AgentService for AgentServiceImpl {
                 if let Err(e) = save_metrics_to_db(&state, &report).await {
                     warn!(error = %e, "Failed to save metrics");
                 }
+
+                // Evaluate alert rules against this snapshot.
+                evaluate_alerts(&state, &report).await;
 
                 let json = serde_json::json!({
                     "type": "metrics_update",
@@ -151,7 +226,7 @@ impl AgentService for AgentServiceImpl {
             job_id: job_def.job_id, node_id: job_def.node_id, name: job_def.name,
             executable: job_def.executable, arguments: job_def.arguments,
             working_directory: job_def.working_directory, environment: job_def.environment,
-            status: 1, pid: 0, exit_code: 0, error_message: String::new(),
+            status: JobStatus::Queued as i32, pid: 0, exit_code: 0, error_message: String::new(),
             created_at: job_def.created_at, started_at: None, finished_at: None,
             created_by: job_def.created_by, log_offset: 0, resource_quota: String::new(),
             retry_count: 0, max_retries: 0,
@@ -165,11 +240,12 @@ impl AgentService for AgentServiceImpl {
         let state = self.state.clone();
         let (tx, rx) = mpsc::channel(100);
 
+        // Emit jobs assigned to this node: `starting` -> execute, `stopping` -> cancel.
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
             loop {
                 interval.tick().await;
-                if let Ok(jobs) = storage::job_queries::get_running_jobs(state.database.pool(), &node_id).await {
+                if let Ok(jobs) = storage::job_queries::get_jobs_for_node(state.database.pool(), &node_id).await {
                     for job in jobs {
                         let _ = tx.send(Ok(job_to_proto(&job))).await;
                     }
@@ -214,10 +290,7 @@ impl AgentService for AgentServiceImpl {
         tokio::spawn(async move {
             while let Some(update_result) = stream.next().await {
                 let update = match update_result { Ok(u) => u, Err(e) => { warn!(error = %e, "Error receiving job status update"); break; } };
-                let status_str = match update.status {
-                    1 => "queued", 2 => "starting", 3 => "running", 4 => "stopping",
-                    5 => "succeeded", 6 => "failed", 7 => "cancelled", 8 => "lost", _ => "unknown",
-                };
+                let status_str = status_int_to_str(update.status).unwrap_or("unknown");
                 if let Err(e) = storage::job_queries::update_job_status(
                     state.database.pool(), &update.job_id, status_str, None, None, Some(&update.message), None, None,
                 ).await {
@@ -234,6 +307,59 @@ impl AgentService for AgentServiceImpl {
         let stream: Self::WatchJobStatusStream =
             Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx));
         Ok(Response::new(stream))
+    }
+
+    /// Unary status report from an agent: validate the transition, persist it,
+    /// free scheduler capacity on terminal states and notify WS clients.
+    async fn update_job_status(&self, request: Request<JobStatusUpdate>) -> Result<Response<JobStatusUpdate>, Status> {
+        let update = request.into_inner();
+
+        let Some(to_str) = status_int_to_str(update.status) else {
+            return Err(Status::invalid_argument(format!("unknown job status: {}", update.status)));
+        };
+        let Some(to) = status_from_str(to_str) else {
+            return Err(Status::invalid_argument("unknown job status"));
+        };
+
+        let Some(row) = storage::job_queries::get_job(self.state.database.pool(), &update.job_id)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+        else {
+            return Err(Status::not_found(format!("job {} not found", update.job_id)));
+        };
+
+        let Some(from) = status_from_str(&row.status) else {
+            return Err(Status::failed_precondition(format!("job in unknown state: {}", row.status)));
+        };
+
+        if let Err(e) = common::job::validate_transition(from, to) {
+            return Err(Status::invalid_argument(format!(
+                "invalid transition {:?} -> {:?}: {}", from, to, e
+            )));
+        }
+
+        let finished = to.is_terminal();
+        let error_message = if update.message.is_empty() { None } else { Some(update.message.as_str()) };
+        if let Err(e) = storage::job_queries::update_job_status(
+            self.state.database.pool(),
+            &update.job_id,
+            to_str,
+            None,
+            None,
+            error_message,
+            None,
+            finished.then(chrono::Utc::now),
+        ).await {
+            return Err(Status::internal(format!("failed to persist status: {}", e)));
+        }
+
+        if finished {
+            self.state.scheduler.complete_job(&update.job_id, to).await;
+        }
+        self.state.ws_manager.push_job_update(&update.job_id).await;
+
+        info!(job_id = %update.job_id, from = %row.status, to = %to_str, "Job status updated");
+        Ok(Response::new(update))
     }
 
     type HeartbeatStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<HeartbeatAck, Status>> + Send>>;
@@ -258,10 +384,113 @@ impl AgentService for AgentServiceImpl {
 
     async fn cancel_job(&self, request: Request<CancelJobRequest>) -> Result<Response<Job>, Status> {
         let req = request.into_inner();
-        info!(job_id = %req.job_id, node_id = %req.node_id, "Job cancellation requested");
-        Ok(Response::new(Job { job_id: req.job_id, node_id: req.node_id, status: 4, ..Default::default() }))
+        let pool = self.state.database.pool();
+
+        let Some(row) = storage::job_queries::get_job(pool, &req.job_id)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+        else {
+            return Err(Status::not_found(format!("job {} not found", req.job_id)));
+        };
+
+        // Only active jobs can be cancelled; terminal/queued are left alone.
+        if matches!(row.status.as_str(), "starting" | "running" | "stopping") {
+            storage::job_queries::update_job_status(
+                pool, &req.job_id, "stopping", None, None, None, None, None,
+            ).await
+            .map_err(|e| Status::internal(e.to_string()))?;
+            self.state.ws_manager.push_job_update(&req.job_id).await;
+            info!(job_id = %req.job_id, "Job cancellation persisted");
+        }
+
+        let updated = storage::job_queries::get_job(pool, &req.job_id)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+            .unwrap_or(row);
+        Ok(Response::new(job_to_proto(&updated)))
     }
 }
+
+// ===== Alert evaluation =====
+
+/// Evaluate all cached rules against a metrics report and persist transitions.
+async fn evaluate_alerts(state: &AppState, report: &NodeMetricsReport) {
+    let rules = state.alert_rules.read().clone();
+    if rules.is_empty() {
+        return;
+    }
+
+    for rule in &rules {
+        let metric = rule.metric.as_str();
+        if metric.starts_with("gpu_") {
+            for gpu in &report.gpus {
+                let value = match metric {
+                    "gpu_temperature" => gpu.temperature_celsius as f64,
+                    "gpu_utilization" => gpu.utilization_gpu as f64,
+                    "gpu_memory_used_percent" => {
+                        if gpu.memory_total_bytes > 0 {
+                            gpu.memory_used_bytes as f64 / gpu.memory_total_bytes as f64 * 100.0
+                        } else { 0.0 }
+                    }
+                    "gpu_power_watts" => gpu.power_watts as f64,
+                    _ => continue,
+                };
+                if let Some(event) = state.alert_engine.evaluate(rule, &report.node_id, &gpu.uuid, value) {
+                    persist_alert_event(state, &event).await;
+                }
+            }
+        } else {
+            let value = match metric {
+                "cpu_usage_percent" => report.cpu_usage_percent,
+                "memory_usage_percent" => {
+                    if report.memory_total_bytes > 0 {
+                        report.memory_used_bytes as f64 / report.memory_total_bytes as f64 * 100.0
+                    } else { 0.0 }
+                }
+                "load_1" => report.load_1,
+                _ => continue,
+            };
+            if let Some(event) = state.alert_engine.evaluate(rule, &report.node_id, "", value) {
+                persist_alert_event(state, &event).await;
+            }
+        }
+    }
+}
+
+async fn persist_alert_event(state: &AppState, event: &AlertEvent) {
+    let old_state = alert_state_str(event.old_state);
+    let new_state = alert_state_str(event.new_state);
+    if let Err(e) = storage::alert_queries::insert_alert_event(
+        state.database.pool(),
+        &event.event_id,
+        &event.rule_id,
+        &event.node_id,
+        &event.gpu_uuid,
+        old_state,
+        new_state,
+        event.current_value,
+        event.threshold,
+        None,
+    ).await {
+        warn!(error = %e, "Failed to persist alert event");
+    }
+    let msg = serde_json::json!({
+        "type": "alert_update",
+        "node_id": event.node_id,
+        "payload": {
+            "event_id": event.event_id,
+            "rule_id": event.rule_id,
+            "gpu_uuid": event.gpu_uuid,
+            "old_state": old_state,
+            "new_state": new_state,
+            "current_value": event.current_value,
+            "threshold": event.threshold,
+        }
+    }).to_string();
+    state.ws_manager.push_alert(msg).await;
+}
+
+// ===== Conversion helpers =====
 
 // Helper functions for gRPC
 async fn save_metrics_to_db(state: &AppState, report: &NodeMetricsReport) -> anyhow::Result<()> {
@@ -337,8 +566,15 @@ fn job_to_proto(job: &storage::models::JobRow) -> Job {
         working_directory: job.working_directory.clone(),
         environment: serde_json::from_value(job.environment.clone()).unwrap_or_default(),
         status: match job.status.as_str() {
-            "queued" => 1, "starting" => 2, "running" => 3, "stopping" => 4,
-            "succeeded" => 5, "failed" => 6, "cancelled" => 7, "lost" => 8, _ => 3,
+            "queued" => JobStatus::Queued as i32,
+            "starting" => JobStatus::Starting as i32,
+            "running" => JobStatus::Running as i32,
+            "stopping" => JobStatus::Stopping as i32,
+            "succeeded" => JobStatus::Succeeded as i32,
+            "failed" => JobStatus::Failed as i32,
+            "cancelled" => JobStatus::Cancelled as i32,
+            "lost" => JobStatus::Lost as i32,
+            _ => JobStatus::Running as i32,
         },
         pid: job.pid.map(|p| p as u32).unwrap_or(0),
         exit_code: job.exit_code.unwrap_or(0) as u32,
@@ -398,5 +634,3 @@ async fn save_job_log(state: &AppState, entry: &JobLogEntry) -> anyhow::Result<(
 
     Ok(())
 }
-
-

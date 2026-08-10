@@ -25,7 +25,12 @@ pub struct AgentClient {
     client: AgentServiceClient<tonic::transport::Channel>,
     node_id: String,
     config: AgentConfig,
+    /// Per-process monotonic report sequence. Seeded with the wall-clock
+    /// millis so that after a restart the sequence jumps forward — the
+    /// server-side dedup cache (node:seq) never mistakes new reports for
+    /// old duplicates.
     sequence: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    pub job_runtime: std::sync::Arc<crate::job_executor::JobRuntime>,
 }
 
 impl AgentClient {
@@ -47,11 +52,13 @@ impl AgentClient {
         
         info!("Connected to server at {}", server_addr);
         
+        let seed = chrono::Utc::now().timestamp_millis() as u64;
         Ok(Self {
             client,
             node_id,
             config,
-            sequence: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            sequence: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(seed)),
+            job_runtime: std::sync::Arc::new(crate::job_executor::JobRuntime::new()),
         })
     }
     
@@ -128,6 +135,18 @@ impl AgentClient {
         Ok(response.into_inner())
     }
     
+    /// Report a job status transition (running/succeeded/failed/…).
+    pub async fn update_job_status(&mut self, job_id: &str, status: i32, message: &str) -> Result<()> {
+        let update = protocol::JobStatusUpdate {
+            job_id: job_id.to_string(),
+            status,
+            message: message.to_string(),
+        };
+        let request = tonic::Request::new(update);
+        let _ = self.client.update_job_status(request).await?;
+        Ok(())
+    }
+    
     pub async fn report_job_logs(&mut self, _job_id: &str, logs: Vec<JobLogEntry>) -> Result<()> {
         let request = tonic::Request::new(tokio_stream::iter(logs));
         let _response = self.client.report_job_logs(request).await?;
@@ -169,14 +188,29 @@ impl AgentClient {
         while let Some(job_result) = stream.next().await {
             match job_result {
                 Ok(job) => {
-                    info!(job_id = %job.job_id, name = %job.name, "Received pending job");
-                    // Execute job
-                    if let Err(e) = crate::job_executor::execute_job(
-                        &self.config,
-                        job,
-                        &mut self.client,
-                    ).await {
-                        warn!(error = %e, "Job execution failed");
+                    // `stopping` = the server asked us to cancel a running job.
+                    if job.status == protocol::JobStatus::Stopping as i32 {
+                        info!(job_id = %job.job_id, "Cancel requested by server");
+                        let running = self.job_runtime.request_cancel(&job.job_id).await;
+                        if !running {
+                            // Nothing to kill — never started or already gone.
+                            let _ = self.update_job_status(
+                                &job.job_id,
+                                protocol::JobStatus::Cancelled as i32,
+                                "cancelled before start",
+                            ).await;
+                        }
+                    } else {
+                        info!(job_id = %job.job_id, name = %job.name, "Received pending job");
+                        // Execute job
+                        if let Err(e) = crate::job_executor::execute_job(
+                            &self.config,
+                            job,
+                            &mut self.client,
+                            &self.job_runtime,
+                        ).await {
+                            warn!(error = %e, "Job execution failed");
+                        }
                     }
                 }
                 Err(e) => {

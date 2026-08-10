@@ -58,89 +58,112 @@ pub async fn list_jobs(
     page_size: i64,
 ) -> Result<(Vec<JobRow>, i64)> {
     let offset = page * page_size;
-    
-    let (query, total_query) = if let Some(_node_id) = node_id {
-        (
-            format!(
-                r#"
-                SELECT * FROM jobs
-                WHERE node_id = $1
-                {}
-                {}
-                ORDER BY created_at DESC
-                LIMIT $2 OFFSET $3
-                "#,
-                status.map(|_s| "AND status = $4".to_string()).unwrap_or_default(),
-                created_by.map(|_c| "AND created_by = $5".to_string()).unwrap_or_default(),
-            ),
-            format!(
-                r#"
-                SELECT COUNT(*) FROM jobs
-                WHERE node_id = $1
-                {}
-                "#,
-                status.map(|_| "AND status = $2".to_string()).unwrap_or_default(),
-            ),
-        )
+
+    // Build a parameterized query with proper bind order.
+    let mut conditions: Vec<String> = Vec::new();
+    let mut bind_values: Vec<serde_json::Value> = Vec::new();
+    let mut n = 0usize;
+    if let Some(nid) = node_id {
+        n += 1;
+        bind_values.push(serde_json::Value::String(nid.to_string()));
+        conditions.push(format!("node_id = ${}", n));
+    }
+    if let Some(st) = status {
+        n += 1;
+        bind_values.push(serde_json::Value::String(st.to_string()));
+        conditions.push(format!("status = ${}", n));
+    }
+    if let Some(cb) = created_by {
+        n += 1;
+        bind_values.push(serde_json::Value::String(cb.to_string()));
+        conditions.push(format!("created_by = ${}", n));
+    }
+    let where_sql = if conditions.is_empty() {
+        String::new()
     } else {
-        (
-            format!(
-                r#"
-                SELECT * FROM jobs
-                {}
-                {}
-                {}
-                ORDER BY created_at DESC
-                LIMIT $1 OFFSET $2
-                "#,
-                status.map(|_s| "AND status = $3".to_string()).unwrap_or_default(),
-                created_by.map(|_c| "AND created_by = $4".to_string()).unwrap_or_default(),
-                "1=1",
-            ),
-            format!(
-                r#"
-                SELECT COUNT(*) FROM jobs
-                {}
-                {}
-                "#,
-                status.map(|_| "AND status = $2".to_string()).unwrap_or_default(),
-                created_by.map(|_| "AND created_by = $3".to_string()).unwrap_or_default(),
-            ),
-        )
+        format!("WHERE {}", conditions.join(" AND "))
     };
-    
-    // Simple approach: get total count first
-    let total: Option<(i64,)> = sqlx::query_as(&total_query)
-        .fetch_optional(pool)
-        .await
-        .ok()
-        .flatten();
-    let total = total.map(|(t,)| t).unwrap_or(0);
-    
-    let jobs = sqlx::query_as::<_, JobRow>(&query)
+
+    let count_sql = format!("SELECT COUNT(*) FROM jobs {}", where_sql);
+    let list_sql = format!(
+        "SELECT * FROM jobs {} ORDER BY created_at DESC LIMIT ${} OFFSET ${}",
+        where_sql,
+        n + 1,
+        n + 2
+    );
+
+    // Count first, then rows — both with the same bound values.
+    let mut count_q = sqlx::query_as::<_, (i64,)>(&count_sql);
+    for v in &bind_values {
+        count_q = count_q.bind(v);
+    }
+    let total: i64 = count_q.fetch_optional(pool).await.ok().flatten().map(|(t,)| t).unwrap_or(0);
+
+    let mut q = sqlx::query_as::<_, JobRow>(&list_sql);
+    for v in &bind_values {
+        q = q.bind(v);
+    }
+    let jobs = q
+        .bind(page_size)
+        .bind(offset)
         .fetch_all(pool)
-        .await;
-    
-    let jobs = match jobs {
-        Ok(j) => j,
-        Err(_) => {
-            // Try simpler query without conditions
-            sqlx::query_as::<_, JobRow>(
-                r#"
-                SELECT * FROM jobs
-                ORDER BY created_at DESC
-                LIMIT $1 OFFSET $2
-                "#,
-            )
-            .bind(page_size)
-            .bind(offset)
-            .fetch_all(pool)
-            .await
-            .unwrap_or_default()
-        }
-    };
-    
+        .await
+        .context("Failed to list jobs")?;
+
     Ok((jobs, total))
+}
+
+/// Fetch jobs for a node that need agent attention: assigned (`starting`)
+/// and cancellation requests (`stopping`).
+pub async fn get_jobs_for_node(pool: &PgPool, node_id: &str) -> Result<Vec<JobRow>> {
+    sqlx::query_as::<_, JobRow>(
+        r#"
+        SELECT * FROM jobs
+        WHERE node_id = $1 AND status IN ('starting', 'stopping')
+        ORDER BY created_at ASC
+        "#,
+    )
+    .bind(node_id)
+    .fetch_all(pool)
+    .await
+    .context("Failed to get jobs for node")
+}
+
+/// Assign a queued job to a node (scheduler dispatch) and mark it starting.
+pub async fn assign_job_to_node(
+    pool: &PgPool,
+    job_id: &str,
+    node_id: &str,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE jobs SET node_id = $2, status = 'starting', started_at = NOW()
+        WHERE job_id = $1
+        "#,
+    )
+    .bind(job_id)
+    .bind(node_id)
+    .execute(pool)
+    .await
+    .context("Failed to assign job to node")?;
+    Ok(())
+}
+
+/// Re-queue jobs stuck in `starting` past the cutoff (e.g. the server
+/// restarted before their agent picked them up, or the agent died).
+pub async fn reset_stale_starting_jobs(pool: &PgPool, cutoff: DateTime<Utc>) -> Result<usize> {
+    let result = sqlx::query(
+        r#"
+        UPDATE jobs
+        SET status = 'queued', started_at = NULL, pid = NULL, error_message = NULL
+        WHERE status = 'starting' AND started_at < $1
+        "#,
+    )
+    .bind(cutoff)
+    .execute(pool)
+    .await
+    .context("Failed to reset stale starting jobs")?;
+    Ok(result.rows_affected() as usize)
 }
 
 pub async fn update_job_status(

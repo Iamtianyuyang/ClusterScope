@@ -65,6 +65,37 @@ pub async fn readonly_middleware(
     }
 }
 
+/// Role gate for admin-only routes (users, alert rules, …). Must run after
+/// [`auth_middleware`] so the claims extension is populated.
+pub async fn require_admin_middleware(
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    require_role_middleware(request, next, &["admin"]).await
+}
+
+/// Role gate for operator-or-admin routes (job submission, job stop).
+pub async fn require_operator_middleware(
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    require_role_middleware(request, next, &["operator", "admin"]).await
+}
+
+async fn require_role_middleware(
+    request: Request,
+    next: Next,
+    allowed: &[&str],
+) -> Result<Response, StatusCode> {
+    let claims = request
+        .extensions()
+        .get::<Claims>()
+        .cloned()
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    crate::handlers::check_role(&claims, allowed)?;
+    Ok(next.run(request).await)
+}
+
 pub fn extract_token(request: &Request) -> Result<Option<String>, StatusCode> {
     let auth_header = request
         .headers()

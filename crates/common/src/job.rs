@@ -77,6 +77,35 @@ pub fn can_transition(from: JobStatus, to: JobStatus) -> bool {
     VALID_TRANSITIONS.contains(&(from, to))
 }
 
+/// Map a DB status string ("queued", "running", …) to the enum.
+pub fn status_from_str(s: &str) -> Option<JobStatus> {
+    match s {
+        "queued" => Some(JobStatus::Queued),
+        "starting" => Some(JobStatus::Starting),
+        "running" => Some(JobStatus::Running),
+        "stopping" => Some(JobStatus::Stopping),
+        "succeeded" => Some(JobStatus::Succeeded),
+        "failed" => Some(JobStatus::Failed),
+        "cancelled" => Some(JobStatus::Cancelled),
+        "lost" => Some(JobStatus::Lost),
+        _ => None,
+    }
+}
+
+/// Inverse of [`status_from_str`].
+pub fn status_to_str(s: JobStatus) -> &'static str {
+    match s {
+        JobStatus::Queued => "queued",
+        JobStatus::Starting => "starting",
+        JobStatus::Running => "running",
+        JobStatus::Stopping => "stopping",
+        JobStatus::Succeeded => "succeeded",
+        JobStatus::Failed => "failed",
+        JobStatus::Cancelled => "cancelled",
+        JobStatus::Lost => "lost",
+    }
+}
+
 pub fn validate_transition(from: JobStatus, to: JobStatus) -> Result<(), AppError> {
     if can_transition(from, to) {
         Ok(())

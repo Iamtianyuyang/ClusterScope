@@ -194,6 +194,17 @@ pub async fn prune_old_metrics(pool: &PgPool) -> Result<()> {
     Ok(())
 }
 
+/// Update the GPU count learned from the latest metrics report.
+pub async fn update_node_gpu_count(pool: &PgPool, node_id: &str, gpu_count: i32) -> Result<()> {
+    sqlx::query("UPDATE node_info SET gpu_count = $2 WHERE node_id = $1")
+        .bind(node_id)
+        .bind(gpu_count)
+        .execute(pool)
+        .await
+        .context("Failed to update node gpu_count")?;
+    Ok(())
+}
+
 pub async fn get_job_logs(
     pool: &PgPool,
     job_id: &str,

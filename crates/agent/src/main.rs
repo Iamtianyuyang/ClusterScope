@@ -25,19 +25,38 @@ struct Cli {
     node_id: Option<String>,
 }
 
+/// Connect to the server with exponential backoff (never gives up).
+async fn connect_with_retry(
+    server_addr: String,
+    node_id: String,
+    config: common::config::AgentConfig,
+) -> anyhow::Result<grpc_client::AgentClient> {
+    let mut delay_secs: u64 = 1;
+    loop {
+        match grpc_client::AgentClient::new(server_addr.clone(), node_id.clone(), config.clone()).await {
+            Ok(client) => return Ok(client),
+            Err(e) => {
+                warn!(error = %e, delay_secs, "Failed to connect to server, retrying");
+                tokio::time::sleep(std::time::Duration::from_secs(delay_secs)).await;
+                delay_secs = (delay_secs * 2).min(60);
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    
+
     // Load config
     let config = config_loader::load_config(&cli)?;
-    
+
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .with_target(false)
         .init();
-    
+
     info!(
         server_addr = %config.server_addr,
         node_id = ?config.node_id,
@@ -67,17 +86,30 @@ async fn main() -> anyhow::Result<()> {
     // Create metrics collector
     let collector = metrics::MetricsCollector::new();
     
-    // Create gRPC client (shared across tasks via mutex)
+    // Create gRPC client (shared across tasks via mutex), retrying until the
+    // server is reachable so a temporary outage doesn't kill the agent.
     let client = std::sync::Arc::new(tokio::sync::Mutex::new(
-        grpc_client::AgentClient::new(
-            config.server_addr.clone(),
-            node_id.clone(),
-            config.clone(),
-        ).await?
+        connect_with_retry(config.server_addr.clone(), node_id.clone(), config.clone()).await?
     ));
 
     // Register node identity with the server (persists node_info row)
-    client.lock().await.register().await?;
+    {
+        let mut guard = client.lock().await;
+        let mut attempt: u32 = 0;
+        loop {
+            match guard.register().await {
+                Ok(()) => break,
+                Err(e) => {
+                    attempt += 1;
+                    if attempt >= 10 {
+                        return Err(anyhow::anyhow!("Failed to register with server after retries: {}", e));
+                    }
+                    warn!(error = %e, attempt, "Register failed, retrying");
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                }
+            }
+        }
+    }
     
     // Start reporting loop
     let report_interval = std::time::Duration::from_secs(config.report_interval_secs);

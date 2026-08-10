@@ -29,24 +29,18 @@ fn nvml() -> Option<&'static Nvml> {
 
 pub struct MetricsCollector {
     prev_network: Option<HashMap<String, NetworkCounter>>,
-    prev_disk: Option<HashMap<String, DiskCounter>>,
 }
 
 struct NetworkCounter {
     bytes_sent: u64,
     bytes_recv: u64,
-}
-
-struct DiskCounter {
-    total_bytes: u64,
-    free_bytes: u64,
+    sampled_at_ms: i64,
 }
 
 impl MetricsCollector {
     pub fn new() -> Self {
         Self {
             prev_network: None,
-            prev_disk: None,
         }
     }
     
@@ -94,15 +88,15 @@ impl MetricsCollector {
     fn collect_system(&mut self, report: &mut NodeMetricsReport) -> Result<()> {
         let sys = sysinfo::System::new_all();
         
-        // CPU usage
+        // CPU usage (sysinfo returns 0-100; stored as-is)
         let total_usage = sys.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32;
-        report.cpu_usage_percent = total_usage as f64 / 100.0;
+        report.cpu_usage_percent = total_usage as f64;
         
         // CPU cores
         for (i, cpu) in sys.cpus().iter().enumerate() {
             report.cpu_cores.push(protocol::CpuCoreMetrics {
                 core_id: i as u32,
-                usage_percent: (cpu.cpu_usage() / 100.0) as f32,
+                usage_percent: cpu.cpu_usage(),
             });
         }
         
@@ -136,41 +130,25 @@ impl MetricsCollector {
     
     fn collect_disks(&mut self, report: &mut NodeMetricsReport) {
         let disks = sysinfo::Disks::new_with_refreshed_list();
-        
-        let mut current = HashMap::new();
-        
+
         for disk in &disks {
             let usage = disk.total_space();
             let available = disk.available_space();
             let used = usage - available;
             let usage_pct = if usage > 0 { (used as f64 / usage as f64) * 100.0 } else { 0.0 };
-            
-            let disk_metrics = protocol::DiskMetrics {
+
+            report.disks.push(protocol::DiskMetrics {
                 mount_point: disk.mount_point().to_string_lossy().to_string(),
                 total_bytes: usage,
                 used_bytes: used,
                 free_bytes: available,
                 usage_percent: usage_pct as f32,
-            };
-            
-            if let Some(prev) = self.prev_disk.as_ref().and_then(|m| m.get(&disk_metrics.mount_point)) {
-                let time_diff = (Utc::now().timestamp() - (prev.total_bytes / 1_000_000) as i64) as f64;
-                if time_diff > 0.0 {
-                    // Disk usage is cumulative, don't compute rate
-                }
-            }
-            
-            current.insert(
-                disk_metrics.mount_point.clone(),
-                DiskCounter { total_bytes: usage, free_bytes: available },
-            );
-            report.disks.push(disk_metrics);
+            });
         }
-        
-        self.prev_disk = Some(current);
     }
     
     fn collect_network(&mut self, report: &mut NodeMetricsReport) {
+        let now_ms = Utc::now().timestamp_millis();
         let network_data = read_network_stats();
         
         let mut current = HashMap::new();
@@ -190,15 +168,14 @@ impl MetricsCollector {
                 rx_rate_bytes_per_sec: None,
             };
             
-            // Calculate rates
+            // Rate = (current - previous) bytes / elapsed seconds
             if let Some(prev) = self.prev_network.as_ref().and_then(|m| m.get(iface)) {
-                let now = Utc::now().timestamp();
-                let diff = now - (prev.bytes_sent / 1_000_000) as i64;
-                if diff > 0 {
-                    let tx_rate = (stats.bytes_sent as i64 - prev.bytes_sent as i64) / diff;
-                    let rx_rate = (stats.bytes_recv as i64 - prev.bytes_recv as i64) / diff;
-                    net.tx_rate_bytes_per_sec = Some(tx_rate.max(0) as f32);
-                    net.rx_rate_bytes_per_sec = Some(rx_rate.max(0) as f32);
+                let elapsed_secs = (now_ms - prev.sampled_at_ms) as f64 / 1000.0;
+                if elapsed_secs > 0.0 {
+                    let tx_rate = (stats.bytes_sent as i128 - prev.bytes_sent as i128) as f64 / elapsed_secs;
+                    let rx_rate = (stats.bytes_recv as i128 - prev.bytes_recv as i128) as f64 / elapsed_secs;
+                    net.tx_rate_bytes_per_sec = Some(tx_rate.max(0.0) as f32);
+                    net.rx_rate_bytes_per_sec = Some(rx_rate.max(0.0) as f32);
                 }
             }
             
@@ -206,6 +183,7 @@ impl MetricsCollector {
             current.insert(iface.clone(), NetworkCounter {
                 bytes_sent: stats.bytes_sent,
                 bytes_recv: stats.bytes_recv,
+                sampled_at_ms: now_ms,
             });
         }
         
@@ -215,7 +193,7 @@ impl MetricsCollector {
     fn collect_gpu(&self, report: &mut NodeMetricsReport) -> Result<()> {
         // Parse nvidia-smi output
         let output = Command::new("nvidia-smi")
-            .args(["--query-gpu=index,uuid,name,utilization.gpu,utilization.memory,memory.total,memory.used,temperature.gpu,power.draw,power.limit,fan.speed,pcie.link.gen.current,pcie.link.width.current",
+            .args(["--query-gpu=index,uuid,name,utilization.gpu,utilization.memory,memory.total,memory.used,temperature.gpu,power.draw,power.limit,fan.speed",
                    "--format=csv,noheader,nounits"])
             .output();
         
@@ -228,7 +206,7 @@ impl MetricsCollector {
                         continue;
                     }
                     
-                    let mut gpu = protocol::GpuMetrics {
+                    let gpu = protocol::GpuMetrics {
                         index: fields[0].parse().unwrap_or(0),
                         uuid: fields[1].to_string(),
                         name: fields[2].to_string(),
@@ -246,9 +224,6 @@ impl MetricsCollector {
                         mig_instances: vec![],
                     };
                     
-                    // Read PCIe counters from /sys
-                    self.read_pcie_stats(&mut gpu);
-                    
                     report.gpus.push(gpu);
                 }
             }
@@ -256,27 +231,6 @@ impl MetricsCollector {
         }
         
         Ok(())
-    }
-    
-    fn read_pcie_stats(&self, gpu: &mut protocol::GpuMetrics) {
-        let pci_path = format!(
-            "/sys/bus/pci/devices/0000:{:02x}:00.0/",
-            gpu.index
-        );
-        
-        let tx_bytes = std::fs::read_to_string(format!("{}rx_bytes", pci_path)).ok();
-        let rx_bytes = std::fs::read_to_string(format!("{}tx_byte", pci_path)).ok();
-        
-        if let Some(tx_str) = tx_bytes {
-            if let Ok(tx) = tx_str.trim().parse::<u64>() {
-                gpu.pcie_tx_bytes_per_second = Some(tx);
-            }
-        }
-        if let Some(rx_str) = rx_bytes {
-            if let Ok(rx) = rx_str.trim().parse::<u64>() {
-                gpu.pcie_rx_bytes_per_second = Some(rx);
-            }
-        }
     }
     
     fn collect_gpu_processes(&self, _config: &AgentConfig, report: &mut NodeMetricsReport) -> Result<()> {
@@ -510,102 +464,6 @@ fn process_user_command(pid: u32) -> (String, String) {
     (username, command)
 }
 
-struct ProcessInfo {
-    username: String,
-    command: String,
-    cpu_percent: f32,
-    system_memory_bytes: u64,
-    started_at: i64,
-}
-
-impl ProcessInfo {
-    /// Placeholder used when process details are not collected (no root needed).
-    fn unknown() -> Self {
-        Self {
-            username: "unknown".to_string(),
-            command: "unknown".to_string(),
-            cpu_percent: 0.0,
-            system_memory_bytes: 0,
-            started_at: 0,
-        }
-    }
-}
-
-fn get_process_info(pid: u32) -> ProcessInfo {
-    let mut info = ProcessInfo {
-        username: "unknown".to_string(),
-        command: "unknown".to_string(),
-        cpu_percent: 0.0,
-        system_memory_bytes: 0,
-        started_at: 0,
-    };
-    
-    let proc_path = format!("/proc/{}", pid);
-    
-    // Get command
-    if let Ok(cmd) = std::fs::read(format!("{}/cmdline", proc_path)) {
-        let cmd_str = cmd.into_iter()
-            .filter(|&b| b != 0)
-            .collect::<Vec<u8>>();
-        info.command = String::from_utf8_lossy(&cmd_str)
-            .to_string()
-            .replace("\0", " ")
-            .trim()
-            .to_string();
-    }
-    
-    // Get status for username and memory
-    if let Ok(status) = std::fs::read_to_string(format!("{}/status", proc_path)) {
-        for line in status.lines() {
-            if line.starts_with("Uid:") {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() > 1 {
-                    if let Ok(uid) = parts[1].parse::<u32>() {
-                        info.username = uid_to_username(uid).unwrap_or_else(|| "unknown".to_string());
-                    }
-                }
-            } else if line.starts_with("VmRSS:") {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    if let Ok(kb) = parts[1].parse::<u64>() {
-                        info.system_memory_bytes = kb * 1024;
-                    }
-                }
-            } else if line.starts_with("Time:") {
-                // utime + stime in clock ticks
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    if let Ok(utime) = parts[1].parse::<i64>() {
-                        let clk_tck = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
-                        if clk_tck > 0 {
-                            info.started_at = Utc::now().timestamp() - (utime / clk_tck as i64);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    // Get CPU percent from /proc/[pid]/stat
-    if let Ok(stat) = std::fs::read_to_string(format!("{}/stat", proc_path)) {
-        if let Some(last_paren) = stat.rfind(')') {
-            let rest = &stat[last_paren + 2..];
-            let parts: Vec<&str> = rest.split_whitespace().collect();
-            if parts.len() >= 11 {
-                // utime (index 11 in the rest, 14 overall)
-                if let Ok(utime) = parts[11].parse::<i64>() {
-                    let clk_tck = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
-                    if clk_tck > 0 {
-                        info.cpu_percent = ((utime as f64 / clk_tck as f64) * 100.0) as f32;
-                    }
-                }
-            }
-        }
-    }
-    
-    info
-}
-
 fn uid_to_username(uid: u32) -> Option<String> {
     unsafe {
         let passwd = libc::getpwuid(uid);
@@ -619,8 +477,6 @@ fn uid_to_username(uid: u32) -> Option<String> {
         Some(std::ffi::CStr::from_ptr(name).to_string_lossy().to_string())
     }
 }
-
-#[cfg(test)]
 
 #[cfg(test)]
 mod smoke_tests {

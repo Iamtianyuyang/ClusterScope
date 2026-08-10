@@ -18,7 +18,8 @@ const OverviewPage: React.FC = () => {
   // WebSocket for live metrics
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${window.location.host}/ws`
+    const token = localStorage.getItem('token')
+    const wsUrl = `${protocol}//${window.location.host}/ws${token ? `?token=${token}` : ''}`
 
     const ws = new WebSocket(wsUrl)
 
