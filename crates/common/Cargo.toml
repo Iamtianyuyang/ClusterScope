@@ -1,0 +1,27 @@
+[package]
+name = "common"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+serde_with.workspace = true
+rand.workspace = true
+regex.workspace = true
+itertools.workspace = true
+parking_lot.workspace = true
+lru.workspace = true
+rustc-hash = "2"
+dirs.workspace = true
+jsonwebtoken.workspace = true
+argon2 = { version = "0.5", features = ["std"] }
+sha2.workspace = true
+libc = "0.2"

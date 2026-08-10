@@ -1,0 +1,675 @@
+syntax = "proto3";
+
+package clusterscope.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/duration.proto";
+
+option java_multiple_files = true;
+option java_package = "ai.clusterscope.proto.v1";
+
+// ============================================================================
+// Common types
+// ============================================================================
+
+enum NodeStatus {
+    NODE_STATUS_UNSPECIFIED = 0;
+    NODE_STATUS_ONLINE = 1;
+    NODE_STATUS_DEGRADED = 2;
+    NODE_STATUS_OFFLINE = 3;
+}
+
+enum JobStatus {
+    JOB_STATUS_UNSPECIFIED = 0;
+    JOB_STATUS_QUEUED = 1;
+    JOB_STATUS_STARTING = 2;
+    JOB_STATUS_RUNNING = 3;
+    JOB_STATUS_STOPPING = 4;
+    JOB_STATUS_SUCCEEDED = 5;
+    JOB_STATUS_FAILED = 6;
+    JOB_STATUS_CANCELLED = 7;
+    JOB_STATUS_LOST = 8;
+}
+
+enum AlertSeverity {
+    ALERT_SEVERITY_UNSPECIFIED = 0;
+    ALERT_SEVERITY_INFO = 1;
+    ALERT_SEVERITY_WARNING = 2;
+    ALERT_SEVERITY_CRITICAL = 3;
+}
+
+enum AlertState {
+    ALERT_STATE_UNSPECIFIED = 0;
+    ALERT_STATE_NORMAL = 1;
+    ALERT_STATE_PENDING = 2;
+    ALERT_STATE_FIRING = 3;
+    ALERT_STATE_RESOLVED = 4;
+}
+
+enum Operator {
+    OPERATOR_UNSPECIFIED = 0;
+    OPERATOR_GT = 1;
+    OPERATOR_GTE = 2;
+    OPERATOR_LT = 3;
+    OPERATOR_LTE = 4;
+    OPERATOR_EQ = 5;
+    OPERATOR_NEQ = 6;
+}
+
+// ============================================================================
+// Node registration & heartbeat
+// ============================================================================
+
+message NodeInfo {
+    string node_id = 1;
+    string hostname = 2;
+    string ip_address = 3;
+    string agent_version = 4;
+    string os_info = 5;
+    string kernel_version = 6;
+    string cpu_model = 7;
+    uint32 cpu_cores = 8;
+    uint64 memory_total_bytes = 9;
+    string agent_platform = 10;
+    google.protobuf.Timestamp registered_at = 11;
+    // Labels for node grouping
+    map<string, string> labels = 12;
+}
+
+message NodeHeartbeat {
+    string node_id = 1;
+    uint64 timestamp_ms = 2;
+    NodeStatus status = 3;
+    // System resources summary
+    double cpu_usage_percent = 10;
+    uint64 memory_total_bytes = 11;
+    uint64 memory_used_bytes = 12;
+    uint64 swap_total_bytes = 13;
+    uint64 swap_used_bytes = 14;
+    double load_1 = 15;
+    double load_5 = 16;
+    double load_15 = 17;
+    uint64 uptime_seconds = 18;
+    uint64 boot_time_seconds = 19;
+    // GPU count
+    uint32 gpu_count = 20;
+}
+
+// ============================================================================
+// GPU metrics
+// ============================================================================
+
+message GpuMetrics {
+    uint32 index = 1;
+    string uuid = 2;
+    string name = 3;
+    float utilization_gpu = 4;
+    float utilization_memory = 5;
+    uint64 memory_total_bytes = 6;
+    uint64 memory_used_bytes = 7;
+    float temperature_celsius = 8;
+    float power_watts = 9;
+    float power_limit_watts = 10;
+    optional float fan_speed_percent = 11;
+    optional uint64 pcie_tx_bytes_per_second = 12;
+    optional uint64 pcie_rx_bytes_per_second = 13;
+    // MIG-specific
+    bool mig_enabled = 20;
+    repeated MigInstance mig_instances = 21;
+}
+
+message MigInstance {
+    uint32 gpu_index = 1;
+    string uuid = 2;
+    string name = 3;
+    uint64 memory_total_bytes = 4;
+    uint64 memory_used_bytes = 5;
+    float utilization_gpu = 6;
+    float utilization_memory = 7;
+    float temperature_celsius = 8;
+}
+
+message GpuProcess {
+    uint32 pid = 1;
+    string username = 2;
+    string command = 3;
+    string gpu_uuid = 4;
+    uint64 gpu_memory_bytes = 5;
+    float cpu_percent = 6;
+    uint64 system_memory_bytes = 7;
+    int64 started_at = 8;
+    string container_name = 20;
+    repeated string gpu_indices = 21;
+    optional float sm_utilization = 22;
+    optional float memory_utilization = 23;
+    optional float encoder_utilization = 24;
+    optional float decoder_utilization = 25;
+}
+
+// ============================================================================
+// Disk metrics
+// ============================================================================
+
+message DiskMetrics {
+    string mount_point = 1;
+    uint64 total_bytes = 2;
+    uint64 used_bytes = 3;
+    uint64 free_bytes = 4;
+    float usage_percent = 5;
+}
+
+// ============================================================================
+// Network metrics
+// ============================================================================
+
+message NetworkMetrics {
+    string interface_name = 1;
+    uint64 bytes_sent = 2;
+    uint64 bytes_recv = 3;
+    uint64 packets_sent = 4;
+    uint64 packets_recv = 5;
+    uint64 errors_in = 6;
+    uint64 errors_out = 7;
+    uint64 drops_in = 8;
+    uint64 drops_out = 9;
+    // Rates (bytes/sec since last report)
+    optional float tx_rate_bytes_per_sec = 20;
+    optional float rx_rate_bytes_per_sec = 21;
+}
+
+// ============================================================================
+// CPU metrics
+// ============================================================================
+
+message CpuCoreMetrics {
+    uint32 core_id = 1;
+    float usage_percent = 2;
+}
+
+// ============================================================================
+// NodeMetricsReport — the complete metrics snapshot from an Agent
+// ============================================================================
+
+message NodeMetricsReport {
+    string node_id = 1;
+    uint64 sequence = 2;
+    uint64 timestamp_ms = 3;
+    uint64 monotonic_clock_ms = 4;
+    
+    // System-level metrics
+    double cpu_usage_percent = 10;
+    repeated CpuCoreMetrics cpu_cores = 11;
+    double load_1 = 12;
+    double load_5 = 13;
+    double load_15 = 14;
+    uint64 memory_total_bytes = 15;
+    uint64 memory_used_bytes = 16;
+    uint64 swap_total_bytes = 17;
+    uint64 swap_used_bytes = 18;
+    uint64 uptime_seconds = 19;
+    uint64 boot_time_seconds = 20;
+    repeated DiskMetrics disks = 21;
+    repeated NetworkMetrics networks = 22;
+    
+    // GPU metrics
+    repeated GpuMetrics gpus = 30;
+    repeated GpuProcess gpu_processes = 31;
+}
+
+// ============================================================================
+// Job definitions
+// ============================================================================
+
+message JobDefinition {
+    string job_id = 1;
+    string node_id = 2;
+    string name = 3;
+    string executable = 4;
+    repeated string arguments = 5;
+    string working_directory = 6;
+    map<string, string> environment = 7;
+    uint32 max_concurrent = 8;
+    google.protobuf.Timestamp created_at = 20;
+    string created_by = 21;
+    string description = 22;
+}
+
+message Job {
+    string job_id = 1;
+    string node_id = 2;
+    string name = 3;
+    string executable = 4;
+    repeated string arguments = 5;
+    string working_directory = 6;
+    map<string, string> environment = 7;
+    JobStatus status = 8;
+    uint32 pid = 20;
+    uint32 exit_code = 21;
+    string error_message = 22;
+    google.protobuf.Timestamp created_at = 30;
+    google.protobuf.Timestamp started_at = 31;
+    google.protobuf.Timestamp finished_at = 32;
+    string created_by = 33;
+    int64 log_offset = 34;
+    string resource_quota = 35;
+    uint32 retry_count = 36;
+    uint32 max_retries = 37;
+}
+
+message JobLogEntry {
+    string job_id = 1;
+    string log_data = 2;
+    bool is_stderr = 3;
+    int64 timestamp = 4;
+    int64 log_offset = 5;
+}
+
+// ============================================================================
+// Alert rules and states
+// ============================================================================
+
+message AlertRule {
+    string rule_id = 1;
+    string name = 2;
+    string description = 3;
+    string metric = 4;
+    Operator operator = 5;
+    float threshold = 6;
+    uint32 duration_seconds = 7;
+    AlertSeverity severity = 8;
+    string node_id = 9; // empty means all nodes
+    repeated string gpu_uuids = 10; // empty means all GPUs
+    map<string, string> labels = 11;
+    bool enabled = 20;
+    google.protobuf.Timestamp created_at = 21;
+    google.protobuf.Timestamp updated_at = 22;
+    string created_by = 23;
+}
+
+message AlertStateRecord {
+    string rule_id = 1;
+    string node_id = 2;
+    string gpu_uuid = 3;
+    AlertState state = 4;
+    float current_value = 5;
+    float threshold = 6;
+    google.protobuf.Timestamp triggered_at = 20;
+    google.protobuf.Timestamp resolved_at = 21;
+    google.protobuf.Timestamp last_updated = 22;
+    uint32 consecutive_count = 23;
+}
+
+message AlertEvent {
+    string event_id = 1;
+    string rule_id = 2;
+    string node_id = 3;
+    string gpu_uuid = 4;
+    AlertState old_state = 5;
+    AlertState new_state = 6;
+    float current_value = 7;
+    float threshold = 8;
+    google.protobuf.Timestamp timestamp = 20;
+    string notification_sent = 21;
+}
+
+// ============================================================================
+// User & Auth
+// ============================================================================
+
+message User {
+    string user_id = 1;
+    string username = 2;
+    string email = 3;
+    string role = 4; // viewer, operator, admin
+    string password_hash = 5;
+    bool enabled = 6;
+    google.protobuf.Timestamp created_at = 20;
+    google.protobuf.Timestamp last_login_at = 21;
+    uint32 failed_login_attempts = 22;
+    google.protobuf.Timestamp locked_until = 23;
+}
+
+message LoginRequest {
+    string username = 1;
+    string password = 2;
+}
+
+message LoginResponse {
+    string access_token = 1;
+    string refresh_token = 2;
+    google.protobuf.Timestamp expires_at = 3;
+}
+
+message UserInfo {
+    string user_id = 1;
+    string username = 2;
+    string email = 3;
+    string role = 4;
+    google.protobuf.Timestamp created_at = 10;
+    google.protobuf.Timestamp last_login_at = 11;
+}
+
+message AuditLog {
+    string log_id = 1;
+    string user = 2;
+    string action = 3;
+    string target = 4;
+    string target_type = 5;
+    string details = 6;
+    string result = 7;
+    string source_ip = 8;
+    google.protobuf.Timestamp timestamp = 20;
+}
+
+// ============================================================================
+// Prometheus metrics endpoint
+// ============================================================================
+
+message PrometheusMetrics {
+    string metrics_text = 1;
+}
+
+// ============================================================================
+// Streaming log
+// ============================================================================
+
+message JobLogStream {
+    string job_id = 1;
+    string log_data = 2;
+    bool is_stderr = 3;
+    int64 timestamp = 4;
+    int64 log_offset = 5;
+    bool has_more = 6;
+    bool is_complete = 7;
+}
+
+// ============================================================================
+// Health & Info
+// ============================================================================
+
+message ClusterInfo {
+    uint32 total_nodes = 1;
+    uint32 online_nodes = 2;
+    uint32 degraded_nodes = 3;
+    uint32 offline_nodes = 4;
+    uint32 total_gpus = 5;
+    uint32 idle_gpus = 6;
+    float avg_gpu_utilization = 7;
+    uint64 total_memory_bytes = 8;
+    uint64 used_memory_bytes = 9;
+    uint32 running_jobs = 10;
+    uint32 active_alerts = 11;
+    uint32 total_users = 12;
+    string server_version = 13;
+    google.protobuf.Timestamp uptime = 14;
+}
+
+// ============================================================================
+// gRPC Service definitions
+// ============================================================================
+
+// Agent service: agents call this to register and report
+service AgentService {
+    // Register and receive node identity
+    rpc Register(NodeInfo) returns (NodeInfo);
+    
+    // Unary: stream metrics reports from agent to server
+    rpc ReportMetrics(stream NodeMetricsReport) returns (stream MetricsAck);
+    
+    // Unary: submit a job to an agent
+    rpc SubmitJob(JobDefinition) returns (Job);
+    
+    // Server streaming: agent requests pending jobs
+    rpc GetPendingJobs(NodeInfo) returns (stream Job);
+    
+    // Bidi streaming: job logs from agent to server
+    rpc ReportJobLogs(stream JobLogEntry) returns (stream LogAck);
+    
+    // Server streaming: job status updates from server to agent
+    rpc WatchJobStatus(stream JobStatusUpdate) returns (stream JobStatusUpdate);
+    
+    // Server streaming: agent sends heartbeat
+    rpc Heartbeat(stream NodeHeartbeat) returns (stream HeartbeatAck);
+    
+    // Cancel a job on agent
+    rpc CancelJob(CancelJobRequest) returns (Job);
+}
+
+service CentralService {
+    // Node management
+    rpc GetNodeStatus(NodeStatusRequest) returns (NodeStatusResponse);
+    rpc ListNodes(google.protobuf.Empty) returns (ListNodesResponse);
+    rpc GetNodeMetrics(NodeMetricsRequest) returns (NodeMetricsResponse);
+    
+    // Metrics history
+    rpc GetMetricsHistory(MetricsHistoryRequest) returns (MetricsHistoryResponse);
+    
+    // Job management
+    rpc CreateJob(JobDefinition) returns (Job);
+    rpc GetJob(JobRequest) returns (Job);
+    rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
+    rpc StopJob(StopJobRequest) returns (Job);
+    rpc GetJobLogs(JobLogRequest) returns (stream JobLogEntry);
+    rpc WatchJobLogs(WatchJobLogRequest) returns (stream JobLogStream);
+    
+    // Alert management
+    rpc CreateAlertRule(AlertRule) returns (AlertRule);
+    rpc UpdateAlertRule(AlertRule) returns (AlertRule);
+    rpc DeleteAlertRule(DeleteAlertRuleRequest) returns (google.protobuf.Empty);
+    rpc ListAlertRules(google.protobuf.Empty) returns (ListAlertRulesResponse);
+    rpc GetAlertState(AlertStateRequest) returns (AlertStateRecord);
+    rpc ListAlertStates(google.protobuf.Empty) returns (ListAlertStatesResponse);
+    rpc AcknowledgeAlert(AcknowledgeAlertRequest) returns (google.protobuf.Empty);
+    
+    // User management
+    rpc Login(LoginRequest) returns (LoginResponse);
+    rpc RefreshToken(RefreshTokenRequest) returns (LoginResponse);
+    rpc GetUser(UserRequest) returns (UserInfo);
+    rpc ListUsers(google.protobuf.Empty) returns (ListUsersResponse);
+    rpc CreateUser(User) returns (UserInfo);
+    rpc UpdateUser(User) returns (UserInfo);
+    rpc DeleteUser(DeleteUserRequest) returns (google.protobuf.Empty);
+    
+    // Cluster info
+    rpc GetClusterInfo(google.protobuf.Empty) returns (ClusterInfo);
+    
+    // Audit log
+    rpc ListAuditLogs(AuditLogRequest) returns (ListAuditLogsResponse);
+    
+    // Prometheus metrics export
+    rpc ExportPrometheusMetrics(google.protobuf.Empty) returns (PrometheusMetrics);
+    
+    // WebSocket-compatible: query historical metrics
+    rpc QueryMetricsStream(MetricsQueryRequest) returns (stream NodeMetricsReport);
+}
+
+// ============================================================================
+// Request/Response messages for CentralService
+// ============================================================================
+
+message MetricsAck {
+    string node_id = 1;
+    uint64 sequence = 2;
+    google.protobuf.Timestamp received_at = 3;
+}
+
+message LogAck {
+    string job_id = 1;
+    int64 acknowledged_offset = 2;
+}
+
+message JobStatusUpdate {
+    string job_id = 1;
+    JobStatus status = 2;
+    string message = 3;
+}
+
+message HeartbeatAck {
+    string node_id = 1;
+    uint64 timestamp_ms = 2;
+    uint32 pending_job_count = 3;
+}
+
+message NodeStatusRequest {
+    string node_id = 1;
+}
+
+message NodeStatusResponse {
+    string node_id = 1;
+    NodeStatus status = 2;
+    google.protobuf.Timestamp last_seen = 3;
+    string hostname = 4;
+    NodeInfo node_info = 5;
+}
+
+message ListNodesResponse {
+    repeated NodeStatusResponse nodes = 1;
+}
+
+message NodeMetricsRequest {
+    string node_id = 1;
+}
+
+message NodeMetricsResponse {
+    string node_id = 1;
+    NodeMetricsReport metrics = 2;
+    google.protobuf.Timestamp updated_at = 3;
+}
+
+message MetricsHistoryRequest {
+    string node_id = 1;
+    string gpu_uuid = 2;
+    string metric_name = 3;
+    int64 start_time_ms = 4;
+    int64 end_time_ms = 5;
+    uint32 interval_seconds = 6; // aggregation interval for historical data
+}
+
+message MetricsHistoryResponse {
+    repeated NodeMetricsReport reports = 1;
+}
+
+message JobRequest {
+    string job_id = 1;
+}
+
+message ListJobsRequest {
+    string node_id = 1;
+    JobStatus status = 2;
+    string created_by = 3;
+    int64 page = 4;
+    int64 page_size = 5;
+}
+
+message ListJobsResponse {
+    repeated Job jobs = 1;
+    int64 total = 2;
+}
+
+message StopJobRequest {
+    string job_id = 1;
+    bool force = 2;
+    uint32 grace_period_seconds = 3;
+}
+
+message JobLogRequest {
+    string job_id = 1;
+    int64 offset = 2;
+    int64 limit = 3;
+    bool stderr_only = 4;
+}
+
+message WatchJobLogRequest {
+    string job_id = 1;
+    bool follow = 2;
+    int64 tail_lines = 3;
+    bool stderr_only = 4;
+}
+
+message DeleteAlertRuleRequest {
+    string rule_id = 1;
+}
+
+message ListAlertRulesResponse {
+    repeated AlertRule rules = 1;
+}
+
+message AlertStateRequest {
+    string rule_id = 1;
+    string node_id = 2;
+    string gpu_uuid = 3;
+}
+
+message ListAlertStatesResponse {
+    repeated AlertStateRecord states = 1;
+}
+
+message AcknowledgeAlertRequest {
+    string rule_id = 1;
+    string node_id = 2;
+    string gpu_uuid = 3;
+    string user_id = 4;
+}
+
+message UserRequest {
+    string user_id = 1;
+    string username = 2;
+}
+
+message ListUsersResponse {
+    repeated UserInfo users = 1;
+}
+
+message DeleteUserRequest {
+    string user_id = 1;
+}
+
+message AuditLogRequest {
+    string user = 1;
+    string action = 2;
+    int64 start_time_ms = 3;
+    int64 end_time_ms = 4;
+    int64 page = 5;
+    int64 page_size = 6;
+}
+
+message ListAuditLogsResponse {
+    repeated AuditLog logs = 1;
+    int64 total = 2;
+}
+
+message MetricsQueryRequest {
+    string node_id = 1;
+    int64 start_time_ms = 2;
+    int64 end_time_ms = 3;
+}
+
+message CancelJobRequest {
+    string node_id = 1;
+    string job_id = 2;
+    bool force = 3;
+}
+
+// ============================================================================
+// WebSocket message types (used over WS, not gRPC)
+// ============================================================================
+
+message WebSocketMessage {
+    string type = 1; // metrics_update, job_update, alert_update, heartbeat, error, subscribe
+    string node_id = 2;
+    string job_id = 3;
+    oneof payload {
+        NodeMetricsReport metrics = 10;
+        Job job = 11;
+        AlertEvent alert = 12;
+        ClusterInfo cluster_info = 13;
+        string error_message = 14;
+        string subscribe_request = 15;
+    }
+}
+
+// Refresh token request
+message RefreshTokenRequest {
+    string token = 1;
+}

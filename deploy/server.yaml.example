@@ -1,0 +1,17 @@
+# ClusterScope Central Server configuration
+# Copy to /etc/clusterscope/server.yaml (or pass as argv[1]).
+
+grpc_addr: "0.0.0.0:50051"
+http_addr: "0.0.0.0:8080"
+ws_addr: "0.0.0.0:8081"
+
+postgres_url: "postgresql://clusterscope:clusterscope@localhost:5432/clusterscope"
+# redis_url: "redis://localhost:6379"   # optional, currently unused
+
+jwt_secret: "change-me-to-a-long-random-string"
+default_admin_username: "admin"
+default_admin_password: "admin123"
+
+# false = read-only API (GET/HEAD) works without a token; writes still require JWT.
+# Recommended for trusted LAN monitoring (passwordless TUI).
+auth_required: false

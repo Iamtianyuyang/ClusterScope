@@ -1,0 +1,28 @@
+# ClusterScope Agent configuration
+# Copy to ~/.config/clusterscope/agent.yaml (shared across nodes is fine).
+
+# Central server gRPC address
+server_addr: "http://127.0.0.1:50051"
+
+# Optional: fixed node id. Leave EMPTY to auto-use the local hostname —
+# recommended on shared-HOME clusters where this file is shared by many nodes.
+node_id: ""
+
+# Persisted node identity (fallback when hostname is unavailable)
+node_id_file: ~/.config/clusterscope/node_id
+
+# How often to collect and report metrics (seconds)
+report_interval_secs: 2
+
+# Log directory for job output
+log_dir: ~/.config/clusterscope/logs
+
+log_level: info
+
+# Mount points to monitor
+disk_mounts:
+  - /
+
+# Read process details (/proc/<pid>) best-effort; degrades to "unknown" when
+# restricted. Never requires root.
+collect_process_details: true

@@ -1,0 +1,58 @@
+[package]
+name = "server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "clusterscope-server"
+path = "src/main.rs"
+
+[dependencies]
+common.workspace = true
+protocol.workspace = true
+storage.workspace = true
+tonic.workspace = true
+axum.workspace = true
+hyper.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+clap.workspace = true
+argon2.workspace = true
+jsonwebtoken.workspace = true
+sqlx.workspace = true
+redis.workspace = true
+reqwest.workspace = true
+tokio-util.workspace = true
+bytes.workspace = true
+sha2.workspace = true
+rand.workspace = true
+parking_lot.workspace = true
+dashmap.workspace = true
+lru.workspace = true
+indexmap.workspace = true
+prometheus-client.workspace = true
+rcgen.workspace = true
+rustls.workspace = true
+rustls-pemfile.workspace = true
+tokio-rustls.workspace = true
+rustls-pki-types.workspace = true
+regex.workspace = true
+itertools.workspace = true
+tokio-stream = "0.1"
+prost-types.workspace = true
+serde_yaml.workspace = true
+http-body-util = "0.1"
+tower-limit = "0.3"

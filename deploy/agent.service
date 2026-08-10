@@ -1,0 +1,16 @@
+[Unit]
+Description=ClusterScope GPU Agent
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/clusterscope-agent --config /etc/clusterscope/agent.yaml
+Restart=always
+RestartSec=5
+User=clusterscope
+Group=clusterscope
+LogsDirectory=/var/log/clusterscope-agent
+WorkingDirectory=/var/lib/clusterscope
+
+[Install]
+WantedBy=multi-user.target
