@@ -126,6 +126,8 @@ pub struct UserRow {
     pub username: String,
     pub email: Option<String>,
     pub role: String,
+    /// Missing in list queries (never expose hashes); defaults to empty.
+    #[sqlx(default)]
     pub password_hash: String,
     pub enabled: bool,
     pub created_at: DateTime<Utc>,

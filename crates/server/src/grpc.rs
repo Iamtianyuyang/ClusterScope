@@ -1,6 +1,6 @@
 use crate::AppState;
 use common::alert::{AlertEvent, AlertRule, AlertSeverity, AlertState};
-use common::job::{status_from_str, JobStatus};
+use common::job::status_from_str;
 use protocol::*;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -245,10 +245,19 @@ impl AgentService for AgentServiceImpl {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
             loop {
                 interval.tick().await;
-                if let Ok(jobs) = storage::job_queries::get_jobs_for_node(state.database.pool(), &node_id).await {
-                    for job in jobs {
-                        let _ = tx.send(Ok(job_to_proto(&job))).await;
+                match storage::job_queries::get_jobs_for_node(state.database.pool(), &node_id).await {
+                    Ok(jobs) => {
+                        for job in jobs {
+                            tracing::debug!(
+                                job_id = %job.job_id,
+                                db_status = %job.status,
+                                proto_status = job_to_proto(&job).status,
+                                "get_pending_jobs: sending job"
+                            );
+                            let _ = tx.send(Ok(job_to_proto(&job))).await;
+                        }
                     }
+                    Err(e) => warn!(error = %e, "get_jobs_for_node failed"),
                 }
             }
         });
@@ -633,4 +642,39 @@ async fn save_job_log(state: &AppState, entry: &JobLogEntry) -> anyhow::Result<(
     .ok();
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row_with_status(status: &str) -> storage::models::JobRow {
+        storage::models::JobRow {
+            job_id: "j1".into(), node_id: "n1".into(), name: "n".into(),
+            executable: "/bin/true".into(),
+            arguments: serde_json::json!([]),
+            working_directory: "/".into(),
+            environment: serde_json::json!({}),
+            status: status.into(),
+            pid: None, exit_code: None, error_message: None,
+            created_at: chrono::Utc::now(), started_at: None, finished_at: None,
+            created_by: "u".into(), resource_quota: None, retry_count: 0, max_retries: 0,
+        }
+    }
+
+    #[test]
+    fn test_job_to_proto_status_mapping() {
+        assert_eq!(job_to_proto(&row_with_status("starting")).status, JobStatus::Starting as i32);
+        assert_eq!(job_to_proto(&row_with_status("stopping")).status, JobStatus::Stopping as i32);
+        assert_eq!(job_to_proto(&row_with_status("running")).status, JobStatus::Running as i32);
+        assert_eq!(job_to_proto(&row_with_status("queued")).status, JobStatus::Queued as i32);
+    }
+
+    #[test]
+    fn test_status_int_to_str() {
+        assert_eq!(status_int_to_str(4), Some("stopping"));
+        assert_eq!(status_int_to_str(3), Some("running"));
+        assert_eq!(status_int_to_str(2), Some("starting"));
+        assert_eq!(status_int_to_str(99), None);
+    }
 }

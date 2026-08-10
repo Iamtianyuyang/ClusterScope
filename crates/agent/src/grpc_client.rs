@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use common::config::AgentConfig;
 use protocol::{
-    AgentServiceClient, NodeInfo, NodeMetricsReport, NodeHeartbeat, Job, JobDefinition,
-    JobLogEntry,
+    AgentServiceClient, Job, JobDefinition, JobLogEntry, JobStatusUpdate, NodeHeartbeat,
+    NodeInfo, NodeMetricsReport,
 };
 use tokio::time::Duration;
 use tokio_stream::StreamExt;
@@ -188,29 +188,43 @@ impl AgentClient {
         while let Some(job_result) = stream.next().await {
             match job_result {
                 Ok(job) => {
+                    info!(job_id = %job.job_id, status = job.status, "Received job message");
                     // `stopping` = the server asked us to cancel a running job.
                     if job.status == protocol::JobStatus::Stopping as i32 {
                         info!(job_id = %job.job_id, "Cancel requested by server");
-                        let running = self.job_runtime.request_cancel(&job.job_id).await;
-                        if !running {
-                            // Nothing to kill — never started or already gone.
-                            let _ = self.update_job_status(
-                                &job.job_id,
-                                protocol::JobStatus::Cancelled as i32,
-                                "cancelled before start",
-                            ).await;
-                        }
+                        let runtime = self.job_runtime.clone();
+                        let mut client = self.client.clone();
+                        let job_id = job.job_id.clone();
+                        // Handle cancellation concurrently: the poll loop must
+                        // keep consuming the stream.
+                        tokio::spawn(async move {
+                            let running = runtime.request_cancel(&job_id).await;
+                            if !running {
+                                // Nothing to kill — never started or already gone.
+                                let _ = client.update_job_status(JobStatusUpdate {
+                                    job_id,
+                                    status: protocol::JobStatus::Cancelled as i32,
+                                    message: "cancelled before start".to_string(),
+                                }).await;
+                            }
+                        });
                     } else {
                         info!(job_id = %job.job_id, name = %job.name, "Received pending job");
-                        // Execute job
-                        if let Err(e) = crate::job_executor::execute_job(
-                            &self.config,
-                            job,
-                            &mut self.client,
-                            &self.job_runtime,
-                        ).await {
-                            warn!(error = %e, "Job execution failed");
-                        }
+                        // Execute the job concurrently so long-running jobs do
+                        // not block polling for new jobs / cancellations.
+                        let config = self.config.clone();
+                        let runtime = self.job_runtime.clone();
+                        let mut client = self.client.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = crate::job_executor::execute_job(
+                                &config,
+                                job,
+                                &mut client,
+                                &runtime,
+                            ).await {
+                                warn!(error = %e, "Job execution failed");
+                            }
+                        });
                     }
                 }
                 Err(e) => {

@@ -36,7 +36,7 @@ pub async fn auth_middleware(
 /// mutating requests still require a valid JWT.
 pub async fn readonly_middleware(
     State(secret): State<Arc<String>>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
     let path = request.uri().path();
@@ -44,10 +44,19 @@ pub async fn readonly_middleware(
         return Ok(next.run(request).await);
     }
 
-    // Read-only requests are public in this mode.
+    // Read-only requests are public in this mode — but if a token IS supplied
+    // it must be valid, and its claims are attached for role gates.
     if request.method() == axum::http::Method::GET
         || request.method() == axum::http::Method::HEAD
     {
+        if let Ok(Some(token)) = extract_token(&request) {
+            match validate_token(&token, &secret) {
+                Ok(claims) => {
+                    request.extensions_mut().insert(claims);
+                }
+                Err(_) => return Err(StatusCode::UNAUTHORIZED),
+            }
+        }
         return Ok(next.run(request).await);
     }
 

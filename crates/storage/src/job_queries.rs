@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
+/// `node_id` may be `None` when the scheduler will pick the node later.
 pub async fn insert_job(pool: &PgPool, job: &JobRow) -> Result<()> {
     sqlx::query(
         r#"
@@ -15,7 +16,7 @@ pub async fn insert_job(pool: &PgPool, job: &JobRow) -> Result<()> {
         "#,
     )
     .bind(&job.job_id)
-    .bind(&job.node_id)
+    .bind(if job.node_id.is_empty() { None::<String> } else { Some(job.node_id.clone()) })
     .bind(&job.name)
     .bind(&job.executable)
     .bind(&job.arguments)
@@ -41,7 +42,10 @@ pub async fn insert_job(pool: &PgPool, job: &JobRow) -> Result<()> {
 
 pub async fn get_job(pool: &PgPool, job_id: &str) -> Result<Option<JobRow>> {
     sqlx::query_as::<_, JobRow>(
-        "SELECT * FROM jobs WHERE job_id = $1",
+        "SELECT job_id, COALESCE(node_id, '') AS node_id, name, executable, arguments,
+       working_directory, environment, status, pid, exit_code, error_message,
+       created_at, started_at, finished_at, created_by, resource_quota,
+       retry_count, max_retries FROM jobs WHERE job_id = $1",
     )
     .bind(job_id)
     .fetch_optional(pool)
@@ -61,21 +65,21 @@ pub async fn list_jobs(
 
     // Build a parameterized query with proper bind order.
     let mut conditions: Vec<String> = Vec::new();
-    let mut bind_values: Vec<serde_json::Value> = Vec::new();
+    let mut bind_values: Vec<String> = Vec::new();
     let mut n = 0usize;
     if let Some(nid) = node_id {
         n += 1;
-        bind_values.push(serde_json::Value::String(nid.to_string()));
+        bind_values.push(nid.to_string());
         conditions.push(format!("node_id = ${}", n));
     }
     if let Some(st) = status {
         n += 1;
-        bind_values.push(serde_json::Value::String(st.to_string()));
+        bind_values.push(st.to_string());
         conditions.push(format!("status = ${}", n));
     }
     if let Some(cb) = created_by {
         n += 1;
-        bind_values.push(serde_json::Value::String(cb.to_string()));
+        bind_values.push(cb.to_string());
         conditions.push(format!("created_by = ${}", n));
     }
     let where_sql = if conditions.is_empty() {
@@ -86,7 +90,10 @@ pub async fn list_jobs(
 
     let count_sql = format!("SELECT COUNT(*) FROM jobs {}", where_sql);
     let list_sql = format!(
-        "SELECT * FROM jobs {} ORDER BY created_at DESC LIMIT ${} OFFSET ${}",
+        "SELECT job_id, COALESCE(node_id, '') AS node_id, name, executable, arguments,
+       working_directory, environment, status, pid, exit_code, error_message,
+       created_at, started_at, finished_at, created_by, resource_quota,
+       retry_count, max_retries FROM jobs {} ORDER BY created_at DESC LIMIT ${} OFFSET ${}",
         where_sql,
         n + 1,
         n + 2
@@ -118,7 +125,10 @@ pub async fn list_jobs(
 pub async fn get_jobs_for_node(pool: &PgPool, node_id: &str) -> Result<Vec<JobRow>> {
     sqlx::query_as::<_, JobRow>(
         r#"
-        SELECT * FROM jobs
+        SELECT job_id, COALESCE(node_id, '') AS node_id, name, executable, arguments,
+       working_directory, environment, status, pid, exit_code, error_message,
+       created_at, started_at, finished_at, created_by, resource_quota,
+       retry_count, max_retries FROM jobs
         WHERE node_id = $1 AND status IN ('starting', 'stopping')
         ORDER BY created_at ASC
         "#,
@@ -205,7 +215,10 @@ pub async fn update_job_status(
 pub async fn get_running_jobs(pool: &PgPool, node_id: &str) -> Result<Vec<JobRow>> {
     sqlx::query_as::<_, JobRow>(
         r#"
-        SELECT * FROM jobs
+        SELECT job_id, COALESCE(node_id, '') AS node_id, name, executable, arguments,
+       working_directory, environment, status, pid, exit_code, error_message,
+       created_at, started_at, finished_at, created_by, resource_quota,
+       retry_count, max_retries FROM jobs
         WHERE node_id = $1 AND status IN ('running', 'starting')
         "#,
     )

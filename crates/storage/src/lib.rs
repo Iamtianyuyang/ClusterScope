@@ -240,6 +240,13 @@ impl DatabasePool {
             e => e.into(),
         })?;
         
+        // node_id may be empty ("") when the scheduler picks the node.
+        // Allow NULL so the FK constraint does not reject it.
+        sqlx::query("ALTER TABLE jobs ALTER COLUMN node_id DROP NOT NULL")
+            .execute(pool)
+            .await
+            .ok();
+
         // Create initial admin user if not exists
         use argon2::password_hash::{PasswordHasher, SaltString};
         use argon2::password_hash::rand_core::OsRng;

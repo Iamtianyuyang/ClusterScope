@@ -8,6 +8,7 @@ use common::auth::{self, Claims, UserRole};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::collections::HashMap;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::AppState;
@@ -306,7 +307,7 @@ pub async fn list_jobs(
         params.get("page").and_then(|s| s.parse().ok()).unwrap_or(0),
         params.get("page_size").and_then(|s| s.parse().ok()).unwrap_or(20),
     ).await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| { warn!(error = %e, "list_jobs failed"); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     Ok(Json(serde_json::json!({
         "jobs": jobs,
@@ -322,7 +323,7 @@ pub async fn get_job(
         state.database.pool(),
         &job_id,
     ).await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|e| { warn!(error = %e, "get_job failed"); StatusCode::INTERNAL_SERVER_ERROR })?
     .ok_or(StatusCode::NOT_FOUND)?;
 
     Ok(Json(job))
@@ -533,7 +534,7 @@ pub async fn list_users(
     let users = storage::user_queries::list_users(
         state.database.pool(),
     ).await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| { warn!(error = %e, "list_users failed"); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     Ok(Json(users))
 }
