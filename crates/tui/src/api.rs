@@ -194,12 +194,13 @@ impl Api {
     }
 
     async fn get(&self, path: &str) -> Result<Value> {
-        let resp = self
-            .client
-            .get(format!("{}{}", self.base, path))
-            .bearer_auth(&self.token)
-            .send()
-            .await?;
+        let mut req = self.client.get(format!("{}{}", self.base, path));
+        // Only attach the header when a real token exists: an empty
+        // `Bearer ` header makes the server reject the request.
+        if !self.token.is_empty() {
+            req = req.bearer_auth(&self.token);
+        }
+        let resp = req.send().await?;
         if !resp.status().is_success() {
             anyhow::bail!("GET {}: HTTP {}", path, resp.status());
         }

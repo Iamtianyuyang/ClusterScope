@@ -156,17 +156,50 @@ pub async fn insert_alert_event(
 }
 
 pub async fn get_active_alert_events(pool: &PgPool) -> Result<Vec<AlertEventRow>> {
+    // Take the LATEST event per (node_id, rule_id, gpu_uuid) first, then
+    // filter — otherwise a stale firing row shadows a newer resolved one.
     sqlx::query_as::<_, AlertEventRow>(
         r#"
-        SELECT DISTINCT ON (node_id, rule_id) *
-        FROM alert_events
+        SELECT * FROM (
+            SELECT DISTINCT ON (node_id, rule_id, gpu_uuid) *
+            FROM alert_events
+            ORDER BY node_id, rule_id, gpu_uuid, timestamp DESC
+        ) latest
         WHERE new_state IN ('pending', 'firing')
-        ORDER BY node_id, rule_id, timestamp DESC
+        ORDER BY timestamp DESC
         "#,
     )
     .fetch_all(pool)
     .await
     .context("Failed to get active alert events")
+}
+
+/// Self-heal: alert instances whose latest event is still pending/firing but
+/// older than `cutoff` get a synthetic `resolved` event (e.g. after a server
+/// restart the in-memory engine lost their state).
+pub async fn expire_stale_alerts(pool: &PgPool, cutoff: chrono::DateTime<chrono::Utc>) -> Result<usize> {
+    let result = sqlx::query(
+        r#"
+        INSERT INTO alert_events (
+            event_id, rule_id, node_id, gpu_uuid, old_state, new_state,
+            current_value, threshold, timestamp
+        )
+        SELECT md5(random()::text || clock_timestamp()::text),
+               t.rule_id, t.node_id, t.gpu_uuid, t.new_state, 'resolved',
+               t.current_value, t.threshold, NOW()
+        FROM (
+            SELECT DISTINCT ON (rule_id, node_id, gpu_uuid) *
+            FROM alert_events
+            ORDER BY rule_id, node_id, gpu_uuid, timestamp DESC
+        ) t
+        WHERE t.new_state IN ('pending', 'firing') AND t.timestamp < $1
+        "#,
+    )
+    .bind(cutoff)
+    .execute(pool)
+    .await
+    .context("Failed to expire stale alerts")?;
+    Ok(result.rows_affected() as usize)
 }
 
 pub async fn get_alert_events_by_rule(

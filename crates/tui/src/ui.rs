@@ -625,6 +625,23 @@ fn draw_footer(f: &mut Frame, app: &AppState, area: Rect) {
         Paragraph::new(Line::from(Span::styled(text, Style::default().fg(DIM)))),
         area,
     );
+
+    // Surface refresh errors (e.g. server unreachable, auth issues).
+    if let Some(err) = &app.error {
+        let line = format!(" error: {}\n", err);
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                line,
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ))),
+            Rect {
+                x: 0,
+                y: area.y.saturating_sub(1),
+                width: area.width,
+                height: 1,
+            },
+        );
+    }
 }
 
 // ---- Jobs / Alerts (unchanged content, restyled) ----

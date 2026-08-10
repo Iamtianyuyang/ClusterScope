@@ -44,12 +44,17 @@ pub async fn readonly_middleware(
         return Ok(next.run(request).await);
     }
 
-    // Read-only requests are public in this mode — but if a token IS supplied
-    // it must be valid, and its claims are attached for role gates.
+    // Read-only requests are public in this mode — but if a non-empty token
+    // IS supplied it must be valid, and its claims are attached for role gates.
     if request.method() == axum::http::Method::GET
         || request.method() == axum::http::Method::HEAD
     {
         if let Ok(Some(token)) = extract_token(&request) {
+            if token.is_empty() {
+                // Empty bearer token == no token (e.g. tools that always
+                // attach an Authorization header).
+                return Ok(next.run(request).await);
+            }
             match validate_token(&token, &secret) {
                 Ok(claims) => {
                     request.extensions_mut().insert(claims);

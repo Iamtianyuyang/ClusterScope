@@ -175,11 +175,11 @@ fn build_http_router(state: Arc<AppState>) -> Router {
         .route("/api/refresh-token", post(handlers::refresh_token))
         .route("/ws", get(ws_handler::ws_upgrade));
 
-    // Admin-only: user management + alert rule management.
+    // Admin-only: user management + alert rule management (writes).
     let admin_routes = Router::new()
         .route("/users", get(handlers::list_users).post(handlers::create_user))
         .route("/users/{id}", get(handlers::get_user).patch(handlers::update_user).delete(handlers::delete_user))
-        .route("/alerts/rules", get(handlers::list_alert_rules).post(handlers::create_alert_rule))
+        .route("/alerts/rules", post(handlers::create_alert_rule))
         .route("/alerts/rules/{rule_id}", delete(handlers::delete_alert_rule))
         .route("/alerts/rules/{rule_id}/ack", post(handlers::acknowledge_alert))
         .route_layer(axum::middleware::from_fn(auth_middleware::require_admin_middleware));
@@ -199,6 +199,7 @@ fn build_http_router(state: Arc<AppState>) -> Router {
         .route("/jobs", get(handlers::list_jobs))
         .route("/jobs/{job_id}", get(handlers::get_job))
         .route("/jobs/{job_id}/logs", get(handlers::get_job_logs))
+        .route("/alerts/rules", get(handlers::list_alert_rules))
         .route("/alerts/rules/{rule_id}/state", get(handlers::get_alert_state))
         .route("/alerts/events", get(handlers::list_alert_events))
         .route("/cluster/info", get(handlers::get_cluster_info))
@@ -244,6 +245,16 @@ async fn run_background_tasks(state: Arc<AppState>) {
         run_scheduler_cycle(&state).await;
 
         refresh_alert_rules(&state).await;
+
+        // Self-heal stale alert instances (server restarts lose engine state).
+        if cycle % 12 == 0 { // every 2 minutes
+            if let Err(e) = storage::alert_queries::expire_stale_alerts(
+                state.database.pool(),
+                Utc::now() - ChronoDuration::minutes(10),
+            ).await {
+                warn!(error = %e, "Failed to expire stale alerts");
+            }
+        }
 
         // Hourly rollups every 10 minutes; daily every hour.
         if cycle % 60 == 0 {
