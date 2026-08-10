@@ -221,5 +221,8 @@ cargo test --workspace
 ## 已知限制
 
 - 进程级 SM 采样依赖驱动持续提供样本(本机 NVIDIA GPU 驱动下为 `—`,优雅降级)
-- Scheduler 未接入 server 主循环(任务提交后停留在 queued)
-- 生产建议:gRPC 启用 TLS(`tls_enabled` 已预留)、PostgreSQL 独立账号、`auth_required: true` 并定期轮换 JWT secret
+- gRPC 未启用 TLS(`tls_enabled` 已预留),生产建议配合内网/VPN 或自行加 TLS
+- 调度器为容量感知的简单 FIFO(按节点 GPU 数与字母序),无优先级/抢占
+- 任务取消通过 SIGTERM 通知进程组,部分进程可能自行忽略信号(可配 force 后升级为 SIGKILL)
+- Web 前端使用 Ant Design + ECharts,尚未实现告警规则的可视化编辑(可通过 REST API 管理)
+- 生产建议:PostgreSQL 独立账号、`auth_required: true` 并定期轮换 JWT secret
