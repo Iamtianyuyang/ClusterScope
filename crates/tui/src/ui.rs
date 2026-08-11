@@ -2,8 +2,11 @@ use crate::api::{AlertEvent, AlertRule, GpuInfo, Job, Node, NodeMetrics};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
+    symbols::Marker,
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
+    widgets::{
+        Axis, Block, Borders, Cell, Chart, Dataset, GraphType, Paragraph, Row, Table,
+    },
     Frame,
 };
 use std::collections::{HashMap, VecDeque};
@@ -27,15 +30,17 @@ pub enum Tab {
     Nodes,
     Jobs,
     Alerts,
+    Trend,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 3] = [Tab::Nodes, Tab::Jobs, Tab::Alerts];
+    pub const ALL: [Tab; 4] = [Tab::Nodes, Tab::Jobs, Tab::Alerts, Tab::Trend];
     pub fn title(self) -> &'static str {
         match self {
             Tab::Nodes => "Overview",
             Tab::Jobs => "Jobs",
             Tab::Alerts => "Alerts",
+            Tab::Trend => "Trend",
         }
     }
     pub fn index(self) -> usize {
@@ -43,6 +48,7 @@ impl Tab {
             Tab::Nodes => 0,
             Tab::Jobs => 1,
             Tab::Alerts => 2,
+            Tab::Trend => 3,
         }
     }
     pub fn from_index(i: usize) -> Self {
@@ -51,23 +57,35 @@ impl Tab {
 }
 
 /// Rolling history per node (last ~2 min at 3s refresh).
+/// `gpus[i]` = utilization curve of GPU i; `gpus_mem[i]` = its memory used %.
 pub struct NodeHistory {
     pub cpu: VecDeque<f64>,
-    pub gpu: VecDeque<f64>,
+    pub gpus: Vec<VecDeque<f64>>,
+    pub gpus_mem: Vec<VecDeque<f64>>,
 }
 
 impl NodeHistory {
     fn new() -> Self {
-        Self { cpu: VecDeque::new(), gpu: VecDeque::new() }
+        Self { cpu: VecDeque::new(), gpus: Vec::new(), gpus_mem: Vec::new() }
     }
-    fn push(&mut self, cpu: f64, gpu: f64) {
+    fn push(&mut self, cpu: f64, gpus: &[(f64, f64)]) {
         self.cpu.push_back(cpu);
-        self.gpu.push_back(gpu);
         if self.cpu.len() > HISTORY_LEN {
             self.cpu.pop_front();
         }
-        if self.gpu.len() > HISTORY_LEN {
-            self.gpu.pop_front();
+        for (i, &(util, mem)) in gpus.iter().enumerate() {
+            if i >= self.gpus.len() {
+                self.gpus.push(VecDeque::new());
+                self.gpus_mem.push(VecDeque::new());
+            }
+            self.gpus[i].push_back(util);
+            if self.gpus[i].len() > HISTORY_LEN {
+                self.gpus[i].pop_front();
+            }
+            self.gpus_mem[i].push_back(mem);
+            if self.gpus_mem[i].len() > HISTORY_LEN {
+                self.gpus_mem[i].pop_front();
+            }
         }
     }
 }
@@ -130,15 +148,18 @@ impl AppState {
         let events = api.alert_events().await?;
 
         for (id, m) in &metrics {
-            let gpu_avg = if m.gpus.is_empty() {
-                0.0
-            } else {
-                m.gpus.iter().map(|g| g.utilization_gpu).sum::<f64>() / m.gpus.len() as f64
-            };
+            let gpu_pairs: Vec<(f64, f64)> = m.gpus.iter().map(|g| {
+                let mem_pct = if g.memory_total_bytes > 0 {
+                    g.memory_used_bytes as f64 / g.memory_total_bytes as f64 * 100.0
+                } else {
+                    0.0
+                };
+                (g.utilization_gpu, mem_pct)
+            }).collect();
             self.history
                 .entry(id.clone())
                 .or_insert_with(NodeHistory::new)
-                .push(m.cpu_usage_percent, gpu_avg);
+                .push(m.cpu_usage_percent, &gpu_pairs);
         }
 
         if self.selected_node >= nodes.len() {
@@ -162,6 +183,14 @@ impl AppState {
             .iter()
             .filter(|p| p.gpu_uuid == gpu.uuid)
             .collect()
+    }
+
+    /// All GPU processes on the selected node (Trend tab: every user's
+    /// programs across all GPUs, not just the selected card).
+    pub fn node_processes(&self) -> Vec<&crate::api::GpuProcess> {
+        let Some(node) = self.nodes.get(self.selected_node) else { return vec![] };
+        let Some(m) = self.metrics.get(&node.node_id) else { return vec![] };
+        m.gpu_processes.iter().collect()
     }
 }
 
@@ -228,6 +257,73 @@ fn mini_bar(pct: f64, width: usize) -> String {
     format!("{:<width$}", "█".repeat(filled), width = width)
 }
 
+/// Cell density for the GPU table (adapts to panel height).
+#[derive(Clone, Copy, PartialEq)]
+enum CellMode {
+    /// One GPU per row: bar + util + vram + temp (original layout).
+    Full,
+    /// Two per row: util + vram + temp.
+    Medium,
+    /// Three per row: util + vram.
+    Short,
+    /// Six per row: util + vram (used only).
+    Tiny,
+}
+
+/// One GPU cell. Formats:
+/// Full:   ` >0 ██████ 100% 10.0G/45G 42°`
+/// Medium: ` >0 100% 10.0G/45G 42°`
+/// Short:  ` >0 100% 10.0G/45G`
+/// Tiny:   ` >0 100% 10.0G`
+fn gpu_cell(g: &crate::api::GpuInfo, sel: bool, mode: CellMode) -> Vec<Span<'static>> {
+    let idle = g.utilization_gpu < BUSY_PCT;
+    let vram = format!("{}/{}", fmt_vram(g.memory_used_bytes), fmt_total(g.memory_total_bytes));
+    let vram_used = fmt_vram(g.memory_used_bytes);
+    let mem_pct = if g.memory_total_bytes > 0 {
+        g.memory_used_bytes as f64 / g.memory_total_bytes as f64 * 100.0
+    } else {
+        0.0
+    };
+
+    let idx = Span::styled(
+        format!(" {}{:<2}", if sel { ">" } else { " " }, g.index),
+        Style::default().fg(if sel { TEAL } else { DIM }).add_modifier(if sel { Modifier::BOLD } else { Modifier::empty() }),
+    );
+    let util = Span::styled(
+        format!("{:>3.0}%", g.utilization_gpu),
+        Style::default().fg(if idle { DIM } else { util_color(g.utilization_gpu) }).add_modifier(if !idle { Modifier::BOLD } else { Modifier::empty() }),
+    );
+
+    match mode {
+        CellMode::Full => vec![
+            idx,
+            Span::styled(
+                format!(" {:<6}", mini_bar(g.utilization_gpu, 6)),
+                Style::default().fg(if idle { DIM } else { util_color(g.utilization_gpu) }),
+            ),
+            util,
+            Span::styled(format!(" {:<7}", vram), Style::default().fg(mem_color(mem_pct))),
+            Span::styled(format!(" {:>2}°", g.temperature_celsius as u64), Style::default().fg(temp_color(g.temperature_celsius))),
+        ],
+        CellMode::Medium => vec![
+            idx,
+            util,
+            Span::styled(format!(" {:<8}", vram), Style::default().fg(mem_color(mem_pct))),
+            Span::styled(format!(" {:>2}°", g.temperature_celsius as u64), Style::default().fg(temp_color(g.temperature_celsius))),
+        ],
+        CellMode::Short => vec![
+            idx,
+            util,
+            Span::styled(format!(" {:<8}", vram), Style::default().fg(mem_color(mem_pct))),
+        ],
+        CellMode::Tiny => vec![
+            idx,
+            util,
+            Span::styled(format!(" {:<5}", vram_used), Style::default().fg(mem_color(mem_pct))),
+        ],
+    }
+}
+
 // ===== draw =====
 
 pub fn draw(f: &mut Frame, app: &AppState) {
@@ -251,6 +347,7 @@ pub fn draw(f: &mut Frame, app: &AppState) {
         Tab::Nodes => draw_nodes(f, app, chunks[3]),
         Tab::Jobs => draw_jobs(f, app, chunks[3]),
         Tab::Alerts => draw_alerts(f, app, chunks[3]),
+        Tab::Trend => draw_trend_full(f, app, chunks[3]),
     }
     draw_process(f, app, chunks[4], chunks[5]);
     draw_footer(f, app, chunks[6]);
@@ -412,73 +509,47 @@ fn node_panel(f: &mut Frame, app: &AppState, node: &Node, area: Rect, selected: 
     let gpu_avg = if gpus.is_empty() { 0.0 } else { gpus.iter().map(|g| g.utilization_gpu).sum::<f64>() / gpus.len() as f64 };
     let load = m.map(|m| m.load_1).unwrap_or(0.0);
 
-    // GPU table first (core info). Selection stays visible via windowing.
+    // GPU table: density adapts to the panel height so every GPU stays
+    // visible — 1 per row (full detail), else 2/3/6 per row (compact).
     if gpus.is_empty() {
         if avail > used {
             lines.push(Line::from(Span::styled(" no GPU data", Style::default().fg(DIM))));
             used += 1;
         }
-    } else if avail >= 3 {
-        lines.push(Line::from(vec![
-            Span::styled(format!(" GPU  UTIL      VRAM   TEMP"), Style::default().fg(DIM)),
-        ]));
-        used += 1;
-        let gpu_space = (avail - used).min(6).max(1);
-        let start = if gpus.len() > gpu_space {
-            (app.selected_gpu + 1).saturating_sub(gpu_space).min(gpus.len() - gpu_space)
-        } else {
-            0
+    } else if avail >= 2 {
+        let n = gpus.len();
+        let rows_avail = (avail - used).max(1) as usize;
+        let per_row = n.div_ceil(rows_avail).clamp(1, n.max(1));
+        let mode = match per_row {
+            1 => CellMode::Full,
+            2 => CellMode::Medium,
+            3 => CellMode::Short,
+            _ => CellMode::Tiny,
         };
-        for (gi, g) in gpus.iter().enumerate().skip(start).take(gpu_space) {
-            let sel = selected && gi == app.selected_gpu;
-            let idle = g.utilization_gpu < BUSY_PCT;
-            let vram = format!("{}/{}", fmt_vram(g.memory_used_bytes), fmt_total(g.memory_total_bytes));
-            let bar = mini_bar(g.utilization_gpu, 6);
-            let row: Vec<Span> = vec![
-                Span::styled(
-                    format!(" {}{:<2}", if sel { ">" } else { " " }, g.index),
-                    Style::default().fg(if sel { TEAL } else { DIM }).add_modifier(if sel { Modifier::BOLD } else { Modifier::empty() }),
-                ),
-                Span::styled(
-                    format!(" {:<6}", bar),
-                    Style::default().fg(if idle { DIM } else { util_color(g.utilization_gpu) }),
-                ),
-                Span::styled(
-                    format!("{:>3.0}%", g.utilization_gpu),
-                    Style::default().fg(if idle { DIM } else { util_color(g.utilization_gpu) }).add_modifier(if !idle { Modifier::BOLD } else { Modifier::empty() }),
-                ),
-                Span::styled(
-                    format!(" {:<7}", vram),
-                    Style::default().fg(mem_color(if g.memory_total_bytes > 0 { g.memory_used_bytes as f64 / g.memory_total_bytes as f64 * 100.0 } else { 0.0 })),
-                ),
-                Span::styled(
-                    format!(" {:>2}°", g.temperature_celsius as u64),
-                    Style::default().fg(temp_color(g.temperature_celsius)),
-                ),
-            ];
-            lines.push(Line::from(row));
+
+        // Roomier panels keep the original single-column table with header.
+        if mode == CellMode::Full && avail - used >= n + 1 {
+            lines.push(Line::from(vec![
+                Span::styled(format!(" GPU  UTIL      VRAM   TEMP"), Style::default().fg(DIM)),
+            ]));
             used += 1;
         }
-        if gpus.len() > gpu_space {
-            lines.push(Line::from(Span::styled(
-                format!(" {} more GPU… (j/k)", gpus.len() - gpu_space),
-                Style::default().fg(DIM),
-            )));
-        }
-    } else if avail == 2 {
-        // very short panel: show only the selected GPU row (no header)
-        if let Some(g) = gpus.get(app.selected_gpu.min(gpus.len() - 1)) {
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!(" >{:<2} {:>3.0}% {}/{} {:>2}°",
-                        g.index,
-                        g.utilization_gpu,
-                        fmt_vram(g.memory_used_bytes),
-                        fmt_total(g.memory_total_bytes),
-                        g.temperature_celsius as u64),
-                    Style::default().fg(TEAL),
-                ),
-            ]));
+
+        let mut gi = 0usize;
+        while gi < n {
+            let mut row: Vec<Span> = Vec::new();
+            for c in 0..per_row {
+                if gi >= n {
+                    break;
+                }
+                let sel = selected && gi == app.selected_gpu;
+                row.extend(gpu_cell(&gpus[gi], sel, mode));
+                if c + 1 < per_row && gi + 1 < n {
+                    row.push(Span::raw("  "));
+                }
+                gi += 1;
+            }
+            lines.push(Line::from(row));
             used += 1;
         }
     }
@@ -517,15 +588,218 @@ fn node_panel(f: &mut Frame, app: &AppState, node: &Node, area: Rect, selected: 
     f.render_widget(p, inner);
 }
 
+// ---- Trend (per-GPU real-time charts) ----
+
+const UTIL_COLOR: Color = Color::Yellow;
+const MEM_COLOR: Color = Color::Cyan;
+const CPU_COLOR: Color = Color::LightBlue;
+
+/// Trend tab: one mini chart per GPU — two lines (utilization + memory used %)
+/// — plus a CPU chart. `h`/`l` switches the node.
+pub fn draw_trend_full(f: &mut Frame, app: &AppState, area: Rect) {
+    let sel = app.nodes.get(app.selected_node);
+    let host = sel
+        .map(|n| if n.hostname.is_empty() { n.node_id.clone() } else { n.hostname.clone() })
+        .unwrap_or_else(|| "-".to_string());
+
+    // History is keyed by node_id; fall back to the cluster average.
+    let (cpu, gpus_util, gpus_mem) = match sel.and_then(|n| app.history.get(&n.node_id)) {
+        Some(h) if !h.cpu.is_empty() => (h.cpu.clone(), h.gpus.clone(), h.gpus_mem.clone()),
+        _ => cluster_average_history(app),
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Min(3)])
+        .split(area);
+
+    // Header: node + line legend.
+    let header = Line::from(vec![
+        Span::styled(format!(" Trend: {} ", host), Style::default().fg(NORMAL).add_modifier(Modifier::BOLD)),
+        Span::styled("  U ── ", Style::default().fg(UTIL_COLOR).add_modifier(Modifier::BOLD)),
+        Span::styled("util   ", Style::default().fg(DIM)),
+        Span::styled("M ── ", Style::default().fg(MEM_COLOR).add_modifier(Modifier::BOLD)),
+        Span::styled("mem   ", Style::default().fg(DIM)),
+        Span::styled(format!("· {} samples · 3s · h/l node", cpu.len()), Style::default().fg(DIM)),
+    ]);
+    f.render_widget(Paragraph::new(header), chunks[0]);
+
+    let grid = chunks[1];
+    if cpu.is_empty() {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                " collecting live metrics…",
+                Style::default().fg(DIM),
+            ))),
+            grid,
+        );
+        return;
+    }
+
+    let cpu_pts: Vec<(f64, f64)> = cpu.iter().enumerate().map(|(i, v)| (i as f64, *v)).collect();
+    let mut items: Vec<(String, Vec<(f64, f64)>, Vec<(f64, f64)>)> =
+        vec![("CPU".to_string(), cpu_pts, vec![])];
+    for i in 0..gpus_util.len() {
+        let util_pts: Vec<(f64, f64)> =
+            gpus_util[i].iter().enumerate().map(|(x, v)| (x as f64, *v)).collect();
+        let mem_pts: Vec<(f64, f64)> = gpus_mem
+            .get(i)
+            .map(|m| m.iter().enumerate().map(|(x, v)| (x as f64, *v)).collect())
+            .unwrap_or_default();
+        items.push((format!("GPU{}", i), util_pts, mem_pts));
+    }
+
+    let cols = ((grid.width as usize) / 26).clamp(2, 4);
+    let rows = items.len().div_ceil(cols).max(1);
+    let cell_w = (grid.width / cols as u16).max(1);
+    let cell_h = (grid.height / rows as u16).max(3);
+
+    for (i, (name, util, mem)) in items.iter().enumerate() {
+        let c = i % cols;
+        let r = i / cols;
+        let cell = Rect {
+            x: grid.x + c as u16 * cell_w,
+            y: grid.y + r as u16 * cell_h,
+            width: cell_w,
+            height: cell_h,
+        };
+        mini_chart(f, name, util, mem, cell);
+    }
+}
+
+/// One chart per GPU: bordered block, title shows current values, two braille
+/// lines — utilization (yellow) and memory used % (cyan). The CPU chart uses a
+/// single LightBlue line.
+fn mini_chart(f: &mut Frame, name: &str, util: &[(f64, f64)], mem: &[(f64, f64)], area: Rect) {
+    let last_util = util.last().map(|p| p.1).unwrap_or(0.0);
+    let last_mem = mem.last().map(|p| p.1).unwrap_or(0.0);
+
+    let mut title = vec![Span::styled(
+        format!(" {} ", name),
+        Style::default().fg(NORMAL).add_modifier(Modifier::BOLD),
+    )];
+    if name == "CPU" {
+        title.push(Span::styled(format!(" {:>3.0}%", last_util), Style::default().fg(CPU_COLOR)));
+    } else {
+        title.push(Span::styled(format!(" U {:>3.0}%", last_util), Style::default().fg(UTIL_COLOR)));
+        title.push(Span::styled(format!(" M {:>3.0}%", last_mem), Style::default().fg(MEM_COLOR)));
+    }
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .title(title);
+
+    let n = util.len().max(1) as f64;
+    let line_color = if name == "CPU" { CPU_COLOR } else { UTIL_COLOR };
+    let mut datasets = vec![
+        Dataset::default()
+            .name("util")
+            .marker(Marker::Braille)
+            .style(Style::default().fg(line_color))
+            .graph_type(GraphType::Line)
+            .data(util),
+    ];
+    if !mem.is_empty() {
+        datasets.push(
+            Dataset::default()
+                .name("mem")
+                .marker(Marker::Braille)
+                .style(Style::default().fg(MEM_COLOR))
+                .graph_type(GraphType::Line)
+                .data(mem),
+        );
+    }
+
+    let chart = Chart::new(datasets)
+        .block(block)
+        .x_axis(Axis::default().bounds([0.0, (n - 1.0).max(1.0)]))
+        .y_axis(Axis::default().bounds([0.0, 100.0]));
+    f.render_widget(chart, area);
+}
+
+/// Element-wise cluster average of all node histories (used when the selected
+/// node has no history yet, e.g. right after startup). Per-GPU curves are
+/// aligned by GPU index; a node without that GPU index simply contributes 0.
+fn cluster_average_history(
+    app: &AppState,
+) -> (
+    std::collections::VecDeque<f64>,
+    Vec<std::collections::VecDeque<f64>>,
+    Vec<std::collections::VecDeque<f64>>,
+) {
+    let mut cpu = std::collections::VecDeque::new();
+    let mut gpus: Vec<std::collections::VecDeque<f64>> = Vec::new();
+    let mut gpus_mem: Vec<std::collections::VecDeque<f64>> = Vec::new();
+    let mut count = 0usize;
+    for h in app.history.values() {
+        if h.cpu.is_empty() {
+            continue;
+        }
+        count += 1;
+        for (i, v) in h.cpu.iter().enumerate() {
+            if i >= cpu.len() {
+                cpu.push_back(0.0);
+            }
+            cpu[i] += v;
+        }
+        for (gi, g) in h.gpus.iter().enumerate() {
+            if gi >= gpus.len() {
+                gpus.push(std::collections::VecDeque::new());
+            }
+            for (i, v) in g.iter().enumerate() {
+                if i >= gpus[gi].len() {
+                    gpus[gi].push_back(0.0);
+                }
+                gpus[gi][i] += v;
+            }
+        }
+        for (gi, g) in h.gpus_mem.iter().enumerate() {
+            if gi >= gpus_mem.len() {
+                gpus_mem.push(std::collections::VecDeque::new());
+            }
+            for (i, v) in g.iter().enumerate() {
+                if i >= gpus_mem[gi].len() {
+                    gpus_mem[gi].push_back(0.0);
+                }
+                gpus_mem[gi][i] += v;
+            }
+        }
+    }
+    if count > 0 {
+        for v in cpu.iter_mut() {
+            *v /= count as f64;
+        }
+        for g in gpus.iter_mut() {
+            for v in g.iter_mut() {
+                *v /= count as f64;
+            }
+        }
+        for g in gpus_mem.iter_mut() {
+            for v in g.iter_mut() {
+                *v /= count as f64;
+            }
+        }
+    }
+    (cpu, gpus, gpus_mem)
+}
+
 // ---- Process panel ----
 
 fn draw_process(f: &mut Frame, app: &AppState, header_area: Rect, table_area: Rect) {
+    // On the Trend tab show every user's processes across all GPUs; on the
+    // other tabs keep the selected GPU's processes.
+    let all_gpus = app.tab == Tab::Trend;
+
     // header: "Processes" + selected node/gpu, then a divider line
     let sel_node = app.nodes.get(app.selected_node);
     let (node_label, gpu_label) = match sel_node {
         Some(n) => {
             let host = if n.hostname.is_empty() { &n.node_id } else { &n.hostname };
-            (host.clone(), app.selected_gpu.to_string())
+            (
+                host.clone(),
+                if all_gpus { "all GPUs".to_string() } else { app.selected_gpu.to_string() },
+            )
         }
         None => ("-".to_string(), "-".to_string()),
     };
@@ -546,7 +820,11 @@ fn draw_process(f: &mut Frame, app: &AppState, header_area: Rect, table_area: Re
         header_area,
     );
 
-    let procs = app.selected_processes();
+    let mut procs: Vec<&crate::api::GpuProcess> = if all_gpus {
+        app.node_processes()
+    } else {
+        app.selected_processes()
+    };
     let node_online = sel_node.map(|n| n.status == "online").unwrap_or(false);
 
     if !node_online {
@@ -572,33 +850,72 @@ fn draw_process(f: &mut Frame, app: &AppState, header_area: Rect, table_area: Re
         return;
     }
 
-    // table columns: PID USER SM VRAM CPU COMMAND
+    // GPU index lookup (uuid → index) for the all-GPUs view.
+    let gpu_idx: std::collections::HashMap<String, String> = sel_node
+        .and_then(|n| app.metrics.get(&n.node_id))
+        .map(|m| m.gpus.iter().map(|g| (g.uuid.clone(), g.index.to_string())).collect())
+        .unwrap_or_default();
+    if all_gpus {
+        procs.sort_by_key(|p| {
+            gpu_idx
+                .get(&p.gpu_uuid)
+                .and_then(|s| s.parse::<i64>().ok())
+                .unwrap_or(i64::MAX)
+        });
+    }
+
+    // table columns: [GPU] PID USER SM VRAM CPU COMMAND
     let mut rows: Vec<Row> = Vec::new();
     for p in &procs {
         let sm = p.sm_utilization.map(|v| format!("{:.0}%", v)).unwrap_or_else(|| "—".into());
         let user = if p.username.is_empty() || p.username == "unknown" { "—" } else { &p.username };
         let cmd = if p.command.is_empty() || p.command == "unknown" { "<restricted>" } else { &p.command };
-        rows.push(Row::new(vec![
-            Cell::from(Span::styled(format!("{:>7}", p.pid), Style::default().fg(NORMAL))),
-            Cell::from(Span::styled(format!("{:<8}", truncate(user, 8)), Style::default().fg(NORMAL))),
-            Cell::from(Span::styled(format!("{:>5}", sm), Style::default().fg(if p.sm_utilization.map(|v| v >= 50.0).unwrap_or(false) { Color::Yellow } else { NORMAL }))),
-            Cell::from(Span::styled(format!("{:>7}", fmt_vram(p.gpu_memory_bytes)), Style::default().fg(NORMAL))),
-            Cell::from(Span::styled(format!("{:>5}", format!("{:.0}%", p.cpu_percent)), Style::default().fg(DIM))),
-            Cell::from(Span::styled(truncate(cmd, table_area.width.saturating_sub(45) as usize), Style::default().fg(NORMAL))),
-        ]));
+        let mut cells: Vec<Cell> = Vec::new();
+        if all_gpus {
+            cells.push(Cell::from(Span::styled(
+                format!("{:>3}", gpu_idx.get(&p.gpu_uuid).map(|s| s.as_str()).unwrap_or("?")),
+                Style::default().fg(DIM),
+            )));
+        }
+        cells.push(Cell::from(Span::styled(format!("{:>7}", p.pid), Style::default().fg(NORMAL))));
+        cells.push(Cell::from(Span::styled(format!("{:<8}", truncate(user, 8)), Style::default().fg(NORMAL))));
+        cells.push(Cell::from(Span::styled(format!("{:>5}", sm), Style::default().fg(if p.sm_utilization.map(|v| v >= 50.0).unwrap_or(false) { Color::Yellow } else { NORMAL }))));
+        cells.push(Cell::from(Span::styled(format!("{:>7}", fmt_vram(p.gpu_memory_bytes)), Style::default().fg(NORMAL))));
+        cells.push(Cell::from(Span::styled(format!("{:>5}", format!("{:.0}%", p.cpu_percent)), Style::default().fg(DIM))));
+        cells.push(Cell::from(Span::styled(
+            truncate(cmd, table_area.width.saturating_sub(if all_gpus { 46 } else { 41 }) as usize),
+            Style::default().fg(NORMAL),
+        )));
+        rows.push(Row::new(cells));
     }
 
-    let widths = [
-        Constraint::Length(8),
-        Constraint::Length(9),
-        Constraint::Length(6),
-        Constraint::Length(8),
-        Constraint::Length(6),
-        Constraint::Min(5),
-    ];
+    let widths: Vec<Constraint> = if all_gpus {
+        vec![
+            Constraint::Length(4),
+            Constraint::Length(8),
+            Constraint::Length(9),
+            Constraint::Length(6),
+            Constraint::Length(8),
+            Constraint::Length(6),
+            Constraint::Min(5),
+        ]
+    } else {
+        vec![
+            Constraint::Length(8),
+            Constraint::Length(9),
+            Constraint::Length(6),
+            Constraint::Length(8),
+            Constraint::Length(6),
+            Constraint::Min(5),
+        ]
+    };
+    let header_names: Vec<&str> = if all_gpus {
+        vec!["GPU", "PID", "USER", "SM", "VRAM", "CPU", "COMMAND"]
+    } else {
+        vec!["PID", "USER", "SM", "VRAM", "CPU", "COMMAND"]
+    };
     let table = Table::new(rows, widths).header(
-        Row::new(vec!["PID", "USER", "SM", "VRAM", "CPU", "COMMAND"])
-            .style(Style::default().fg(DIM)),
+        Row::new(header_names).style(Style::default().fg(DIM)),
     );
     f.render_widget(table, table_area);
 }
@@ -617,9 +934,9 @@ fn truncate(s: &str, max: usize) -> String {
 
 fn draw_footer(f: &mut Frame, app: &AppState, area: Rect) {
     let text = if app.help {
-        " j/k GPU    h/l node    Tab tabs    Enter details    r refresh    1/2/3 views    q quit "
+        " j/k GPU    h/l node    Tab tabs    Enter details    r refresh    1/2/3/4 views    q quit "
     } else {
-        " j/k GPU    h/l node    Enter details    r refresh    ? help    q quit "
+        " j/k GPU    h/l node    Tab tabs    r refresh    ? help    q quit "
     };
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(text, Style::default().fg(DIM)))),

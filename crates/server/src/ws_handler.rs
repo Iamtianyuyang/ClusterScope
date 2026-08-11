@@ -59,16 +59,16 @@ impl WsManager {
         }
     }
 
-    pub fn register(&self, client_id: String, sender: mpsc::Sender<String>) {
-        let mut clients = self.clients.blocking_lock();
+    pub async fn register(&self, client_id: String, sender: mpsc::Sender<String>) {
+        let mut clients = self.clients.lock().await;
         clients.insert(client_id, ClientHandle {
             sender,
             node_filter: None,
         });
     }
 
-    pub fn unregister(&self, client_id: &str) {
-        let mut clients = self.clients.blocking_lock();
+    pub async fn unregister(&self, client_id: &str) {
+        let mut clients = self.clients.lock().await;
         clients.remove(client_id);
     }
 
@@ -171,7 +171,7 @@ impl WsHandler {
         // Channel between broadcasters and this socket. The receiver lives in
         // this task; broadcasters only hold the sender half.
         let (tx, mut rx) = mpsc::channel::<String>(1000);
-        self.manager.register(client_id.clone(), tx);
+        self.manager.register(client_id.clone(), tx).await;
         info!(client_id = %client_id, "WebSocket client connected");
 
         // Send welcome
@@ -221,7 +221,7 @@ impl WsHandler {
             }
         }
 
-        self.manager.unregister(&client_id);
+        self.manager.unregister(&client_id).await;
         info!(client_id = %client_id, "WebSocket client disconnected");
     }
 
@@ -233,7 +233,8 @@ impl WsHandler {
             Ok(sub) => {
                 let mut clients = self.manager.clients.lock().await;
                 if let Some(client) = clients.get_mut(client_id) {
-                    client.node_filter = sub.node_id;
+                    // Empty string is treated as "all nodes" (no filter).
+                    client.node_filter = sub.node_id.filter(|id| !id.is_empty());
                     let msg = serde_json::to_string(&WsMessage {
                         type_: "subscribed".to_string(),
                         ..Default::default()

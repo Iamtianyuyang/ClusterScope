@@ -94,6 +94,7 @@ async fn run(
                     KeyCode::Char('1') => state.tab = ui::Tab::from_index(0),
                     KeyCode::Char('2') => state.tab = ui::Tab::from_index(1),
                     KeyCode::Char('3') => state.tab = ui::Tab::from_index(2),
+                    KeyCode::Char('4') => state.tab = ui::Tab::from_index(3),
                     KeyCode::Tab => {
                         state.tab = ui::Tab::from_index(state.tab.index() + 1);
                     }

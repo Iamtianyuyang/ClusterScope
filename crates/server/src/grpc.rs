@@ -173,6 +173,13 @@ impl AgentService for AgentServiceImpl {
                 // Evaluate alert rules against this snapshot.
                 evaluate_alerts(&state, &report).await;
 
+                let avg_gpu_utilization: f32 = if report.gpus.is_empty() {
+                    0.0
+                } else {
+                    report.gpus.iter().map(|g| g.utilization_gpu).sum::<f32>()
+                        / report.gpus.len() as f32
+                };
+
                 let json = serde_json::json!({
                     "type": "metrics_update",
                     "node_id": node_id,
@@ -180,6 +187,7 @@ impl AgentService for AgentServiceImpl {
                         "sequence": report.sequence,
                         "timestamp_ms": report.timestamp_ms,
                         "cpu_usage_percent": report.cpu_usage_percent,
+                        "avg_gpu_utilization": avg_gpu_utilization,
                         "load_1": report.load_1,
                         "memory_total_bytes": report.memory_total_bytes,
                         "memory_used_bytes": report.memory_used_bytes,
