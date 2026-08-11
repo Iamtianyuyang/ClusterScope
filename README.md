@@ -23,8 +23,8 @@
 
 - **Agent**:部署在每台 GPU 节点,通过 **NVML** 采集 GPU 利用率/显存/温度/功耗/进程,`/proc` 尽力读取进程用户名与命令行(权限不足自动降级)
 - **Server**:聚合所有节点,提供 REST API,持久化到 PostgreSQL
-- **TUI**:ratatui 终端仪表盘 —— 多节点横向一屏总览、GPU 表格、GPU 进程面板
-- **Web**:React 前端(可选)
+- **TUI**:ratatui 终端仪表盘 —— 多节点横向一屏总览、GPU 表格、GPU 进程面板、实时折线图(Trend)
+- **Web**:React 前端(可选)—— 实时 CPU/GPU 折线图、历史曲线、任务与告警管理
 
 ```
 ┌────────────────┐   REST/WS   ┌─────────────────────┐
@@ -129,7 +129,24 @@ Overview   Jobs   Alerts   Trend
 | `?` | 帮助 |
 | `q` | 退出 |
 
-Overview 页保留原始布局（每节点全部 GPU 的 UTIL/VRAM/TEMP 表格）。Trend 页每张 GPU 一张独立小图，图内两条线：性能占用(黄) + 显存占用(青)，另有 CPU 图(浅蓝)，`h`/`l` 切换节点。
+Overview 页保留原始布局(每节点全部 GPU 的 UTIL/VRAM/TEMP 表格);面板高度不足时自动压缩为每行 2/3/6 张卡,保证**全部显卡始终可见**。
+
+Trend 页每张 GPU 一张独立小图,图内两条线:**性能占用(黄)+ 显存占用(青)**,另有 CPU 图(浅蓝);`h`/`l` 切换节点,下方进程面板显示该节点**所有 GPU 上全部用户的进程**(带 GPU 列)。
+
+```
+ Trend: node-01   U ── util   M ── mem   · 60 samples · 3s · h/l node
+┌ CPU    0%──────┐┌ GPU0  U 98% M 22%──┐┌ GPU1  U  0% M  0%──┐┌ GPU2  U  0% M  0%──┐
+│⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀││⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉││⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤││⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤│
+└────────────────┘└────────────────────┘└────────────────────┘└────────────────────┘
+┌ GPU3  U 89% M 38%────┐┌ GPU4  U  0% M 22%────┐┌ GPU5  U 90% M 24%────┐
+│⢀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀││⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉││⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀│
+└───────────────────────┘└───────────────────────┘└───────────────────────┘
+ Processes      node-01 / GPU all GPUs
+──────────────────────────────────────────────────────────────────────────────
+GPU  PID      USER      SM     VRAM     CPU    COMMAND
+  3  1598696  xuepeng…    91%    16.9G     0%  python train_seismic_titok_proxy_stage1_ddp.py
+  4  1598824  xuepeng…    88%    10.9G     0%  python train_seismic_titok_proxy_stage2_ddp.py
+```
 
 ### 信息层级
 
@@ -137,6 +154,7 @@ Overview 页保留原始布局（每节点全部 GPU 的 UTIL/VRAM/TEMP 表格�
 第一眼:哪台机器忙        (TopBar "1 busy" + 面板 GPU 行)
 第二眼:哪张 GPU 忙       (黄色进度条 + 高亮 %)
 第三眼:谁的什么程序       (Processes 面板:USER / COMMAND / VRAM)
+第四眼:忙了多久           (Trend 页折线:利用率 / 显存占用曲线)
 ```
 
 ### 颜色语义(90% 中性,10% 表达状态)
@@ -150,6 +168,29 @@ Overview 页保留原始布局（每节点全部 GPU 的 UTIL/VRAM/TEMP 表格�
 | 告警 | 黄色加粗 | TopBar `! N alert` |
 | 选中 | teal | 面板边框 + `>` 标记,无大面积背景 |
 | 离线 | ○ + dim | 整卡弱化,不刷红 |
+| 折线·性能占用 | 黄 | Trend 页每张 GPU 图的利用率线 |
+| 折线·显存占用 | 青 | Trend 页每张 GPU 图的内存占用线 |
+| 折线·CPU | 浅蓝 | Trend 页 CPU 曲线 |
+
+## Web 前端(可选)
+
+React + Ant Design + ECharts,与 TUI 同源数据(同一 Server 的 REST / WebSocket)。
+
+- **Overview**:实时 CPU/GPU 利用率折线图 —— WebSocket 推送(2s 一个点,约 3 分钟滚动窗口),支持集群平均 / 单节点切换;节点卡片实时显示各节点 CPU/GPU 占用
+- **Node Details**:单节点历史曲线(15m / 1h / 6h / 24h,CPU + 每张 GPU)、GPU 表格(利用率/显存/温度/功耗)、进程表
+- **Jobs / Alerts / Processes**:任务列表与提交、告警规则与事件、GPU 进程
+
+本地开发:
+
+```bash
+cd web
+npm install
+npm run dev            # http://localhost:3000(代理 /api 与 /ws 到 Server:8080)
+npm run build          # 产物在 web/dist
+npm run preview -- --host 0.0.0.0 --port 8188   # 静态预览(含 /api、/ws 代理)
+```
+
+生产部署:`docker compose up`(Dockerfile.web + nginx 反代),或把 `web/dist` 交给任意静态服务器并反代 `/api`、`/ws` 到 Server。
 
 ## 数据采集(无 root)
 
