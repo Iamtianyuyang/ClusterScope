@@ -15,7 +15,7 @@
 **ClusterScope** — 轻量级 Linux GPU 集群监控平台。终端仪表盘 + 分布式采集,普通用户即可运行,**无需 root**。
 
 <p align="center">
-  <a href="https://github.com/Iamtianyuyang/ClusterScope/releases"><img alt="Release" src="https://img.shields.io/badge/release-v0.1.0-2aa198"></a>
+  <a href="https://github.com/Iamtianyuyang/ClusterScope/releases"><img alt="Release" src="https://img.shields.io/badge/release-v0.1.1-2aa198"></a>
   <a href="https://github.com/Iamtianyuyang/ClusterScope/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20x86__64-lightgrey">
   <img alt="No root" src="https://img.shields.io/badge/root-not%20required-success">
@@ -50,8 +50,8 @@
 **方式 A:直接下载 Release 包(推荐)**
 
 ```bash
-curl -L -O https://github.com/Iamtianyuyang/ClusterScope/releases/download/v0.1.0/clusterscope-v0.1.0-linux-x86_64.tar.gz
-tar xzf clusterscope-v0.1.0-linux-x86_64.tar.gz
+curl -L -O https://github.com/Iamtianyuyang/ClusterScope/releases/download/v0.1.1/clusterscope-v0.1.1-linux-x86_64.tar.gz
+tar xzf clusterscope-v0.1.1-linux-x86_64.tar.gz
 # 得到 clusterscope-agent / clusterscope-server / clusterscope-tui
 ```
 
