@@ -107,14 +107,28 @@ pub async fn update_alert_rule(
     Ok(())
 }
 
-pub async fn delete_alert_rule(pool: &PgPool, rule_id: &str) -> Result<()> {
-    sqlx::query("DELETE FROM alert_rules WHERE rule_id = $1")
+/// Delete an alert rule together with its events (the events table has a
+/// RESTRICT FK on rule_id, so a bare rule delete fails with 500 once the
+/// rule has fired). One transaction keeps both deletes atomic.
+pub async fn delete_alert_rule_cascade(pool: &PgPool, rule_id: &str) -> Result<u64> {
+    let mut tx = pool
+        .begin()
+        .await
+        .context("Failed to begin delete_alert_rule transaction")?;
+    sqlx::query("DELETE FROM alert_events WHERE rule_id = $1")
         .bind(rule_id)
-        .execute(pool)
+        .execute(&mut *tx)
+        .await
+        .context("Failed to delete alert events")?;
+    let result = sqlx::query("DELETE FROM alert_rules WHERE rule_id = $1")
+        .bind(rule_id)
+        .execute(&mut *tx)
         .await
         .context("Failed to delete alert rule")?;
-
-    Ok(())
+    tx.commit()
+        .await
+        .context("Failed to commit delete_alert_rule transaction")?;
+    Ok(result.rows_affected())
 }
 
 #[allow(clippy::too_many_arguments)]
