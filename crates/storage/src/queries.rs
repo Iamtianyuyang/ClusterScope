@@ -205,6 +205,39 @@ pub async fn update_node_gpu_count(pool: &PgPool, node_id: &str, gpu_count: i32)
     Ok(())
 }
 
+/// Aggregate GPU utilization across the latest metrics report of every node.
+///
+/// Returns `(avg_utilization_percent, busy_gpu_count, total_gpu_count)`
+/// where busy = utilization >= 1%; `None` when no node has reported metrics
+/// yet. Derived from real data — never fabricated.
+pub async fn get_gpu_utilization_summary(pool: &PgPool) -> Result<Option<(f64, i64, i64)>> {
+    let row: (f64, i64, i64) = sqlx::query_as(
+        r#"
+        WITH latest AS (
+            SELECT DISTINCT ON (node_id) node_id, gpu_metrics
+            FROM node_metrics
+            WHERE gpu_metrics IS NOT NULL
+            ORDER BY node_id, timestamp_ms DESC
+        )
+        SELECT
+            COALESCE(AVG((g->>'utilization_gpu')::float), 0),
+            COUNT(*) FILTER (WHERE (g->>'utilization_gpu')::float >= 1.0),
+            COUNT(*)
+        FROM latest
+        CROSS JOIN LATERAL jsonb_array_elements(latest.gpu_metrics) AS g
+        "#,
+    )
+    .fetch_one(pool)
+    .await
+    .context("Failed to aggregate GPU utilization")?;
+
+    if row.2 == 0 {
+        Ok(None)
+    } else {
+        Ok(Some(row))
+    }
+}
+
 pub async fn get_job_logs(
     pool: &PgPool,
     job_id: &str,

@@ -202,6 +202,25 @@ pub async fn expire_stale_alerts(pool: &PgPool, cutoff: chrono::DateTime<chrono:
     Ok(result.rows_affected() as usize)
 }
 
+/// Number of targets whose latest alert event is still pending/firing.
+pub async fn count_active_alerts(pool: &PgPool) -> Result<i64> {
+    let (count,): (i64,) = sqlx::query_as(
+        r#"
+        SELECT COUNT(*)
+        FROM (
+            SELECT DISTINCT ON (node_id, rule_id, gpu_uuid) *
+            FROM alert_events
+            ORDER BY node_id, rule_id, gpu_uuid, timestamp DESC
+        ) latest
+        WHERE latest.new_state IN ('pending', 'firing')
+        "#,
+    )
+    .fetch_one(pool)
+    .await
+    .context("Failed to count active alerts")?;
+    Ok(count)
+}
+
 pub async fn get_alert_events_by_rule(
     pool: &PgPool,
     rule_id: &str,

@@ -614,6 +614,17 @@ pub async fn get_cluster_info(
 
     let total_gpus: u32 = nodes.iter().map(|n| n.gpu_count).sum();
 
+    // Real values from the latest metrics report per node. `None` when no
+    // metrics have arrived yet — reported as JSON null, never as fake 0s.
+    // Busy = GPU with utilization >= 1% in its latest report.
+    let gpu_summary = storage::queries::get_gpu_utilization_summary(
+        state.database.pool(),
+    ).await.ok().flatten();
+    let (avg_gpu_utilization, idle_gpus) = match gpu_summary {
+        Some((avg, busy, total)) => (Some(avg), Some((total - busy).max(0))),
+        None => (None, None),
+    };
+
     // Count running jobs
     let running_jobs = storage::job_queries::list_jobs(
         state.database.pool(),
@@ -624,16 +635,21 @@ pub async fn get_cluster_info(
         1,
     ).await.map(|(jobs, _)| jobs.len()).unwrap_or(0);
 
+    // Active (pending/firing) alerts from the latest event per target.
+    let active_alerts = storage::alert_queries::count_active_alerts(
+        state.database.pool(),
+    ).await.unwrap_or(0);
+
     Ok(Json(serde_json::json!({
         "total_nodes": nodes.len(),
         "online_nodes": online,
         "degraded_nodes": degraded,
         "offline_nodes": offline,
         "total_gpus": total_gpus,
-        "idle_gpus": total_gpus, // TODO: calculate from metrics
-        "avg_gpu_utilization": 0.0,
+        "idle_gpus": idle_gpus,
+        "avg_gpu_utilization": avg_gpu_utilization,
         "running_jobs": running_jobs,
-        "active_alerts": 0, // TODO: count from alerts
+        "active_alerts": active_alerts,
     })))
 }
 

@@ -552,8 +552,8 @@ async fn save_metrics_to_db(state: &AppState, report: &NodeMetricsReport) -> any
         Some(report.load_15),
         Some(report.memory_total_bytes as i64),
         Some(report.memory_used_bytes as i64),
-        Some(0_i64), // swap_total
-        Some(0_i64), // swap_used
+        Some(report.swap_total_bytes as i64),
+        Some(report.swap_used_bytes as i64),
         Some(report.uptime_seconds as i64),
         Some(report.boot_time_seconds as i64),
         gpu_metrics,
