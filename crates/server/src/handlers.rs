@@ -118,6 +118,12 @@ pub async fn refresh_token(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
+    // Disabled users must not be able to keep their session alive by
+    // refreshing a token obtained before the account was disabled.
+    if !user.enabled {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
     let access_token = auth::generate_jwt(
         &user.user_id,
         &user.role,
@@ -227,39 +233,32 @@ pub async fn get_metrics_history(
 
     // Raw rows cover the last 24h; older ranges come from the hourly (7d)
     // and daily (90d) aggregate tables, merged and sorted by timestamp.
-    const RAW_RETENTION_MS: i64 = 24 * 3600 * 1000;
-    const HOURLY_RETENTION_MS: i64 = 7 * 24 * 3600 * 1000;
     let now_ms = chrono::Utc::now().timestamp_millis();
-    let raw_cutoff = now_ms - RAW_RETENTION_MS;
-    let hourly_cutoff = now_ms - HOURLY_RETENTION_MS;
+    let (raw_range, hourly_range, daily_range) = history_tiers(start_time, end_time, now_ms);
 
     let mut rows: Vec<serde_json::Value> = Vec::new();
 
     // 1) Raw reports within the retention window.
-    if end_time >= raw_cutoff {
-        let raw_start = start_time.max(raw_cutoff);
-        if let Ok(reports) = storage::queries::get_metrics_history(
+    if let Some((raw_start, raw_end)) = raw_range
+        && let Ok(reports) = storage::queries::get_metrics_history(
             state.database.pool(),
             node_id,
             raw_start,
-            end_time,
+            raw_end,
             10000,
         )
         .await
-        {
-            rows.extend(
-                reports
-                    .into_iter()
-                    .map(|r| serde_json::to_value(r).unwrap_or(serde_json::Value::Null)),
-            );
-        }
+    {
+        rows.extend(
+            reports
+                .into_iter()
+                .map(|r| serde_json::to_value(r).unwrap_or(serde_json::Value::Null)),
+        );
     }
 
     // 2) Hourly buckets for the part older than the raw window.
-    if start_time < raw_cutoff && end_time > hourly_cutoff {
-        let agg_start = start_time.max(hourly_cutoff);
-        let agg_end = raw_cutoff - 1;
-        if let Ok(buckets) = storage::queries::get_aggregated_history(
+    if let Some((agg_start, agg_end)) = hourly_range
+        && let Ok(buckets) = storage::queries::get_aggregated_history(
             state.database.pool(),
             node_id,
             agg_start,
@@ -267,31 +266,125 @@ pub async fn get_metrics_history(
             true,
         )
         .await
-        {
-            rows.extend(aggregate_rows_to_json(node_id, buckets, "hourly"));
-        }
+    {
+        rows.extend(aggregate_rows_to_json(node_id, buckets, "hourly"));
     }
 
     // 3) Daily buckets for ranges older than 7 days.
-    if start_time < hourly_cutoff {
-        let agg_end = end_time.min(hourly_cutoff - 1);
-        if let Ok(buckets) = storage::queries::get_aggregated_history(
+    if let Some((agg_start, agg_end)) = daily_range
+        && let Ok(buckets) = storage::queries::get_aggregated_history(
             state.database.pool(),
             node_id,
-            start_time,
+            agg_start,
             agg_end,
             false,
         )
         .await
-        {
-            rows.extend(aggregate_rows_to_json(node_id, buckets, "daily"));
-        }
+    {
+        rows.extend(aggregate_rows_to_json(node_id, buckets, "daily"));
     }
 
     // Sort merged rows by timestamp, oldest first.
     rows.sort_by_key(|r| r.get("timestamp_ms").and_then(|v| v.as_i64()).unwrap_or(0));
 
     Ok(Json(serde_json::json!(rows)))
+}
+
+/// One `[start, end]` sub-range served by a retention tier.
+type TierRange = Option<(i64, i64)>;
+
+/// Partition a `[start_ms, end_ms]` history request into the (raw, hourly,
+/// daily) retention-tier ranges that must be queried, relative to `now_ms`.
+/// Every returned sub-range is clipped to the caller's `[start_ms, end_ms]`.
+///
+/// Returns `(raw, hourly, daily)` where each is `Some((range_start, range_end))`
+/// when that tier contributes data, `None` otherwise.
+fn history_tiers(start_ms: i64, end_ms: i64, now_ms: i64) -> (TierRange, TierRange, TierRange) {
+    const RAW_RETENTION_MS: i64 = 24 * 3600 * 1000;
+    const HOURLY_RETENTION_MS: i64 = 7 * 24 * 3600 * 1000;
+    let raw_cutoff = now_ms - RAW_RETENTION_MS;
+    let hourly_cutoff = now_ms - HOURLY_RETENTION_MS;
+
+    let raw = if end_ms >= raw_cutoff {
+        Some((start_ms.max(raw_cutoff), end_ms))
+    } else {
+        None
+    };
+    let hourly = if start_ms < raw_cutoff && end_ms > hourly_cutoff {
+        Some((start_ms.max(hourly_cutoff), end_ms.min(raw_cutoff - 1)))
+    } else {
+        None
+    };
+    let daily = if start_ms < hourly_cutoff {
+        Some((start_ms, end_ms.min(hourly_cutoff - 1)))
+    } else {
+        None
+    };
+    (raw, hourly, daily)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HOUR_MS: i64 = 3600 * 1000;
+    const DAY_MS: i64 = 24 * HOUR_MS;
+
+    #[test]
+    fn test_history_tiers_within_raw_window() {
+        let now = 1_800_000_000_000;
+        let (raw, hourly, daily) = history_tiers(now - 2 * HOUR_MS, now, now);
+        assert_eq!(raw, Some((now - 2 * HOUR_MS, now)));
+        assert_eq!(hourly, None);
+        assert_eq!(daily, None);
+    }
+
+    #[test]
+    fn test_history_tiers_recent_range_ends_before_raw_cutoff() {
+        // 3 days ago, 1h window: entirely inside the hourly tier, and the
+        // hourly range must NOT leak buckets beyond the requested end.
+        let now = 1_800_000_000_000;
+        let start = now - 3 * DAY_MS;
+        let end = start + HOUR_MS;
+        let (raw, hourly, daily) = history_tiers(start, end, now);
+        assert_eq!(raw, None);
+        let Some((hs, he)) = hourly else {
+            panic!("expected hourly tier");
+        };
+        assert_eq!(hs, start);
+        assert_eq!(he, end, "hourly range must respect the requested end");
+        assert_eq!(daily, None);
+    }
+
+    #[test]
+    fn test_history_tiers_spanning_all_tiers() {
+        let now = 1_800_000_000_000;
+        let start = now - 30 * DAY_MS;
+        let end = now;
+        let (raw, hourly, daily) = history_tiers(start, end, now);
+        assert_eq!(raw, Some((now - DAY_MS, now)));
+        let Some((hs, he)) = hourly else {
+            panic!("expected hourly tier");
+        };
+        assert_eq!(hs, now - 7 * DAY_MS);
+        assert_eq!(he, now - DAY_MS - 1);
+        let Some((ds, de)) = daily else {
+            panic!("expected daily tier");
+        };
+        assert_eq!(ds, start);
+        assert_eq!(de, now - 7 * DAY_MS - 1);
+    }
+
+    #[test]
+    fn test_history_tiers_older_than_hourly() {
+        let now = 1_800_000_000_000;
+        let start = now - 30 * DAY_MS;
+        let end = start + HOUR_MS;
+        let (raw, hourly, daily) = history_tiers(start, end, now);
+        assert_eq!(raw, None);
+        assert_eq!(hourly, None);
+        assert_eq!(daily, Some((start, end)));
+    }
 }
 
 /// Convert aggregate buckets into the same row shape as raw reports, using
@@ -416,7 +509,11 @@ pub async fn list_jobs(
         params.get("node_id").map(|s| s.as_str()),
         params.get("status").map(|s| s.as_str()),
         params.get("created_by").map(|s| s.as_str()),
-        params.get("page").and_then(|s| s.parse().ok()).unwrap_or(0),
+        params
+            .get("page")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0)
+            .max(0),
         params
             .get("page_size")
             .and_then(|s| s.parse().ok())
@@ -455,13 +552,18 @@ pub async fn stop_job(
     Path(job_id): Path<String>,
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    // A stop request for an unknown job is an error, not a silent success.
-    if storage::job_queries::get_job(state.database.pool(), &job_id)
+    // A stop request for an unknown job is an error, not a silent success;
+    // terminal jobs must not be flipped back to `stopping` (that would
+    // rewrite their finished state to `cancelled` once the agent reports).
+    let job = storage::job_queries::get_job(state.database.pool(), &job_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .is_none()
-    {
-        return Err(StatusCode::NOT_FOUND);
+        .ok_or(StatusCode::NOT_FOUND)?;
+    if matches!(
+        job.status.as_str(),
+        "succeeded" | "failed" | "cancelled" | "lost"
+    ) {
+        return Err(StatusCode::CONFLICT);
     }
 
     storage::job_queries::update_job_status(
@@ -501,14 +603,18 @@ pub async fn get_job_logs(
     Path(job_id): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
+    // Clamp paging so a hostile/huge `limit` cannot make the server stream
+    // an unbounded result set into memory.
     let offset: i64 = params
         .get("offset")
         .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
+        .unwrap_or(0)
+        .max(0);
     let limit: i64 = params
         .get("limit")
         .and_then(|s| s.parse().ok())
-        .unwrap_or(100);
+        .unwrap_or(100)
+        .clamp(1, 10000);
 
     let logs = storage::queries::get_job_logs(state.database.pool(), &job_id, offset, limit, false)
         .await
@@ -673,10 +779,26 @@ pub async fn create_user(
 
     let hash = auth::hash_password(password).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let user_id =
-        storage::user_queries::create_user(state.database.pool(), username, email, role, &hash)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let user_id = match storage::user_queries::create_user(
+        state.database.pool(),
+        username,
+        email,
+        role,
+        &hash,
+    )
+    .await
+    {
+        Ok(id) => id,
+        Err(e)
+            if e.downcast_ref::<sqlx::Error>()
+                .and_then(|e| e.as_database_error())
+                .is_some_and(|e| e.is_unique_violation()) =>
+        {
+            // Duplicate username: report the real conflict instead of 500.
+            return Err(StatusCode::CONFLICT);
+        }
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
 
     Ok(Json(serde_json::json!({
         "user_id": user_id,
@@ -827,7 +949,11 @@ pub async fn list_audit_logs(
             .get("end_time_ms")
             .and_then(|s| s.parse().ok())
             .map(|t: i64| chrono::DateTime::from_timestamp_millis(t).unwrap_or(Utc::now())),
-        params.get("page").and_then(|s| s.parse().ok()).unwrap_or(0),
+        params
+            .get("page")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0)
+            .max(0),
         params
             .get("page_size")
             .and_then(|s| s.parse().ok())
@@ -855,6 +981,7 @@ pub async fn get_prometheus_metrics(
     let mut registry = Registry::default();
 
     let nodes_counter: Counter = Counter::default();
+    nodes_counter.inc_by(state.node_registry.list().len() as u64);
     registry.register("nodes_total", "Total nodes", nodes_counter);
 
     let online_gauge: Gauge = Gauge::default();
