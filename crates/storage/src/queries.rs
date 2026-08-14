@@ -58,6 +58,7 @@ pub async fn upsert_node_info(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_node_metrics(
     pool: &PgPool,
     node_id: &str,
@@ -114,14 +115,11 @@ pub async fn insert_node_metrics(
     .execute(pool)
     .await
     .context("Failed to insert node metrics")?;
-    
+
     Ok(())
 }
 
-pub async fn get_latest_metrics(
-    pool: &PgPool,
-    node_id: &str,
-) -> Result<Option<NodeMetricsRow>> {
+pub async fn get_latest_metrics(pool: &PgPool, node_id: &str) -> Result<Option<NodeMetricsRow>> {
     sqlx::query_as::<_, NodeMetricsRow>(
         r#"
         SELECT * FROM node_metrics
@@ -221,7 +219,7 @@ pub async fn prune_old_metrics(pool: &PgPool) -> Result<()> {
         .bind(twenty_four_ago.timestamp_millis())
         .execute(pool)
         .await?;
-    
+
     Ok(())
 }
 
@@ -238,18 +236,20 @@ pub async fn update_node_gpu_count(pool: &PgPool, node_id: &str, gpu_count: i32)
 
 /// Whether a node has ever registered (used to validate job targets).
 pub async fn node_exists(pool: &PgPool, node_id: &str) -> Result<bool> {
-    let (exists,): (bool,) = sqlx::query_as(
-        "SELECT EXISTS(SELECT 1 FROM node_info WHERE node_id = $1)",
-    )
-    .bind(node_id)
-    .fetch_one(pool)
-    .await
-    .context("Failed to check node existence")?;
+    let (exists,): (bool,) =
+        sqlx::query_as("SELECT EXISTS(SELECT 1 FROM node_info WHERE node_id = $1)")
+            .bind(node_id)
+            .fetch_one(pool)
+            .await
+            .context("Failed to check node existence")?;
     Ok(exists)
 }
 
 /// Delete job log rows older than `cutoff` (retention for the logs table).
-pub async fn prune_old_job_logs(pool: &PgPool, cutoff: chrono::DateTime<chrono::Utc>) -> Result<usize> {
+pub async fn prune_old_job_logs(
+    pool: &PgPool,
+    cutoff: chrono::DateTime<chrono::Utc>,
+) -> Result<usize> {
     let result = sqlx::query("DELETE FROM job_logs WHERE timestamp < $1")
         .bind(cutoff)
         .execute(pool)
@@ -283,11 +283,7 @@ pub async fn get_gpu_utilization_summary(pool: &PgPool) -> Result<Option<(f64, i
     .await
     .context("Failed to aggregate GPU utilization")?;
 
-    if row.2 == 0 {
-        Ok(None)
-    } else {
-        Ok(Some(row))
-    }
+    if row.2 == 0 { Ok(None) } else { Ok(Some(row)) }
 }
 
 pub async fn get_job_logs(

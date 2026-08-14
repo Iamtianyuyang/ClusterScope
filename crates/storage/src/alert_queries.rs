@@ -2,6 +2,7 @@ use crate::models::{AlertEventRow, AlertRuleRow};
 use anyhow::{Context, Result};
 use sqlx::PgPool;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_alert_rule(
     pool: &PgPool,
     rule_id: &str,
@@ -42,29 +43,26 @@ pub async fn insert_alert_rule(
     .execute(pool)
     .await
     .context("Failed to insert alert rule")?;
-    
+
     Ok(())
 }
 
 pub async fn get_alert_rule(pool: &PgPool, rule_id: &str) -> Result<Option<AlertRuleRow>> {
-    sqlx::query_as::<_, AlertRuleRow>(
-        "SELECT * FROM alert_rules WHERE rule_id = $1",
-    )
-    .bind(rule_id)
-    .fetch_optional(pool)
-    .await
-    .context("Failed to get alert rule")
+    sqlx::query_as::<_, AlertRuleRow>("SELECT * FROM alert_rules WHERE rule_id = $1")
+        .bind(rule_id)
+        .fetch_optional(pool)
+        .await
+        .context("Failed to get alert rule")
 }
 
 pub async fn list_alert_rules(pool: &PgPool) -> Result<Vec<AlertRuleRow>> {
-    sqlx::query_as::<_, AlertRuleRow>(
-        "SELECT * FROM alert_rules ORDER BY created_at DESC",
-    )
-    .fetch_all(pool)
-    .await
-    .context("Failed to list alert rules")
+    sqlx::query_as::<_, AlertRuleRow>("SELECT * FROM alert_rules ORDER BY created_at DESC")
+        .fetch_all(pool)
+        .await
+        .context("Failed to list alert rules")
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn update_alert_rule(
     pool: &PgPool,
     rule_id: &str,
@@ -105,7 +103,7 @@ pub async fn update_alert_rule(
     .execute(pool)
     .await
     .context("Failed to update alert rule")?;
-    
+
     Ok(())
 }
 
@@ -115,10 +113,11 @@ pub async fn delete_alert_rule(pool: &PgPool, rule_id: &str) -> Result<()> {
         .execute(pool)
         .await
         .context("Failed to delete alert rule")?;
-    
+
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_alert_event(
     pool: &PgPool,
     event_id: &str,
@@ -151,7 +150,7 @@ pub async fn insert_alert_event(
     .execute(pool)
     .await
     .context("Failed to insert alert event")?;
-    
+
     Ok(())
 }
 
@@ -177,7 +176,10 @@ pub async fn get_active_alert_events(pool: &PgPool) -> Result<Vec<AlertEventRow>
 /// Self-heal: alert instances whose latest event is still pending/firing but
 /// older than `cutoff` get a synthetic `resolved` event (e.g. after a server
 /// restart the in-memory engine lost their state).
-pub async fn expire_stale_alerts(pool: &PgPool, cutoff: chrono::DateTime<chrono::Utc>) -> Result<usize> {
+pub async fn expire_stale_alerts(
+    pool: &PgPool,
+    cutoff: chrono::DateTime<chrono::Utc>,
+) -> Result<usize> {
     let result = sqlx::query(
         r#"
         INSERT INTO alert_events (

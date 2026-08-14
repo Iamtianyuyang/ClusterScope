@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use common::config::AgentConfig;
 use protocol::{AgentServiceClient, Job, JobLogEntry, JobStatus, JobStatusUpdate};
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
 use tokio::sync::Mutex;
@@ -53,11 +53,13 @@ async fn report_status(
     status: JobStatus,
     message: &str,
 ) {
-    let _ = client.update_job_status(JobStatusUpdate {
-        job_id: job_id.to_string(),
-        status: status as i32,
-        message: message.to_string(),
-    }).await;
+    let _ = client
+        .update_job_status(JobStatusUpdate {
+            job_id: job_id.to_string(),
+            status: status as i32,
+            message: message.to_string(),
+        })
+        .await;
 }
 
 /// Execute a job on the agent node and report status transitions to the server.
@@ -78,7 +80,13 @@ pub async fn execute_job(
     // Abort early when the job was cancelled before we spawned it.
     if runtime.is_cancelled(&job_id).await {
         info!(job_id = %job_id, "Job cancelled before start");
-        report_status(client, &job_id, JobStatus::Cancelled, "cancelled before start").await;
+        report_status(
+            client,
+            &job_id,
+            JobStatus::Cancelled,
+            "cancelled before start",
+        )
+        .await;
         runtime.cancelled.lock().await.remove(&job_id);
         return Ok(());
     }
@@ -110,7 +118,13 @@ pub async fn execute_job(
         Ok(p) => p,
         Err(e) => {
             error!(job_id = %job_id, error = %e, "Failed to spawn process");
-            report_status(client, &job_id, JobStatus::Failed, &format!("spawn failed: {}", e)).await;
+            report_status(
+                client,
+                &job_id,
+                JobStatus::Failed,
+                &format!("spawn failed: {}", e),
+            )
+            .await;
             runtime.cancelled.lock().await.remove(&job_id);
             return Ok(());
         }
@@ -146,7 +160,15 @@ pub async fn execute_job(
         let offset = log_offset.clone();
         let mut client = client.clone();
         tokio::spawn(async move {
-            stream_output(&mut process_stdout, &log_dir, &job_id, false, &offset, &mut client).await
+            stream_output(
+                &mut process_stdout,
+                &log_dir,
+                &job_id,
+                false,
+                &offset,
+                &mut client,
+            )
+            .await
         })
     };
 
@@ -156,7 +178,15 @@ pub async fn execute_job(
         let offset = log_offset.clone();
         let mut client = client.clone();
         tokio::spawn(async move {
-            stream_output(&mut process_stderr, &log_dir, &job_id, true, &offset, &mut client).await
+            stream_output(
+                &mut process_stderr,
+                &log_dir,
+                &job_id,
+                true,
+                &offset,
+                &mut client,
+            )
+            .await
         })
     };
 
@@ -176,7 +206,10 @@ pub async fn execute_job(
             info!(job_id = %job_id, pid = pid, exit_code, "Job finished");
 
             let (final_status, message) = if runtime.is_cancelled(&job_id).await {
-                (JobStatus::Cancelled, format!("cancelled (exit {})", exit_code))
+                (
+                    JobStatus::Cancelled,
+                    format!("cancelled (exit {})", exit_code),
+                )
             } else if exit_code == 0 {
                 (JobStatus::Succeeded, String::new())
             } else {
@@ -186,7 +219,13 @@ pub async fn execute_job(
         }
         Err(e) => {
             error!(job_id = %job_id, pid = pid, error = %e, "Process wait failed");
-            report_status(client, &job_id, JobStatus::Failed, &format!("wait failed: {}", e)).await;
+            report_status(
+                client,
+                &job_id,
+                JobStatus::Failed,
+                &format!("wait failed: {}", e),
+            )
+            .await;
         }
     }
 
@@ -212,7 +251,11 @@ where
     let mut file = tokio::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(log_dir.join(if is_stderr { "stderr.log" } else { "stdout.log" }))
+        .open(log_dir.join(if is_stderr {
+            "stderr.log"
+        } else {
+            "stdout.log"
+        }))
         .await?;
 
     loop {
@@ -234,7 +277,9 @@ where
                 file.write_all(line.as_bytes()).await?;
 
                 // Send to server (best effort)
-                let _ = client.report_job_logs(tokio_stream::iter(vec![entry])).await;
+                let _ = client
+                    .report_job_logs(tokio_stream::iter(vec![entry]))
+                    .await;
             }
             Err(e) => {
                 warn!(error = %e, "Error reading job output");

@@ -6,15 +6,18 @@ use clap::Parser;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io;
 use std::time::Duration;
 
 /// ClusterScope terminal dashboard
 #[derive(Parser)]
-#[command(name = "clusterscope-tui", about = "ClusterScope GPU cluster monitor (TUI)")]
+#[command(
+    name = "clusterscope-tui",
+    about = "ClusterScope GPU cluster monitor (TUI)"
+)]
 struct Cli {
     /// Server base URL
     #[arg(short, long, default_value = "http://127.0.0.1:8080")]

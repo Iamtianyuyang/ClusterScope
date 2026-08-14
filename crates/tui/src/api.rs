@@ -168,12 +168,20 @@ impl Api {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("no access_token in login response"))?
             .to_string();
-        Ok(Self { base, token, client })
+        Ok(Self {
+            base,
+            token,
+            client,
+        })
     }
 
     /// Connect without credentials. Works when the server runs in read-only
     /// mode (`auth_required: false`); otherwise the caller must log in.
-    pub async fn connect(base: &str, username: Option<&str>, password: Option<&str>) -> Result<Self> {
+    pub async fn connect(
+        base: &str,
+        username: Option<&str>,
+        password: Option<&str>,
+    ) -> Result<Self> {
         match (username, password) {
             (Some(u), Some(p)) => Self::login(base, u, p).await,
             _ => {
@@ -181,7 +189,11 @@ impl Api {
                 let client = reqwest::Client::builder()
                     .timeout(std::time::Duration::from_secs(10))
                     .build()?;
-                let api = Self { base, token: String::new(), client };
+                let api = Self {
+                    base,
+                    token: String::new(),
+                    client,
+                };
                 match api.get("/api/nodes").await {
                     Ok(_) => Ok(api),
                     Err(e) => anyhow::bail!(
@@ -208,7 +220,7 @@ impl Api {
     }
 
     pub async fn nodes(&self) -> Result<Vec<Node>> {
-        Ok(self.get("/api/nodes").await?.serde_json::<Vec<Node>>()?)
+        self.get("/api/nodes").await?.serde_json::<Vec<Node>>()
     }
 
     pub async fn node_metrics(&self, node_id: &str) -> Result<Option<NodeMetrics>> {
@@ -225,11 +237,11 @@ impl Api {
     }
 
     pub async fn alert_rules(&self) -> Result<Vec<AlertRule>> {
-        Ok(self.get("/api/alerts/rules").await?.serde_json()?)
+        self.get("/api/alerts/rules").await?.serde_json()
     }
 
     pub async fn alert_events(&self) -> Result<Vec<AlertEvent>> {
-        Ok(self.get("/api/alerts/events").await?.serde_json()?)
+        self.get("/api/alerts/events").await?.serde_json()
     }
 }
 

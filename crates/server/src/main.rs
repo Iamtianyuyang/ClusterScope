@@ -1,11 +1,11 @@
 use axum::{
-    routing::{delete, get, post},
     Router,
+    routing::{delete, get, post},
 };
 use chrono::{Duration as ChronoDuration, Utc};
 use common::alert::AlertRule;
 use common::config::ServerConfig;
-use common::job::{status_from_str, Job, JobStatus};
+use common::job::{Job, JobStatus, status_from_str};
 use protocol::AgentServiceServer;
 use scheduler::Scheduler;
 
@@ -15,12 +15,10 @@ use tokio::net::TcpListener;
 use tonic::transport::Server;
 use tracing::{info, warn};
 
-
 mod auth_middleware;
-mod ws_handler;
-mod handlers;
 mod grpc;
-
+mod handlers;
+mod ws_handler;
 
 struct AppState {
     config: ServerConfig,
@@ -77,9 +75,9 @@ async fn main() -> anyhow::Result<()> {
         node_registry,
         scheduler,
         jwt_secret: config.jwt_secret.clone(),
-        seen_reports: std::sync::Arc::new(parking_lot::RwLock::new(
-            lru::LruCache::new(std::num::NonZeroUsize::new(100000).unwrap())
-        )),
+        seen_reports: std::sync::Arc::new(parking_lot::RwLock::new(lru::LruCache::new(
+            std::num::NonZeroUsize::new(100000).unwrap(),
+        ))),
     });
 
     // Background tasks
@@ -111,14 +109,19 @@ async fn main() -> anyhow::Result<()> {
 
     let grpc_handle = tokio::spawn(async move {
         Server::builder()
-            .add_service(AgentServiceServer::with_interceptor(agent_service, interceptor))
+            .add_service(AgentServiceServer::with_interceptor(
+                agent_service,
+                interceptor,
+            ))
             .serve(grpc_addr)
             .await
     });
 
     info!(addr = %config.grpc_addr, "gRPC server started");
     if config.agent_token.is_empty() {
-        warn!("agent_token is empty — gRPC accepts any caller; set AGENT_TOKEN for untrusted networks");
+        warn!(
+            "agent_token is empty — gRPC accepts any caller; set AGENT_TOKEN for untrusted networks"
+        );
     }
 
     // HTTP server (REST + WebSocket, both on http_addr)
@@ -126,13 +129,10 @@ async fn main() -> anyhow::Result<()> {
     let http_router = build_http_router(http_state);
 
     let http_addr = config.http_addr.parse::<SocketAddr>()?;
-    let http_handle = tokio::spawn(async move {
-        axum::serve(
-            TcpListener::bind(http_addr).await?,
-            http_router,
-        )
-        .await
-    });
+    let http_handle =
+        tokio::spawn(
+            async move { axum::serve(TcpListener::bind(http_addr).await?, http_router).await },
+        );
 
     info!(addr = %config.http_addr, "HTTP server started");
 
@@ -156,7 +156,10 @@ async fn main() -> anyhow::Result<()> {
 ///   CLUSTERSCOPE_AGENT_TOKEN / AGENT_TOKEN
 fn load_config() -> anyhow::Result<ServerConfig> {
     let args: Vec<String> = std::env::args().collect();
-    let config_path = args.get(1).map(|s| s.as_str()).unwrap_or("/etc/clusterscope/server.yaml");
+    let config_path = args
+        .get(1)
+        .map(|s| s.as_str())
+        .unwrap_or("/etc/clusterscope/server.yaml");
 
     let mut config = if std::path::Path::new(config_path).exists() {
         let content = std::fs::read_to_string(config_path)
@@ -179,10 +182,14 @@ fn load_config() -> anyhow::Result<ServerConfig> {
     config.jwt_secret = env("JWT_SECRET", config.jwt_secret);
     config.http_addr = env("HTTP_ADDR", config.http_addr);
     config.grpc_addr = env("GRPC_ADDR", config.grpc_addr);
-    if let Ok(v) = std::env::var("CLUSTERSCOPE_AUTH_REQUIRED").or_else(|_| std::env::var("AUTH_REQUIRED")) {
+    if let Ok(v) =
+        std::env::var("CLUSTERSCOPE_AUTH_REQUIRED").or_else(|_| std::env::var("AUTH_REQUIRED"))
+    {
         config.auth_required = v.eq_ignore_ascii_case("true") || v == "1";
     }
-    if let Ok(v) = std::env::var("CLUSTERSCOPE_DEFAULT_ADMIN_PASSWORD").or_else(|_| std::env::var("DEFAULT_ADMIN_PASSWORD")) {
+    if let Ok(v) = std::env::var("CLUSTERSCOPE_DEFAULT_ADMIN_PASSWORD")
+        .or_else(|_| std::env::var("DEFAULT_ADMIN_PASSWORD"))
+    {
         config.default_admin_password = v;
     }
     config.agent_token = env("AGENT_TOKEN", config.agent_token);
@@ -209,18 +216,36 @@ fn build_http_router(state: Arc<AppState>) -> Router {
 
     // Admin-only: user management + alert rule management (writes).
     let admin_routes = Router::new()
-        .route("/users", get(handlers::list_users).post(handlers::create_user))
-        .route("/users/{id}", get(handlers::get_user).patch(handlers::update_user).delete(handlers::delete_user))
+        .route(
+            "/users",
+            get(handlers::list_users).post(handlers::create_user),
+        )
+        .route(
+            "/users/{id}",
+            get(handlers::get_user)
+                .patch(handlers::update_user)
+                .delete(handlers::delete_user),
+        )
         .route("/alerts/rules", post(handlers::create_alert_rule))
-        .route("/alerts/rules/{rule_id}", delete(handlers::delete_alert_rule))
-        .route("/alerts/rules/{rule_id}/ack", post(handlers::acknowledge_alert))
-        .route_layer(axum::middleware::from_fn(auth_middleware::require_admin_middleware));
+        .route(
+            "/alerts/rules/{rule_id}",
+            delete(handlers::delete_alert_rule),
+        )
+        .route(
+            "/alerts/rules/{rule_id}/ack",
+            post(handlers::acknowledge_alert),
+        )
+        .route_layer(axum::middleware::from_fn(
+            auth_middleware::require_admin_middleware,
+        ));
 
     // Operator+: job submission and cancellation.
     let operator_routes = Router::new()
         .route("/jobs", post(handlers::create_job))
         .route("/jobs/{job_id}", delete(handlers::stop_job))
-        .route_layer(axum::middleware::from_fn(auth_middleware::require_operator_middleware));
+        .route_layer(axum::middleware::from_fn(
+            auth_middleware::require_operator_middleware,
+        ));
 
     // Read-only monitoring routes (any authenticated user).
     let read_routes = Router::new()
@@ -232,7 +257,10 @@ fn build_http_router(state: Arc<AppState>) -> Router {
         .route("/jobs/{job_id}", get(handlers::get_job))
         .route("/jobs/{job_id}/logs", get(handlers::get_job_logs))
         .route("/alerts/rules", get(handlers::list_alert_rules))
-        .route("/alerts/rules/{rule_id}/state", get(handlers::get_alert_state))
+        .route(
+            "/alerts/rules/{rule_id}/state",
+            get(handlers::get_alert_state),
+        )
         .route("/alerts/events", get(handlers::list_alert_events))
         .route("/cluster/info", get(handlers::get_cluster_info))
         .route("/audit-logs", get(handlers::list_audit_logs))
@@ -279,21 +307,27 @@ async fn run_background_tasks(state: Arc<AppState>) {
         refresh_alert_rules(&state).await;
 
         // Self-heal stale alert instances (server restarts lose engine state).
-        if cycle % 12 == 0 { // every 2 minutes
+        if cycle % 12 == 0 {
+            // every 2 minutes
             if let Err(e) = storage::alert_queries::expire_stale_alerts(
                 state.database.pool(),
                 Utc::now() - ChronoDuration::minutes(10),
-            ).await {
+            )
+            .await
+            {
                 warn!(error = %e, "Failed to expire stale alerts");
             }
         }
 
         // Job log retention: keep the last 30 days of task output.
-        if cycle % 60 == 0 { // every 10 minutes
+        if cycle % 60 == 0 {
+            // every 10 minutes
             if let Err(e) = storage::queries::prune_old_job_logs(
                 state.database.pool(),
                 Utc::now() - ChronoDuration::days(30),
-            ).await {
+            )
+            .await
+            {
                 warn!(error = %e, "Failed to prune old job logs");
             }
         }
@@ -303,7 +337,9 @@ async fn run_background_tasks(state: Arc<AppState>) {
             if let Err(e) = storage::aggregation::aggregate_to_hourly(state.database.pool()).await {
                 warn!(error = %e, "Failed to aggregate hourly metrics");
             }
-            if let Err(e) = storage::aggregation::cleanup_hourly_data(state.database.pool(), 7).await {
+            if let Err(e) =
+                storage::aggregation::cleanup_hourly_data(state.database.pool(), 7).await
+            {
                 warn!(error = %e, "Failed to clean hourly metrics");
             }
         }
@@ -311,7 +347,9 @@ async fn run_background_tasks(state: Arc<AppState>) {
             if let Err(e) = storage::aggregation::aggregate_to_daily(state.database.pool()).await {
                 warn!(error = %e, "Failed to aggregate daily metrics");
             }
-            if let Err(e) = storage::aggregation::cleanup_daily_data(state.database.pool(), 90).await {
+            if let Err(e) =
+                storage::aggregation::cleanup_daily_data(state.database.pool(), 90).await
+            {
                 warn!(error = %e, "Failed to clean daily metrics");
             }
         }
@@ -330,7 +368,10 @@ async fn run_scheduler_cycle(state: &Arc<AppState>) {
         } else {
             0
         };
-        state.scheduler.set_node_gpu_capacity(&node.node_id, capacity).await;
+        state
+            .scheduler
+            .set_node_gpu_capacity(&node.node_id, capacity)
+            .await;
     }
 
     // Re-queue jobs stuck in 'starting' (agent died / server restarted) and
@@ -338,7 +379,9 @@ async fn run_scheduler_cycle(state: &Arc<AppState>) {
     if let Ok(requeued) = storage::job_queries::reset_stale_starting_jobs(
         state.database.pool(),
         Utc::now() - ChronoDuration::minutes(10),
-    ).await {
+    )
+    .await
+    {
         for job_id in requeued {
             state.scheduler.remove_running(&job_id).await;
         }
@@ -359,8 +402,12 @@ async fn run_scheduler_cycle(state: &Arc<AppState>) {
     for job in scheduled {
         info!(job_id = %job.job_id, node_id = %job.node_id, "Job dispatched");
         if let Err(e) = storage::job_queries::assign_job_to_node(
-            state.database.pool(), &job.job_id, &job.node_id,
-        ).await {
+            state.database.pool(),
+            &job.job_id,
+            &job.node_id,
+        )
+        .await
+        {
             warn!(error = %e, job_id = %job.job_id, "Failed to persist job dispatch");
         }
         state.ws_manager.push_job_update(&job.job_id).await;
