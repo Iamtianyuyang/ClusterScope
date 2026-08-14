@@ -64,6 +64,28 @@ pub struct GpuProcess {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct CpuCore {
+    #[serde(default)]
+    pub core_id: u32,
+    #[serde(default)]
+    pub usage_percent: f32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SystemProcess {
+    #[serde(default)]
+    pub pid: u32,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub command: String,
+    #[serde(default)]
+    pub cpu_percent: f32,
+    #[serde(default)]
+    pub memory_bytes: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct NodeMetrics {
     #[serde(default)]
     pub node_id: String,
@@ -81,6 +103,13 @@ pub struct NodeMetrics {
     pub memory_used_bytes: u64,
     #[serde(default)]
     pub uptime_seconds: u64,
+    /// Per-core CPU usage (agent-reported). Empty on older servers / when
+    /// the agent could not read it — render as unknown, never as fake 0s.
+    #[serde(default, alias = "cpu_core_metrics")]
+    pub cpu_cores: Vec<CpuCore>,
+    /// Top CPU-consuming host processes (agent-reported, newest agents only).
+    #[serde(default, alias = "cpu_processes")]
+    pub cpu_processes: Vec<SystemProcess>,
     #[serde(default, alias = "gpu_metrics")]
     pub gpus: Vec<GpuInfo>,
     #[serde(default, alias = "gpu_processes")]

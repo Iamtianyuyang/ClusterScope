@@ -89,6 +89,7 @@ async fn run(
                         last_refresh = std::time::Instant::now();
                     }
                     KeyCode::Char('?') => state.help = !state.help,
+                    KeyCode::Char('p') => state.show_cpu_procs = !state.show_cpu_procs,
                     KeyCode::Esc => {
                         if state.help {
                             state.help = false;

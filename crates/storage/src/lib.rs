@@ -74,8 +74,13 @@ impl DatabasePool {
                 network_metrics JSONB,
                 disk_metrics JSONB,
                 cpu_core_metrics JSONB,
+                cpu_processes JSONB,
                 created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
             );
+            
+            -- Existing deployments predate the schema script; add any late
+            -- columns idempotently (no-op on fresh databases).
+            ALTER TABLE node_metrics ADD COLUMN IF NOT EXISTS cpu_processes JSONB;
             
             CREATE INDEX IF NOT EXISTS idx_node_metrics_node_time ON node_metrics(node_id, timestamp_ms);
             CREATE INDEX IF NOT EXISTS idx_node_metrics_timestamp ON node_metrics(timestamp_ms);

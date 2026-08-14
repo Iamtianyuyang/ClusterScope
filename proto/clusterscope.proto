@@ -193,6 +193,15 @@ message CpuCoreMetrics {
     float usage_percent = 2;
 }
 
+// Top CPU-consuming host process (agent-reported snapshot).
+message SystemProcess {
+    uint32 pid = 1;
+    string username = 2;
+    string command = 3;
+    float cpu_percent = 4;
+    uint64 memory_bytes = 5;
+}
+
 // ============================================================================
 // NodeMetricsReport — the complete metrics snapshot from an Agent
 // ============================================================================
@@ -221,6 +230,8 @@ message NodeMetricsReport {
     // GPU metrics
     repeated GpuMetrics gpus = 30;
     repeated GpuProcess gpu_processes = 31;
+    // Top CPU-consuming host processes (additive; old consumers ignore it)
+    repeated SystemProcess cpu_processes = 32;
 }
 
 // ============================================================================

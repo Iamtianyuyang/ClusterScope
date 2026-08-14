@@ -80,6 +80,7 @@ pub async fn insert_node_metrics(
     network_metrics: Option<serde_json::Value>,
     disk_metrics: Option<serde_json::Value>,
     cpu_core_metrics: Option<serde_json::Value>,
+    cpu_processes: Option<serde_json::Value>,
 ) -> Result<()> {
     sqlx::query(
         r#"
@@ -89,8 +90,8 @@ pub async fn insert_node_metrics(
             memory_total_bytes, memory_used_bytes,
             swap_total_bytes, swap_used_bytes,
             uptime_seconds, boot_time_seconds,
-            gpu_metrics, gpu_processes, network_metrics, disk_metrics, cpu_core_metrics
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+            gpu_metrics, gpu_processes, network_metrics, disk_metrics, cpu_core_metrics, cpu_processes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
         "#,
     )
     .bind(node_id)
@@ -112,6 +113,7 @@ pub async fn insert_node_metrics(
     .bind(network_metrics)
     .bind(disk_metrics)
     .bind(cpu_core_metrics)
+    .bind(cpu_processes)
     .execute(pool)
     .await
     .context("Failed to insert node metrics")?;
