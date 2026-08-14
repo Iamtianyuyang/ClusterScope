@@ -49,6 +49,11 @@ raw rows and sorted by timestamp.
 | DELETE | `/api/jobs/{job_id}` | Stop a job |
 | GET | `/api/jobs/{job_id}/logs` | Get job logs |
 
+`POST /api/jobs` body: `node_id`, `name`, `executable`, `arguments`,
+`working_directory`, optional `environment`, and optional `resource_quota`
+(e.g. `"gpu:2"`, `"gpus:4"`, or a plain `"2"`) — the scheduler uses it to
+reserve GPUs per job; empty/omitted means 1 GPU.
+
 ### Alerts
 
 | Method | Path | Description |

@@ -258,6 +258,17 @@ mod tests {
     }
 
     #[test]
+    fn test_lost_transitions() {
+        // A job whose node died can be marked lost from any active state.
+        assert!(can_transition(JobStatus::Running, JobStatus::Lost));
+        assert!(can_transition(JobStatus::Stopping, JobStatus::Lost));
+        assert!(can_transition(JobStatus::Starting, JobStatus::Running));
+        // Lost is terminal: a resurrected agent may not push it forward.
+        assert!(!can_transition(JobStatus::Lost, JobStatus::Running));
+        assert!(!can_transition(JobStatus::Lost, JobStatus::Succeeded));
+    }
+
+    #[test]
     fn test_transition_validation() {
         assert!(validate_transition(JobStatus::Queued, JobStatus::Starting).is_ok());
         assert!(validate_transition(JobStatus::Queued, JobStatus::Running).is_err());
