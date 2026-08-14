@@ -1,7 +1,7 @@
 # ClusterScope
 
 <p align="center">
-  <img src="web/public/icon.svg" width="96" height="96" alt="ClusterScope" />
+  <img src="assets/icon.svg" width="96" height="96" alt="ClusterScope" />
 </p>
 
 ```
@@ -24,23 +24,22 @@
 - **Agent**:部署在每台 GPU 节点,通过 **NVML** 采集 GPU 利用率/显存/温度/功耗/进程,`/proc` 尽力读取进程用户名与命令行(权限不足自动降级)
 - **Server**:聚合所有节点,提供 REST API,持久化到 PostgreSQL
 - **TUI**:ratatui 终端仪表盘 —— 多节点横向一屏总览、GPU 表格、GPU 进程面板、实时折线图(Trend)
-- **Web**:React 前端(可选)—— 实时 CPU/GPU 折线图、历史曲线、任务与告警管理
 
 ```
-┌────────────────┐   REST/WS   ┌─────────────────────┐
-│  TUI / Web     │────────────▶│   Central Server     │
-└────────────────┘             │  (gRPC + REST + WS)  │
-                               └──────────┬──────────┘
-                                          │ gRPC :50051
-                    ┌─────────────────────┼─────────────────────┐
-              ┌─────▼─────┐        ┌──────▼──────┐       ┌──────▼──────┐
-              │   Agent   │        │    Agent    │       │    Agent    │
-              │ node-01│        │ node-02  │       │ node-03  │
-              └───────────┘        └─────────────┘       └─────────────┘
-                    └──────────┬──────────┴──────────┬──────────┘
-                         ┌────▼────┐           ┌─────▼─────┐
-                         │PostgreSQL│           │  (可选) Redis│
-                         └─────────┘           └───────────┘
+┌────────────────┐   REST     ┌─────────────────────┐
+│  TUI           │───────────▶│   Central Server     │
+└────────────────┘            │  (gRPC + REST)      │
+                              └──────────┬──────────┘
+                                         │ gRPC :50051
+                   ┌─────────────────────┼─────────────────────┐
+             ┌─────▼─────┐        ┌──────▼──────┐       ┌──────▼──────┐
+             │   Agent   │        │    Agent    │       │    Agent    │
+             │ node-01   │        │ node-02     │       │ node-03     │
+             └───────────┘        └─────────────┘       └─────────────┘
+                   └──────────┬──────────┴──────────┬──────────┘
+                        ┌────▼────┐           ┌─────▼─────┐
+                        │PostgreSQL│           │ (已移除) Redis│
+                        └─────────┘           └───────────┘
 ```
 
 ## 快速开始
@@ -172,26 +171,6 @@ GPU  PID      USER      SM     VRAM     CPU    COMMAND
 | 折线·显存占用 | 青 | Trend 页每张 GPU 图的内存占用线 |
 | 折线·CPU | 浅蓝 | Trend 页 CPU 曲线 |
 
-## Web 前端(可选)
-
-React + Ant Design + ECharts,与 TUI 同源数据(同一 Server 的 REST / WebSocket)。
-
-- **Overview**:实时 CPU/GPU 利用率折线图 —— WebSocket 推送(2s 一个点,约 3 分钟滚动窗口),支持集群平均 / 单节点切换;节点卡片实时显示各节点 CPU/GPU 占用
-- **Node Details**:单节点历史曲线(15m / 1h / 6h / 24h,CPU + 每张 GPU)、GPU 表格(利用率/显存/温度/功耗)、进程表
-- **Jobs / Alerts / Processes**:任务列表与提交、告警规则与事件、GPU 进程
-
-本地开发:
-
-```bash
-cd web
-npm install
-npm run dev            # http://localhost:3000(代理 /api 与 /ws 到 Server:8080)
-npm run build          # 产物在 web/dist
-npm run preview -- --host 0.0.0.0 --port 8188   # 静态预览(含 /api、/ws 代理)
-```
-
-生产部署:`docker compose up`(Dockerfile.web + nginx 反代),或把 `web/dist` 交给任意静态服务器并反代 `/api`、`/ws` 到 Server。
-
 ## 数据采集(无 root)
 
 - **NVML**(nvml-wrapper):设备数、利用率、显存、温度、功耗、compute processes(pid + used VRAM)、per-process SM/memory/encoder/decoder 采样(驱动不支持时为 `—`)
@@ -250,8 +229,8 @@ crates/
 ├── server/      # 中央服务(REST/WS/gRPC/认证)
 ├── scheduler/   # GPU 感知任务调度
 └── tui/         # 终端仪表盘(ratatui)
-web/             # React 前端(可选,含图标 web/public/icon.svg)
-deploy/          # systemd、docker-compose、nginx、install-agent.sh、tui.sh
+deploy/          # systemd、docker-compose、install-agent.sh、tui.sh
+assets/          # 项目图标
 docs/            # 架构与 API 文档
 ```
 
@@ -267,7 +246,7 @@ cargo test --workspace
 - gRPC 未启用 TLS(`tls_enabled` 已预留),生产建议配合内网/VPN 或自行加 TLS
 - 调度器为容量感知的简单 FIFO(无优先级/抢占);`node_id` 作为首选节点,满时自动改派到其它在线节点
 - 任务取消通过 SIGTERM 通知进程组,部分进程可能自行忽略信号(可配 force 后升级为 SIGKILL)
-- Web 前端使用 Ant Design + ECharts,尚未实现告警规则的可视化编辑(可通过 REST API 管理)
+- 当前只保留 TUI 终端仪表盘(Web 前端已移除);告警规则等管理操作通过 REST API 完成
 - 历史曲线:原始数据保留 24h,更早范围来自小时级(7 天)与天级(90 天)聚合,聚合行只有平均利用率,无逐 GPU 明细
 - `cluster/info` 中 `idle_gpus` / `avg_gpu_utilization` / `active_alerts` 无数据时为 JSON `null`(不会伪造 0)
 - 生产建议:PostgreSQL 独立账号、`auth_required: true`、设置 `agent_token` 并定期轮换 JWT secret
