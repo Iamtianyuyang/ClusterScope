@@ -167,10 +167,10 @@ async fn main() -> anyhow::Result<()> {
 
                 // Re-register every ~60s so node info survives server restarts
                 // (the server keeps node state in memory + upserts on register).
-                if beats % 12 == 0 {
-                    if let Err(e) = client.lock().await.register().await {
-                        warn!(error = %e, "Failed to re-register with server");
-                    }
+                if beats.is_multiple_of(12)
+                    && let Err(e) = client.lock().await.register().await
+                {
+                    warn!(error = %e, "Failed to re-register with server");
                 }
             }
         })

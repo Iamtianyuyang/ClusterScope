@@ -439,10 +439,11 @@ impl MetricsCollector {
                 ])
                 .output();
 
-            if let Ok(output) = output {
-                if output.status.success() {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
+            if let Ok(output) = output
+                && output.status.success()
+            {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
                         let fields: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
                         if fields.len() < 2 {
                             continue;
@@ -599,6 +600,23 @@ fn uid_to_username(uid: u32) -> Option<String> {
     }
 }
 
+fn monotonic_clock_ms() -> u64 {
+    // Real CLOCK_MONOTONIC (never jumps with wall-clock changes).
+    #[cfg(target_os = "linux")]
+    {
+        let mut ts = std::mem::MaybeUninit::<libc::timespec>::uninit();
+        if unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, ts.as_mut_ptr()) } == 0 {
+            let ts = unsafe { ts.assume_init() };
+            return (ts.tv_sec as u64) * 1_000 + (ts.tv_nsec as u64) / 1_000_000;
+        }
+    }
+    // Fallback (non-Linux build): wall clock since epoch.
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
 #[cfg(test)]
 mod smoke_tests {
     use super::*;
@@ -627,21 +645,4 @@ mod smoke_tests {
             );
         }
     }
-}
-
-fn monotonic_clock_ms() -> u64 {
-    // Real CLOCK_MONOTONIC (never jumps with wall-clock changes).
-    #[cfg(target_os = "linux")]
-    {
-        let mut ts = std::mem::MaybeUninit::<libc::timespec>::uninit();
-        if unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, ts.as_mut_ptr()) } == 0 {
-            let ts = unsafe { ts.assume_init() };
-            return (ts.tv_sec as u64) * 1_000 + (ts.tv_nsec as u64) / 1_000_000;
-        }
-    }
-    // Fallback (non-Linux build): wall clock since epoch.
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
 }
