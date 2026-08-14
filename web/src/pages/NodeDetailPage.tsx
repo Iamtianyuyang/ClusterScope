@@ -23,6 +23,8 @@ const NodeDetailPage: React.FC = () => {
     '1h': [Date.now() - 1 * 60 * 60 * 1000, Date.now()],
     '6h': [Date.now() - 6 * 60 * 60 * 1000, Date.now()],
     '24h': [Date.now() - 24 * 60 * 60 * 1000, Date.now()],
+    '7d': [Date.now() - 7 * 24 * 60 * 60 * 1000, Date.now()],
+    '30d': [Date.now() - 30 * 24 * 60 * 60 * 1000, Date.now()],
   }
 
   useEffect(() => {
@@ -96,8 +98,24 @@ const NodeDetailPage: React.FC = () => {
     }],
   }
 
-  // The server stores GPU metrics under `gpu_metrics` (DB column name).
+  // Ranges beyond 24h mix raw rows with hourly/daily aggregates. Aggregated
+  // rows carry `gpu_utilization_percent` (cluster average) instead of
+  // per-GPU `gpu_metrics`, so render a single average line in that case.
   const gpuSeries = (() => {
+    if (history.some((h: any) => h.gpu_utilization_percent != null)) {
+      return [{
+        name: 'Avg GPU',
+        data: history.map((h: any) => {
+          if (h.gpu_utilization_percent != null) return h.gpu_utilization_percent
+          const gpus: any[] = h.gpu_metrics || []
+          if (!gpus.length) return null
+          return gpus.reduce((s: number, g: any) => s + (g.utilization_gpu ?? 0), 0) / gpus.length
+        }),
+        type: 'line',
+        smooth: true,
+        itemStyle: { color: '#52c41a' },
+      }]
+    }
     const gpuCount = history.reduce(
       (max: number, h: any) => Math.max(max, (h.gpu_metrics || []).length),
       0,
@@ -145,6 +163,8 @@ const NodeDetailPage: React.FC = () => {
             <Select.Option value="1h">1 hour</Select.Option>
             <Select.Option value="6h">6 hours</Select.Option>
             <Select.Option value="24h">24 hours</Select.Option>
+            <Select.Option value="7d">7 days</Select.Option>
+            <Select.Option value="30d">30 days</Select.Option>
           </Select>
         </div>
       </div>

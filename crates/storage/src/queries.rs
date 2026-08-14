@@ -162,6 +162,37 @@ pub async fn get_metrics_history(
     .context("Failed to get metrics history")
 }
 
+/// Aggregated metric buckets (hourly or daily) for a node and time range.
+/// Returns `(bucket, metric_name, avg_value)` rows, oldest first.
+pub async fn get_aggregated_history(
+    pool: &PgPool,
+    node_id: &str,
+    start_ms: i64,
+    end_ms: i64,
+    hourly: bool,
+) -> Result<Vec<(chrono::DateTime<chrono::Utc>, String, f64)>> {
+    // Table/bucket names come from a fixed two-value whitelist below.
+    let (table, bucket_col) = if hourly {
+        ("metrics_hourly", "hour_bucket")
+    } else {
+        ("metrics_daily", "day_bucket")
+    };
+    let sql = format!(
+        "SELECT {}, metric_name, avg_value FROM {} \
+         WHERE node_id = $1 AND {} >= to_timestamp($2 / 1000.0) \
+           AND {} <= to_timestamp($3 / 1000.0) \
+         ORDER BY {} ASC",
+        bucket_col, table, bucket_col, bucket_col, bucket_col
+    );
+    sqlx::query_as::<_, (chrono::DateTime<chrono::Utc>, String, f64)>(&sql)
+        .bind(node_id)
+        .bind(start_ms)
+        .bind(end_ms)
+        .fetch_all(pool)
+        .await
+        .context("Failed to get aggregated metrics history")
+}
+
 pub async fn get_metrics_for_time_range(
     pool: &PgPool,
     start_time_ms: i64,
