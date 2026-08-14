@@ -108,6 +108,13 @@ pub async fn refresh_token(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::UNAUTHORIZED)?;
 
+    // Rotation: revoke the presented token so a stolen refresh token cannot
+    // be reused once it has been refreshed.
+    let _ = storage::user_queries::revoke_refresh_token(
+        state.database.pool(),
+        refresh_token,
+    ).await;
+
     let user = storage::user_queries::get_user_by_id(
         state.database.pool(),
         &user_id,
@@ -299,6 +306,16 @@ pub async fn create_job(
     Json(req): Json<JobCreateRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
 
+    // Basic input validation: a job needs an executable and a known node.
+    if req.executable.trim().is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let node_known = storage::queries::node_exists(state.database.pool(), &req.node_id)
+        .await
+        .unwrap_or(false);
+    if !node_known {
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     let job_id = Uuid::new_v4().to_string();
     let env: HashMap<String, String> = req.environment.into_iter()
@@ -369,7 +386,7 @@ pub async fn list_jobs(
         params.get("status").map(|s| s.as_str()),
         params.get("created_by").map(|s| s.as_str()),
         params.get("page").and_then(|s| s.parse().ok()).unwrap_or(0),
-        params.get("page_size").and_then(|s| s.parse().ok()).unwrap_or(20),
+        params.get("page_size").and_then(|s| s.parse().ok()).unwrap_or(20).clamp(1, 200),
     ).await
     .map_err(|e| { warn!(error = %e, "list_jobs failed"); StatusCode::INTERNAL_SERVER_ERROR })?;
 
@@ -399,6 +416,14 @@ pub async fn stop_job(
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
 
+    // A stop request for an unknown job is an error, not a silent success.
+    if storage::job_queries::get_job(state.database.pool(), &job_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .is_none()
+    {
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     storage::job_queries::update_job_status(
         state.database.pool(),
@@ -469,6 +494,14 @@ pub async fn create_alert_rule(
     let gpu_uuids = req.get("gpu_uuids").cloned().unwrap_or(serde_json::Value::Array(vec![]));
     let labels = req.get("labels").cloned().unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
     let description = req.get("description").and_then(|v| v.as_str()).unwrap_or("");
+
+    // Whitelist the operator/severity and sanity-check the metric so bad
+    // rules cannot be persisted (they would silently never fire).
+    let valid_operator = matches!(operator, "gt" | "gte" | "lt" | "lte" | "eq" | "neq");
+    let valid_severity = matches!(severity, "info" | "warning" | "critical");
+    if metric.is_empty() || !valid_operator || !valid_severity || !threshold.is_finite() || duration < 0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     storage::alert_queries::insert_alert_rule(
         state.database.pool(),
@@ -571,6 +604,13 @@ pub async fn create_user(
     let role = req.get("role").and_then(|v| v.as_str()).unwrap_or("viewer");
     let email = req.get("email").and_then(|v| v.as_str());
 
+    if username.len() < 3 || password.len() < 6 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if !matches!(role, "viewer" | "operator" | "admin") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
     let hash = auth::hash_password(password)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -639,6 +679,10 @@ pub async fn update_user(
 
     let role = req.get("role").and_then(|v| v.as_str());
     let enabled = req.get("enabled").and_then(|v| v.as_bool());
+
+    if role.is_some_and(|r| !matches!(r, "viewer" | "operator" | "admin")) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     storage::user_queries::update_user(
         state.database.pool(),
@@ -730,7 +774,7 @@ pub async fn list_audit_logs(
         params.get("start_time_ms").and_then(|s| s.parse().ok()).map(|t: i64| chrono::DateTime::from_timestamp_millis(t).unwrap_or(Utc::now())),
         params.get("end_time_ms").and_then(|s| s.parse().ok()).map(|t: i64| chrono::DateTime::from_timestamp_millis(t).unwrap_or(Utc::now())),
         params.get("page").and_then(|s| s.parse().ok()).unwrap_or(0),
-        params.get("page_size").and_then(|s| s.parse().ok()).unwrap_or(50),
+        params.get("page_size").and_then(|s| s.parse().ok()).unwrap_or(50).clamp(1, 200),
     ).await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
