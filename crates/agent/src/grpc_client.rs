@@ -155,29 +155,6 @@ impl AgentClient {
         Ok(())
     }
 
-    /// Report a job status transition (running/succeeded/failed/…).
-    pub async fn update_job_status(
-        &mut self,
-        job_id: &str,
-        status: i32,
-        message: &str,
-    ) -> Result<()> {
-        let update = protocol::JobStatusUpdate {
-            job_id: job_id.to_string(),
-            status,
-            message: message.to_string(),
-        };
-        let request = self.authed(tonic::Request::new(update));
-        let _ = self.client.update_job_status(request).await?;
-        Ok(())
-    }
-
-    pub async fn report_job_logs(&mut self, _job_id: &str, logs: Vec<JobLogEntry>) -> Result<()> {
-        let request = self.authed(tonic::Request::new(tokio_stream::iter(logs)));
-        let _response = self.client.report_job_logs(request).await?;
-        Ok(())
-    }
-
     pub async fn watch_jobs(&mut self) {
         loop {
             match self.poll_pending_jobs().await {
