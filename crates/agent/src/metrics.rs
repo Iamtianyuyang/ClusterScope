@@ -28,6 +28,10 @@ fn nvml() -> Option<&'static Nvml> {
 }
 
 pub struct MetricsCollector {
+    /// Persistent sysinfo handle: CPU usage is computed from the delta
+    /// between two refreshes, so a fresh instance per tick would report
+    /// 0 forever on Linux. Reused across ticks instead.
+    sys: Option<sysinfo::System>,
     prev_network: Option<HashMap<String, NetworkCounter>>,
 }
 
@@ -40,6 +44,7 @@ struct NetworkCounter {
 impl MetricsCollector {
     pub fn new() -> Self {
         Self {
+            sys: None,
             prev_network: None,
         }
     }
@@ -86,7 +91,10 @@ impl MetricsCollector {
     }
     
     fn collect_system(&mut self, report: &mut NodeMetricsReport) -> Result<()> {
-        let sys = sysinfo::System::new_all();
+        // Reuse one System across ticks (CPU usage needs a previous sample).
+        let sys = self.sys.get_or_insert_with(sysinfo::System::new_all);
+        sys.refresh_cpu_usage();
+        sys.refresh_memory();
         
         // CPU usage (sysinfo returns 0-100; stored as-is)
         let total_usage = sys.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32;
@@ -190,7 +198,79 @@ impl MetricsCollector {
         self.prev_network = Some(current);
     }
     
+    /// GPU metrics via NVML when available (no subprocess spawn per tick);
+    /// falls back to parsing `nvidia-smi` output.
     fn collect_gpu(&self, report: &mut NodeMetricsReport) -> Result<()> {
+        if let Some(nvml) = nvml() {
+            if self.collect_gpu_nvml(nvml, report).is_ok() {
+                return Ok(());
+            }
+            warn!("NVML GPU metrics failed — falling back to nvidia-smi");
+        }
+        self.collect_gpu_fallback(report)
+    }
+
+    /// NVML-based GPU metrics: utilization, memory, temperature, power, fan.
+    /// A failing device is skipped (degraded) without failing the others;
+    /// unsupported optional fields (fan, power limit) degrade to None/0.
+    fn collect_gpu_nvml(&self, nvml: &Nvml, report: &mut NodeMetricsReport) -> Result<()> {
+        let count = nvml.device_count()?;
+        for idx in 0..count {
+            let device = match nvml.device_by_index(idx) {
+                Ok(d) => d,
+                Err(e) => {
+                    warn!(error = %e, gpu_index = idx, "NVML device open failed — skipping GPU");
+                    continue;
+                }
+            };
+            // Utilization is the core metric: when it cannot be read the GPU
+            // is reported unavailable rather than guessing 0.
+            let utilization = match device.utilization_rates() {
+                Ok(u) => (u.gpu as f32, u.memory as f32),
+                Err(e) => {
+                    warn!(error = %e, gpu_index = idx, "NVML utilization read failed — skipping GPU");
+                    continue;
+                }
+            };
+            let memory = device.memory_info().map(|m| (m.total, m.used)).unwrap_or((0, 0));
+            let temperature = device.temperature(nvml_wrapper::enum_wrappers::device::TemperatureSensor::Gpu)
+                .unwrap_or(0) as f32;
+            let power_watts = device.power_usage().unwrap_or(0) as f32 / 1000.0;
+            let power_limit_watts = device.power_management_limit()
+                .ok()
+                .map(|mw| mw as f32 / 1000.0)
+                .unwrap_or(0.0);
+            let fan_speed = device.fan_speed(0)
+                .ok()
+                .map(|f| f as f32);
+            let name = device.name().unwrap_or_else(|_| "unknown".to_string());
+            let uuid = device.uuid().unwrap_or_default();
+
+            report.gpus.push(protocol::GpuMetrics {
+                index: idx,
+                uuid,
+                name,
+                utilization_gpu: utilization.0,
+                utilization_memory: utilization.1,
+                memory_total_bytes: memory.0,
+                memory_used_bytes: memory.1,
+                temperature_celsius: temperature,
+                power_watts: power_watts,
+                power_limit_watts: power_limit_watts,
+                fan_speed_percent: fan_speed,
+                pcie_tx_bytes_per_second: None,
+                pcie_rx_bytes_per_second: None,
+                mig_enabled: false,
+                mig_instances: vec![],
+            });
+        }
+        Ok(())
+    }
+
+    /// Fallback: parse `nvidia-smi --query-gpu=...` (kept for hosts without
+    /// NVML). Unparseable fields stay 0; a missing/failed nvidia-smi is
+    /// logged so the gap is visible.
+    fn collect_gpu_fallback(&self, report: &mut NodeMetricsReport) -> Result<()> {
         // Parse nvidia-smi output
         let output = Command::new("nvidia-smi")
             .args(["--query-gpu=index,uuid,name,utilization.gpu,utilization.memory,memory.total,memory.used,temperature.gpu,power.draw,power.limit,fan.speed",
@@ -227,7 +307,12 @@ impl MetricsCollector {
                     report.gpus.push(gpu);
                 }
             }
-            _ => {}
+            Ok(_) => {
+                warn!("nvidia-smi exited non-zero — GPU metrics unavailable");
+            }
+            Err(e) => {
+                warn!(error = %e, "Failed to run nvidia-smi — GPU metrics unavailable");
+            }
         }
         
         Ok(())
@@ -500,6 +585,16 @@ mod smoke_tests {
 }
 
 fn monotonic_clock_ms() -> u64 {
+    // Real CLOCK_MONOTONIC (never jumps with wall-clock changes).
+    #[cfg(target_os = "linux")]
+    {
+        let mut ts = std::mem::MaybeUninit::<libc::timespec>::uninit();
+        if unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, ts.as_mut_ptr()) } == 0 {
+            let ts = unsafe { ts.assume_init() };
+            return (ts.tv_sec as u64) * 1_000 + (ts.tv_nsec as u64) / 1_000_000;
+        }
+    }
+    // Fallback (non-Linux build): wall clock since epoch.
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
