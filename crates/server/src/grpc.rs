@@ -86,6 +86,16 @@ impl AgentService for AgentServiceImpl {
         let node_info = request.into_inner();
         info!(node_id = %node_info.node_id, "Agent registered");
 
+        // Preserve the GPU count learned from metrics: a re-register (agents
+        // re-register every ~60s) must not wipe it back to 0, or the
+        // scheduler briefly sees zero capacity on every cycle.
+        let gpu_count = self
+            .state
+            .node_registry
+            .get(&node_info.node_id)
+            .map(|n| n.gpu_count)
+            .unwrap_or(0);
+
         let entry = common::node_registry::NodeEntry {
             node_id: node_info.node_id.clone(),
             hostname: node_info.hostname.clone(),
@@ -100,7 +110,7 @@ impl AgentService for AgentServiceImpl {
             last_seen: chrono::Utc::now(),
             status: common::node_registry::NodeStatus::Online,
             labels: node_info.labels.clone(),
-            gpu_count: 0,
+            gpu_count,
         };
 
         self.state.node_registry.register(entry.clone());
@@ -118,7 +128,7 @@ impl AgentService for AgentServiceImpl {
             node_info.cpu_cores as i32,
             node_info.memory_total_bytes as i64,
             serde_json::to_value(&node_info.labels).unwrap_or_else(|_| serde_json::json!({})),
-            0, // gpu_count is learned from metrics after registration
+            gpu_count as i32, // preserved from registry (learned from metrics)
         )
         .await
         {
@@ -326,7 +336,13 @@ impl AgentService for AgentServiceImpl {
                                 proto_status = job_to_proto(&job).status,
                                 "get_pending_jobs: sending job"
                             );
-                            let _ = tx.send(Ok(job_to_proto(&job))).await;
+                            // A failed send means the client stream is gone;
+                            // stop the loop so the task exits instead of
+                            // polling the DB every 5s forever (each agent
+                            // reconnect would otherwise leak one task).
+                            if tx.send(Ok(job_to_proto(&job))).await.is_err() {
+                                return;
+                            }
                         }
                     }
                     Err(e) => warn!(error = %e, "get_jobs_for_node failed"),

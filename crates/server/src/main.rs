@@ -107,7 +107,7 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let grpc_handle = tokio::spawn(async move {
+    let mut grpc_handle = tokio::spawn(async move {
         Server::builder()
             .add_service(AgentServiceServer::with_interceptor(
                 agent_service,
@@ -129,18 +129,39 @@ async fn main() -> anyhow::Result<()> {
     let http_router = build_http_router(http_state);
 
     let http_addr = config.http_addr.parse::<SocketAddr>()?;
-    let http_handle =
+    let mut http_handle =
         tokio::spawn(
             async move { axum::serve(TcpListener::bind(http_addr).await?, http_router).await },
         );
 
     info!(addr = %config.http_addr, "HTTP server started");
 
-    tokio::signal::ctrl_c().await?;
-    info!("Shutting down...");
-
-    grpc_handle.abort();
-    http_handle.abort();
+    // Wait for Ctrl-C or a server failure. A bind/serve error inside a
+    // detached task used to be silently swallowed — the process would keep
+    // running with half the services dead and nobody noticing.
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            info!("Shutting down...");
+            grpc_handle.abort();
+            http_handle.abort();
+        }
+        result = &mut grpc_handle => {
+            http_handle.abort();
+            match result {
+                Ok(Ok(())) => warn!("gRPC server stopped unexpectedly"),
+                Ok(Err(e)) => anyhow::bail!("gRPC server failed: {e}"),
+                Err(e) => anyhow::bail!("gRPC server task panicked: {e}"),
+            }
+        }
+        result = &mut http_handle => {
+            grpc_handle.abort();
+            match result {
+                Ok(Ok(())) => warn!("HTTP server stopped unexpectedly"),
+                Ok(Err(e)) => anyhow::bail!("HTTP server failed: {e}"),
+                Err(e) => anyhow::bail!("HTTP server task panicked: {e}"),
+            }
+        }
+    }
 
     Ok(())
 }
