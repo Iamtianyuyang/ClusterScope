@@ -118,10 +118,10 @@ impl MetricsCollector {
         // Memory
         let total = sys.total_memory();
         let used = sys.used_memory();
-        report.memory_total_bytes = total as u64;
-        report.memory_used_bytes = used as u64;
-        report.swap_total_bytes = sys.total_swap() as u64;
-        report.swap_used_bytes = sys.used_swap() as u64;
+        report.memory_total_bytes = total;
+        report.memory_used_bytes = used;
+        report.swap_total_bytes = sys.total_swap();
+        report.swap_used_bytes = sys.used_swap();
 
         // Uptime
         report.uptime_seconds = sysinfo::System::uptime();
@@ -622,8 +622,8 @@ mod smoke_tests {
                 g.name,
                 g.utilization_gpu,
                 g.memory_used_bytes.unwrap_or(0) / 1024 / 1024,
-                g.temperature_celsius,
-                g.power_watts
+                g.temperature_celsius.unwrap_or(f32::NAN),
+                g.power_watts.unwrap_or(f32::NAN)
             );
         }
     }

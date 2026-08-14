@@ -36,7 +36,7 @@ impl JobRuntime {
         match pids.get(job_id).copied() {
             Some(pid) if pid > 0 => {
                 unsafe {
-                    libc::kill(-(pid as i32), libc::SIGTERM);
+                    libc::kill(-pid, libc::SIGTERM);
                 }
                 true
             }
@@ -287,7 +287,7 @@ where
                     job_id: job_id.to_string(),
                     log_data: line.clone(),
                     is_stderr,
-                    timestamp: chrono::Utc::now().timestamp_millis() as i64,
+                    timestamp: chrono::Utc::now().timestamp_millis(),
                     log_offset: offset,
                 };
 
