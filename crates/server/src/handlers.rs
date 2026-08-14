@@ -215,16 +215,80 @@ pub async fn get_metrics_history(
         .and_then(|s| s.parse().ok())
         .ok_or(StatusCode::BAD_REQUEST)?;
 
-    let reports = storage::queries::get_metrics_history(
-        state.database.pool(),
-        node_id,
-        start_time,
-        end_time,
-        10000,
-    ).await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Raw rows cover the last 24h; older ranges come from the hourly (7d)
+    // and daily (90d) aggregate tables, merged and sorted by timestamp.
+    const RAW_RETENTION_MS: i64 = 24 * 3600 * 1000;
+    const HOURLY_RETENTION_MS: i64 = 7 * 24 * 3600 * 1000;
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let raw_cutoff = now_ms - RAW_RETENTION_MS;
+    let hourly_cutoff = now_ms - HOURLY_RETENTION_MS;
 
-    Ok(Json(serde_json::json!(reports)))
+    let mut rows: Vec<serde_json::Value> = Vec::new();
+
+    // 1) Raw reports within the retention window.
+    if end_time >= raw_cutoff {
+        let raw_start = start_time.max(raw_cutoff);
+        if let Ok(reports) = storage::queries::get_metrics_history(
+            state.database.pool(),
+            node_id,
+            raw_start,
+            end_time,
+            10000,
+        ).await {
+            rows.extend(reports.into_iter().map(|r| serde_json::to_value(r).unwrap_or(serde_json::Value::Null)));
+        }
+    }
+
+    // 2) Hourly buckets for the part older than the raw window.
+    if start_time < raw_cutoff && end_time > hourly_cutoff {
+        let agg_start = start_time.max(hourly_cutoff);
+        let agg_end = raw_cutoff - 1;
+        if let Ok(buckets) = storage::queries::get_aggregated_history(
+            state.database.pool(), node_id, agg_start, agg_end, true,
+        ).await {
+            rows.extend(aggregate_rows_to_json(node_id, buckets, "hourly"));
+        }
+    }
+
+    // 3) Daily buckets for ranges older than 7 days.
+    if start_time < hourly_cutoff {
+        let agg_end = end_time.min(hourly_cutoff - 1);
+        if let Ok(buckets) = storage::queries::get_aggregated_history(
+            state.database.pool(), node_id, start_time, agg_end, false,
+        ).await {
+            rows.extend(aggregate_rows_to_json(node_id, buckets, "daily"));
+        }
+    }
+
+    // Sort merged rows by timestamp, oldest first.
+    rows.sort_by_key(|r| r.get("timestamp_ms").and_then(|v| v.as_i64()).unwrap_or(0));
+
+    Ok(Json(serde_json::json!(rows)))
+}
+
+/// Convert aggregate buckets into the same row shape as raw reports, using
+/// the shared metric keys so clients can plot them uniformly:
+/// `cpu_usage_percent` / `memory_usage_percent` / `gpu_utilization_percent`.
+fn aggregate_rows_to_json(
+    node_id: &str,
+    buckets: Vec<(chrono::DateTime<chrono::Utc>, String, f64)>,
+    source: &'static str,
+) -> Vec<serde_json::Value> {
+    buckets.into_iter().filter_map(|(bucket, metric, avg)| {
+        let key = match metric.as_str() {
+            "cpu_usage_percent" => Some("cpu_usage_percent"),
+            "memory_used_percent" => Some("memory_usage_percent"),
+            "gpu_utilization" => Some("gpu_utilization_percent"),
+            _ => None,
+        };
+        let key = key?;
+        Some(serde_json::json!({
+            "node_id": node_id,
+            "timestamp_ms": bucket.timestamp_millis(),
+            key: avg,
+            "source": source,
+        }))
+    }).collect()
 }
 
 // ===== Job Handlers =====
