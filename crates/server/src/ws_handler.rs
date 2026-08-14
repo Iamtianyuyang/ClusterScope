@@ -18,7 +18,7 @@ struct SubscribeRequest {
 }
 
 /// JSON message pushed to WebSocket clients (mirrors proto `WebSocketMessage`).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WsMessage {
     #[serde(rename = "type")]
     pub type_: String,
@@ -28,17 +28,6 @@ pub struct WsMessage {
     pub job_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub payload: Option<serde_json::Value>,
-}
-
-impl Default for WsMessage {
-    fn default() -> Self {
-        Self {
-            type_: String::new(),
-            node_id: None,
-            job_id: None,
-            payload: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -82,12 +71,11 @@ impl WsManager {
         let mut dead: Vec<String> = Vec::new();
 
         for (id, client) in clients.iter_mut() {
-            if let Some(node) = filter {
-                if let Some(f) = &client.node_filter {
-                    if f != node {
-                        continue;
-                    }
-                }
+            if let Some(node) = filter
+                && let Some(f) = &client.node_filter
+                && f != node
+            {
+                continue;
             }
             match client.sender.try_send(message.clone()) {
                 Ok(()) => {}

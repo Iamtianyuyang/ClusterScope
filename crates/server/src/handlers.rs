@@ -42,10 +42,10 @@ pub async fn login(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    if let Some(locked_until) = user.locked_until {
-        if locked_until > Utc::now() {
-            return Err(StatusCode::TOO_MANY_REQUESTS);
-        }
+    if let Some(locked_until) = user.locked_until
+        && locked_until > Utc::now()
+    {
+        return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
     // Verify password

@@ -174,7 +174,7 @@ fn load_config() -> anyhow::Result<ServerConfig> {
     };
 
     let env = |name: &str, current: String| -> String {
-        std::env::var(&format!("CLUSTERSCOPE_{}", name))
+        std::env::var(format!("CLUSTERSCOPE_{}", name))
             .or_else(|_| std::env::var(name))
             .unwrap_or(current)
     };
@@ -307,33 +307,31 @@ async fn run_background_tasks(state: Arc<AppState>) {
         refresh_alert_rules(&state).await;
 
         // Self-heal stale alert instances (server restarts lose engine state).
-        if cycle % 12 == 0 {
-            // every 2 minutes
-            if let Err(e) = storage::alert_queries::expire_stale_alerts(
+        // every 2 minutes
+        if cycle.is_multiple_of(12)
+            && let Err(e) = storage::alert_queries::expire_stale_alerts(
                 state.database.pool(),
                 Utc::now() - ChronoDuration::minutes(10),
             )
             .await
-            {
-                warn!(error = %e, "Failed to expire stale alerts");
-            }
+        {
+            warn!(error = %e, "Failed to expire stale alerts");
         }
 
-        // Job log retention: keep the last 30 days of task output.
-        if cycle % 60 == 0 {
-            // every 10 minutes
-            if let Err(e) = storage::queries::prune_old_job_logs(
+        // Job log retention: keep the last 30 days of task output (every 10
+        // minutes).
+        if cycle.is_multiple_of(60)
+            && let Err(e) = storage::queries::prune_old_job_logs(
                 state.database.pool(),
                 Utc::now() - ChronoDuration::days(30),
             )
             .await
-            {
-                warn!(error = %e, "Failed to prune old job logs");
-            }
+        {
+            warn!(error = %e, "Failed to prune old job logs");
         }
 
         // Hourly rollups every 10 minutes; daily every hour.
-        if cycle % 60 == 0 {
+        if cycle.is_multiple_of(60) {
             if let Err(e) = storage::aggregation::aggregate_to_hourly(state.database.pool()).await {
                 warn!(error = %e, "Failed to aggregate hourly metrics");
             }
@@ -343,7 +341,7 @@ async fn run_background_tasks(state: Arc<AppState>) {
                 warn!(error = %e, "Failed to clean hourly metrics");
             }
         }
-        if cycle % 360 == 0 {
+        if cycle.is_multiple_of(360) {
             if let Err(e) = storage::aggregation::aggregate_to_daily(state.database.pool()).await {
                 warn!(error = %e, "Failed to aggregate daily metrics");
             }
