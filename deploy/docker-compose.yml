@@ -36,14 +36,5 @@ services:
       postgres:
         condition: service_healthy
 
-  web:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.web
-    ports:
-      - "3000:80"
-    depends_on:
-      - server
-
 volumes:
   pgdata:
