@@ -142,7 +142,10 @@ impl MetricsCollector {
         for disk in &disks {
             let usage = disk.total_space();
             let available = disk.available_space();
-            let used = usage - available;
+            // saturating: quota/ZFS/overlay filesystems can report
+            // available > total; a plain subtract would underflow (panic in
+            // debug, >100% usage in release).
+            let used = usage.saturating_sub(available);
             let usage_pct = if usage > 0 {
                 (used as f64 / usage as f64) * 100.0
             } else {
@@ -241,19 +244,16 @@ impl MetricsCollector {
                     continue;
                 }
             };
-            let memory = device
-                .memory_info()
-                .map(|m| (m.total, m.used))
-                .unwrap_or((0, 0));
+            let memory = device.memory_info().ok().map(|m| (m.total, m.used));
             let temperature = device
                 .temperature(nvml_wrapper::enum_wrappers::device::TemperatureSensor::Gpu)
-                .unwrap_or(0) as f32;
-            let power_watts = device.power_usage().unwrap_or(0) as f32 / 1000.0;
+                .ok()
+                .map(|t| t as f32);
+            let power_watts = device.power_usage().ok().map(|mw| mw as f32 / 1000.0);
             let power_limit_watts = device
                 .power_management_limit()
                 .ok()
-                .map(|mw| mw as f32 / 1000.0)
-                .unwrap_or(0.0);
+                .map(|mw| mw as f32 / 1000.0);
             let fan_speed = device.fan_speed(0).ok().map(|f| f as f32);
             let name = device.name().unwrap_or_else(|_| "unknown".to_string());
             let uuid = device.uuid().unwrap_or_default();
@@ -264,8 +264,8 @@ impl MetricsCollector {
                 name,
                 utilization_gpu: utilization.0,
                 utilization_memory: utilization.1,
-                memory_total_bytes: memory.0,
-                memory_used_bytes: memory.1,
+                memory_total_bytes: memory.map(|m| m.0),
+                memory_used_bytes: memory.map(|m| m.1),
                 temperature_celsius: temperature,
                 power_watts,
                 power_limit_watts,
@@ -298,18 +298,30 @@ impl MetricsCollector {
                         continue;
                     }
 
+                    // Utilization is the core metric: when it cannot be read
+                    // the GPU is reported unavailable rather than guessing 0
+                    // (mirrors the NVML path).
+                    let Some(utilization_gpu) = parse_opt::<f32>(fields[3]) else {
+                        warn!(gpu_index = %fields[0], "nvidia-smi utilization unavailable — skipping GPU");
+                        continue;
+                    };
+                    let Some(utilization_memory) = parse_opt::<f32>(fields[4]) else {
+                        warn!(gpu_index = %fields[0], "nvidia-smi memory utilization unavailable — skipping GPU");
+                        continue;
+                    };
+
                     let gpu = protocol::GpuMetrics {
                         index: fields[0].parse().unwrap_or(0),
                         uuid: fields[1].to_string(),
                         name: fields[2].to_string(),
-                        utilization_gpu: fields[3].parse().unwrap_or(0.0),
-                        utilization_memory: fields[4].parse().unwrap_or(0.0),
-                        memory_total_bytes: parse_bytes(fields[5]),
-                        memory_used_bytes: parse_bytes(fields[6]),
-                        temperature_celsius: fields[7].parse().unwrap_or(0.0),
-                        power_watts: fields[8].parse().unwrap_or(0.0),
-                        power_limit_watts: fields[9].parse().unwrap_or(0.0),
-                        fan_speed_percent: fields.get(10).and_then(|s| s.parse().ok()),
+                        utilization_gpu,
+                        utilization_memory,
+                        memory_total_bytes: parse_opt::<u64>(fields[5]).map(|v| v * 1024 * 1024),
+                        memory_used_bytes: parse_opt::<u64>(fields[6]).map(|v| v * 1024 * 1024),
+                        temperature_celsius: parse_opt::<f32>(fields[7]),
+                        power_watts: parse_opt::<f32>(fields[8]),
+                        power_limit_watts: parse_opt::<f32>(fields[9]),
+                        fan_speed_percent: fields.get(10).and_then(|s| parse_opt::<f32>(s)),
                         pcie_tx_bytes_per_second: None,
                         pcie_rx_bytes_per_second: None,
                         mig_enabled: false,
@@ -371,9 +383,11 @@ impl MetricsCollector {
                     username,
                     command,
                     gpu_uuid: uuid.clone(),
+                    // Unavailable must stay unset — a fabricated 0 looks like
+                    // an idle process to consumers.
                     gpu_memory_bytes: match p.used_gpu_memory {
-                        UsedGpuMemory::Used(b) => b,
-                        UsedGpuMemory::Unavailable => 0,
+                        UsedGpuMemory::Used(b) => Some(b),
+                        UsedGpuMemory::Unavailable => None,
                     },
                     cpu_percent: 0.0,
                     system_memory_bytes: 0,
@@ -448,9 +462,8 @@ impl MetricsCollector {
                                 username,
                                 command,
                                 gpu_uuid: gpu_uuid.clone(),
-                                gpu_memory_bytes: fields[1].trim().parse().unwrap_or(0)
-                                    * 1024
-                                    * 1024,
+                                gpu_memory_bytes: parse_opt::<u64>(fields[1])
+                                    .map(|mib| mib * 1024 * 1024),
                                 cpu_percent: 0.0,
                                 system_memory_bytes: 0,
                                 started_at: 0,
@@ -471,9 +484,14 @@ impl MetricsCollector {
     }
 }
 
-fn parse_bytes(field: &str) -> u64 {
-    // nvidia-smi returns values in MiB for memory
-    field.trim().parse::<u64>().unwrap_or(0) * 1024 * 1024
+/// Parse a numeric field, treating empty / "[N/A]" / garbage as unset.
+fn parse_opt<T: std::str::FromStr>(field: &str) -> Option<T> {
+    let f = field.trim();
+    if f.is_empty() || f.eq_ignore_ascii_case("[N/A]") {
+        None
+    } else {
+        f.parse().ok()
+    }
 }
 
 fn get_load_average() -> Result<(f64, f64, f64)> {
@@ -603,7 +621,7 @@ mod smoke_tests {
                 g.index,
                 g.name,
                 g.utilization_gpu,
-                g.memory_used_bytes / 1024 / 1024,
+                g.memory_used_bytes.unwrap_or(0) / 1024 / 1024,
                 g.temperature_celsius,
                 g.power_watts
             );

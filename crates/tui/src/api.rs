@@ -32,13 +32,13 @@ pub struct GpuInfo {
     #[serde(default)]
     pub utilization_memory: f64,
     #[serde(default)]
-    pub memory_total_bytes: u64,
+    pub memory_total_bytes: Option<u64>,
     #[serde(default)]
-    pub memory_used_bytes: u64,
+    pub memory_used_bytes: Option<u64>,
     #[serde(default)]
-    pub temperature_celsius: f64,
+    pub temperature_celsius: Option<f64>,
     #[serde(default)]
-    pub power_watts: f64,
+    pub power_watts: Option<f64>,
     #[serde(default)]
     pub fan_speed_percent: Option<f64>,
 }
@@ -54,7 +54,7 @@ pub struct GpuProcess {
     #[serde(default)]
     pub gpu_uuid: String,
     #[serde(default)]
-    pub gpu_memory_bytes: u64,
+    pub gpu_memory_bytes: Option<u64>,
     #[serde(default)]
     pub cpu_percent: f32,
     #[serde(default)]
