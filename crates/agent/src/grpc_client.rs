@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use common::config::AgentConfig;
 use protocol::{
-    AgentServiceClient, Job, JobDefinition, JobLogEntry, JobStatusUpdate, NodeHeartbeat,
+    AgentServiceClient, JobLogEntry, JobStatusUpdate, NodeHeartbeat,
     NodeInfo, NodeMetricsReport,
 };
 use tokio::time::Duration;
@@ -25,6 +25,8 @@ pub struct AgentClient {
     client: AgentServiceClient<tonic::transport::Channel>,
     node_id: String,
     config: AgentConfig,
+    /// Authorization metadata attached to every request when a token is set.
+    auth: Option<tonic::metadata::MetadataValue<tonic::metadata::Ascii>>,
     /// Per-process monotonic report sequence. Seeded with the wall-clock
     /// millis so that after a restart the sequence jumps forward — the
     /// server-side dedup cache (node:seq) never mistakes new reports for
@@ -53,18 +55,35 @@ impl AgentClient {
         info!("Connected to server at {}", server_addr);
         
         let seed = chrono::Utc::now().timestamp_millis() as u64;
+        let auth = if config.agent_token.is_empty() {
+            None
+        } else {
+            let value = format!("Bearer {}", config.agent_token)
+                .parse::<tonic::metadata::MetadataValue<tonic::metadata::Ascii>>()
+                .map_err(|e| anyhow::anyhow!("invalid agent_token: {}", e))?;
+            Some(value)
+        };
         Ok(Self {
             client,
             node_id,
             config,
+            auth,
             sequence: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(seed)),
             job_runtime: std::sync::Arc::new(crate::job_executor::JobRuntime::new()),
         })
     }
+
+    /// Attach the agent token to a request (when configured).
+    fn authed<T>(&self, mut request: tonic::Request<T>) -> tonic::Request<T> {
+        if let Some(token) = &self.auth {
+            request.metadata_mut().insert("authorization", token.clone());
+        }
+        request
+    }
     
     pub async fn register(&mut self) -> Result<()> {
         let node_info = self.build_node_info();
-        let request = tonic::Request::new(node_info);
+        let request = self.authed(tonic::Request::new(node_info));
         let _ = self.client.register(request).await?;
         info!(node_id = %self.node_id, "Registered with server");
         Ok(())
@@ -109,7 +128,7 @@ impl AgentClient {
         report.node_id = self.node_id.clone();
         report.sequence = seq;
         
-        let request = tonic::Request::new(tokio_stream::iter(vec![report]));
+        let request = self.authed(tonic::Request::new(tokio_stream::iter(vec![report])));
         
         self.client.report_metrics(request).await?;
         Ok(())
@@ -123,16 +142,10 @@ impl AgentClient {
             ..Default::default()
         };
         
-        let request = tonic::Request::new(tokio_stream::iter(vec![heartbeat]));
+        let request = self.authed(tonic::Request::new(tokio_stream::iter(vec![heartbeat])));
         
         let _response = self.client.heartbeat(request).await?;
         Ok(())
-    }
-    
-    pub async fn submit_job(&mut self, job: JobDefinition) -> Result<Job> {
-        let request = tonic::Request::new(job);
-        let response = self.client.submit_job(request).await?;
-        Ok(response.into_inner())
     }
     
     /// Report a job status transition (running/succeeded/failed/…).
@@ -142,25 +155,15 @@ impl AgentClient {
             status,
             message: message.to_string(),
         };
-        let request = tonic::Request::new(update);
+        let request = self.authed(tonic::Request::new(update));
         let _ = self.client.update_job_status(request).await?;
         Ok(())
     }
     
     pub async fn report_job_logs(&mut self, _job_id: &str, logs: Vec<JobLogEntry>) -> Result<()> {
-        let request = tonic::Request::new(tokio_stream::iter(logs));
+        let request = self.authed(tonic::Request::new(tokio_stream::iter(logs)));
         let _response = self.client.report_job_logs(request).await?;
         Ok(())
-    }
-    
-    pub async fn cancel_job(&mut self, job_id: &str, force: bool) -> Result<Job> {
-        let request = tonic::Request::new(protocol::CancelJobRequest {
-            node_id: self.node_id.clone(),
-            job_id: job_id.to_string(),
-            force,
-        });
-        let response = self.client.cancel_job(request).await?;
-        Ok(response.into_inner())
     }
     
     pub async fn watch_jobs(&mut self) {
@@ -181,7 +184,7 @@ impl AgentClient {
             ..Default::default()
         };
         
-        let request = tonic::Request::new(node_info);
+        let request = self.authed(tonic::Request::new(node_info));
         let mut stream = self.client.get_pending_jobs(request).await?
             .into_inner();
         

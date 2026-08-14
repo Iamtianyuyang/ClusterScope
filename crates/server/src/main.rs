@@ -81,15 +81,37 @@ async fn main() -> anyhow::Result<()> {
     // gRPC server
     let grpc_addr = config.grpc_addr.parse::<SocketAddr>()?;
     let agent_service = grpc::AgentServiceImpl::new(state.clone());
+    let agent_token = config.agent_token.clone();
+    let interceptor = move |req: tonic::Request<()>| {
+        if agent_token.is_empty() {
+            // No token configured: accept any caller (trusted network only).
+            return Ok(req);
+        }
+        let authorized = req
+            .metadata()
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .map(|t| t == agent_token)
+            .unwrap_or(false);
+        if authorized {
+            Ok(req)
+        } else {
+            Err(tonic::Status::unauthenticated("invalid agent token"))
+        }
+    };
 
     let grpc_handle = tokio::spawn(async move {
         Server::builder()
-            .add_service(AgentServiceServer::new(agent_service))
+            .add_service(AgentServiceServer::with_interceptor(agent_service, interceptor))
             .serve(grpc_addr)
             .await
     });
 
     info!(addr = %config.grpc_addr, "gRPC server started");
+    if config.agent_token.is_empty() {
+        warn!("agent_token is empty — gRPC accepts any caller; set AGENT_TOKEN for untrusted networks");
+    }
 
     // HTTP server (REST + WebSocket, both on http_addr)
     let http_state = state.clone();
@@ -123,6 +145,7 @@ async fn main() -> anyhow::Result<()> {
 ///   CLUSTERSCOPE_HTTP_ADDR / HTTP_ADDR
 ///   CLUSTERSCOPE_GRPC_ADDR / GRPC_ADDR
 ///   CLUSTERSCOPE_AUTH_REQUIRED / AUTH_REQUIRED
+///   CLUSTERSCOPE_AGENT_TOKEN / AGENT_TOKEN
 fn load_config() -> anyhow::Result<ServerConfig> {
     let args: Vec<String> = std::env::args().collect();
     let config_path = args.get(1).map(|s| s.as_str()).unwrap_or("/etc/clusterscope/server.yaml");
@@ -154,6 +177,7 @@ fn load_config() -> anyhow::Result<ServerConfig> {
     if let Ok(v) = std::env::var("CLUSTERSCOPE_DEFAULT_ADMIN_PASSWORD").or_else(|_| std::env::var("DEFAULT_ADMIN_PASSWORD")) {
         config.default_admin_password = v;
     }
+    config.agent_token = env("AGENT_TOKEN", config.agent_token);
 
     // Refuse obviously insecure configurations when auth is enforced.
     if config.auth_required
