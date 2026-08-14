@@ -1,17 +1,16 @@
-use common::config::ServerConfig;
 use anyhow::{Context, Result};
+use common::config::ServerConfig;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 
-pub mod models;
-pub mod conversions;
-pub mod queries;
-pub mod migrations;
 pub mod aggregation;
 pub mod alert_queries;
-pub mod job_queries;
-pub mod user_queries;
 pub mod audit_queries;
+pub mod job_queries;
+pub mod migrations;
+pub mod models;
+pub mod queries;
+pub mod user_queries;
 
 pub struct DatabasePool {
     pub pool: Arc<sqlx::Pool<sqlx::Postgres>>,
@@ -24,16 +23,16 @@ impl DatabasePool {
             .connect(&config.postgres_url)
             .await
             .context("Failed to connect to PostgreSQL")?;
-        
+
         // Run migrations
         Self::run_migrations(&pool, &config.default_admin_password).await?;
-        
-        Ok(Self { pool: Arc::new(pool) })
+
+        Ok(Self {
+            pool: Arc::new(pool),
+        })
     }
-    
+
     async fn run_migrations(pool: &sqlx::Pool<sqlx::Postgres>, admin_password: &str) -> Result<()> {
-        
-        
         // Create tables (multi-statement script: raw execution, not prepared)
         sqlx::raw_sql(
             r#"
@@ -239,7 +238,7 @@ impl DatabasePool {
             }
             e => e.into(),
         })?;
-        
+
         // node_id may be empty ("") when the scheduler picks the node.
         // Allow NULL so the FK constraint does not reject it.
         sqlx::query("ALTER TABLE jobs ALTER COLUMN node_id DROP NOT NULL")
@@ -248,15 +247,15 @@ impl DatabasePool {
             .ok();
 
         // Create initial admin user if not exists
-        use argon2::password_hash::{PasswordHasher, SaltString};
         use argon2::password_hash::rand_core::OsRng;
-        
+        use argon2::password_hash::{PasswordHasher, SaltString};
+
         let existing = sqlx::query_scalar::<_, String>(
-            "SELECT username FROM users WHERE username = 'admin' LIMIT 1"
+            "SELECT username FROM users WHERE username = 'admin' LIMIT 1",
         )
         .fetch_one(pool)
         .await;
-        
+
         if existing.is_err() {
             let salt = SaltString::generate(&mut OsRng);
             let argon2 = argon2::Argon2::default();
@@ -264,7 +263,7 @@ impl DatabasePool {
                 .hash_password(admin_password.as_bytes(), &salt)
                 .map_err(|e| anyhow::anyhow!("Failed to hash admin password: {}", e))?
                 .to_string();
-            
+
             sqlx::query(
                 "INSERT INTO users (user_id, username, role, password_hash, enabled) VALUES ($1, $2, $3, $4, TRUE)",
             )
@@ -275,10 +274,10 @@ impl DatabasePool {
             .execute(pool)
             .await?;
         }
-        
+
         Ok(())
     }
-    
+
     pub fn pool(&self) -> &sqlx::Pool<sqlx::Postgres> {
         &self.pool
     }

@@ -1,8 +1,8 @@
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Query, State, WebSocketUpgrade};
 use axum::http::HeaderMap;
-use axum::response::{IntoResponse, Response};
 use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -61,10 +61,13 @@ impl WsManager {
 
     pub async fn register(&self, client_id: String, sender: mpsc::Sender<String>) {
         let mut clients = self.clients.lock().await;
-        clients.insert(client_id, ClientHandle {
-            sender,
-            node_filter: None,
-        });
+        clients.insert(
+            client_id,
+            ClientHandle {
+                sender,
+                node_filter: None,
+            },
+        );
     }
 
     pub async fn unregister(&self, client_id: &str) {
@@ -113,12 +116,9 @@ impl WsManager {
             type_: "job_update".to_string(),
             job_id: Some(job_id.to_string()),
             ..Default::default()
-        }).unwrap_or_default();
+        })
+        .unwrap_or_default();
         self.broadcast(payload, None).await;
-    }
-
-    pub async fn push_job_log(&self, _entry: &protocol::JobLogEntry) {
-        // WebSocket push for job logs handled at client level
     }
 
     pub async fn push_alert(&self, alert: String) {
@@ -154,14 +154,12 @@ pub async fn ws_upgrade(
 
     let handler = WsHandler {
         manager: state.ws_manager.clone(),
-        node_id: None,
     };
     ws.on_upgrade(move |socket| async move { handler.handle(socket).await })
 }
 
 pub struct WsHandler {
     pub manager: WsManager,
-    pub node_id: Option<String>,
 }
 
 impl WsHandler {
@@ -238,7 +236,8 @@ impl WsHandler {
                     let msg = serde_json::to_string(&WsMessage {
                         type_: "subscribed".to_string(),
                         ..Default::default()
-                    }).unwrap_or_default();
+                    })
+                    .unwrap_or_default();
                     let _ = client.sender.try_send(msg);
                 }
             }

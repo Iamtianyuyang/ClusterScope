@@ -79,9 +79,8 @@ fn alert_state_str(s: AlertState) -> &'static str {
 
 #[tonic::async_trait]
 impl AgentService for AgentServiceImpl {
-    type ReportMetricsStream = std::pin::Pin<
-        Box<dyn tokio_stream::Stream<Item = Result<MetricsAck, Status>> + Send>
-    >;
+    type ReportMetricsStream =
+        std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<MetricsAck, Status>> + Send>>;
 
     async fn register(&self, request: Request<NodeInfo>) -> Result<Response<NodeInfo>, Status> {
         let node_info = request.into_inner();
@@ -120,14 +119,19 @@ impl AgentService for AgentServiceImpl {
             node_info.memory_total_bytes as i64,
             serde_json::to_value(&node_info.labels).unwrap_or_else(|_| serde_json::json!({})),
             0, // gpu_count is learned from metrics after registration
-        ).await {
+        )
+        .await
+        {
             warn!(error = %e, "Failed to persist node info");
         }
 
         Ok(Response::new(node_info))
     }
 
-    async fn report_metrics(&self, request: Request<Streaming<NodeMetricsReport>>) -> Result<Response<Self::ReportMetricsStream>, Status> {
+    async fn report_metrics(
+        &self,
+        request: Request<Streaming<NodeMetricsReport>>,
+    ) -> Result<Response<Self::ReportMetricsStream>, Status> {
         let mut stream = request.into_inner();
         let state = self.state.clone();
 
@@ -137,20 +141,29 @@ impl AgentService for AgentServiceImpl {
             while let Some(report_result) = stream.next().await {
                 let report = match report_result {
                     Ok(r) => r,
-                    Err(e) => { warn!(error = %e, "Error receiving metrics report"); break; }
+                    Err(e) => {
+                        warn!(error = %e, "Error receiving metrics report");
+                        break;
+                    }
                 };
 
                 let node_id = report.node_id.clone();
                 let sequence = report.sequence;
-                state.node_registry.update_last_seen(&node_id, chrono::Utc::now());
+                state
+                    .node_registry
+                    .update_last_seen(&node_id, chrono::Utc::now());
 
                 // Learn GPU count from the report (keeps node_info + registry current).
                 let gpu_count = report.gpus.len() as u32;
                 if gpu_count > 0 {
                     state.node_registry.update_gpu_count(&node_id, gpu_count);
                     if let Err(e) = storage::queries::update_node_gpu_count(
-                        state.database.pool(), &node_id, gpu_count as i32,
-                    ).await {
+                        state.database.pool(),
+                        &node_id,
+                        gpu_count as i32,
+                    )
+                    .await
+                    {
                         warn!(error = %e, "Failed to update node gpu_count");
                     }
                 }
@@ -158,11 +171,22 @@ impl AgentService for AgentServiceImpl {
                 let cache_key = format!("{}:{}", node_id, sequence);
                 let is_new = {
                     let mut seen = state.seen_reports.write();
-                    if seen.contains(&cache_key) { false } else { seen.put(cache_key, ()); true }
+                    if seen.contains(&cache_key) {
+                        false
+                    } else {
+                        seen.put(cache_key, ());
+                        true
+                    }
                 };
 
                 if !is_new {
-                    let _ = tx.send(Ok(MetricsAck { node_id: node_id.clone(), sequence, received_at: None })).await;
+                    let _ = tx
+                        .send(Ok(MetricsAck {
+                            node_id: node_id.clone(),
+                            sequence,
+                            received_at: None,
+                        }))
+                        .await;
                     continue;
                 }
 
@@ -193,13 +217,20 @@ impl AgentService for AgentServiceImpl {
                         "memory_used_bytes": report.memory_used_bytes,
                         "gpu_count": report.gpus.len(),
                     }
-                }).to_string();
+                })
+                .to_string();
                 state.ws_manager.push_metrics(&node_id, json).await;
 
-                let _ = tx.send(Ok(MetricsAck {
-                    node_id, sequence,
-                    received_at: Some(prost_types::Timestamp { seconds: chrono::Utc::now().timestamp(), nanos: 0 }),
-                })).await;
+                let _ = tx
+                    .send(Ok(MetricsAck {
+                        node_id,
+                        sequence,
+                        received_at: Some(prost_types::Timestamp {
+                            seconds: chrono::Utc::now().timestamp(),
+                            nanos: 0,
+                        }),
+                    }))
+                    .await;
             }
         });
 
@@ -213,37 +244,69 @@ impl AgentService for AgentServiceImpl {
         info!(job_id = %job_def.job_id, "Job submitted");
 
         let job_row = storage::models::JobRow {
-            job_id: job_def.job_id.clone(), node_id: job_def.node_id.clone(),
-            name: job_def.name.clone(), executable: job_def.executable.clone(),
-            arguments: serde_json::to_value(&job_def.arguments).unwrap_or(serde_json::Value::Array(vec![])),
+            job_id: job_def.job_id.clone(),
+            node_id: job_def.node_id.clone(),
+            name: job_def.name.clone(),
+            executable: job_def.executable.clone(),
+            arguments: serde_json::to_value(&job_def.arguments)
+                .unwrap_or(serde_json::Value::Array(vec![])),
             working_directory: job_def.working_directory.clone(),
-            environment: serde_json::to_value(&job_def.environment).unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
-            status: "queued".to_string(), pid: None, exit_code: None, error_message: None,
-            created_at: job_def.created_at
-                .map(|t| chrono::DateTime::<chrono::Utc>::from_timestamp(t.seconds, t.nanos as u32).unwrap_or(chrono::Utc::now()))
+            environment: serde_json::to_value(&job_def.environment)
+                .unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+            status: "queued".to_string(),
+            pid: None,
+            exit_code: None,
+            error_message: None,
+            created_at: job_def
+                .created_at
+                .map(|t| {
+                    chrono::DateTime::<chrono::Utc>::from_timestamp(t.seconds, t.nanos as u32)
+                        .unwrap_or(chrono::Utc::now())
+                })
                 .unwrap_or(chrono::Utc::now()),
-            started_at: None, finished_at: None, created_by: job_def.created_by.clone(),
-            resource_quota: None, retry_count: 0, max_retries: 0,
+            started_at: None,
+            finished_at: None,
+            created_by: job_def.created_by.clone(),
+            resource_quota: None,
+            retry_count: 0,
+            max_retries: 0,
         };
 
-        if let Err(e) = storage::job_queries::insert_job(self.state.database.pool(), &job_row).await {
+        if let Err(e) = storage::job_queries::insert_job(self.state.database.pool(), &job_row).await
+        {
             warn!(error = %e, "Failed to save job");
         }
 
         Ok(Response::new(Job {
-            job_id: job_def.job_id, node_id: job_def.node_id, name: job_def.name,
-            executable: job_def.executable, arguments: job_def.arguments,
-            working_directory: job_def.working_directory, environment: job_def.environment,
-            status: JobStatus::Queued as i32, pid: 0, exit_code: 0, error_message: String::new(),
-            created_at: job_def.created_at, started_at: None, finished_at: None,
-            created_by: job_def.created_by, log_offset: 0, resource_quota: String::new(),
-            retry_count: 0, max_retries: 0,
+            job_id: job_def.job_id,
+            node_id: job_def.node_id,
+            name: job_def.name,
+            executable: job_def.executable,
+            arguments: job_def.arguments,
+            working_directory: job_def.working_directory,
+            environment: job_def.environment,
+            status: JobStatus::Queued as i32,
+            pid: 0,
+            exit_code: 0,
+            error_message: String::new(),
+            created_at: job_def.created_at,
+            started_at: None,
+            finished_at: None,
+            created_by: job_def.created_by,
+            log_offset: 0,
+            resource_quota: String::new(),
+            retry_count: 0,
+            max_retries: 0,
         }))
     }
 
-    type GetPendingJobsStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<Job, Status>> + Send>>;
+    type GetPendingJobsStream =
+        std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<Job, Status>> + Send>>;
 
-    async fn get_pending_jobs(&self, request: Request<NodeInfo>) -> Result<Response<Self::GetPendingJobsStream>, Status> {
+    async fn get_pending_jobs(
+        &self,
+        request: Request<NodeInfo>,
+    ) -> Result<Response<Self::GetPendingJobsStream>, Status> {
         let node_id = request.into_inner().node_id;
         let state = self.state.clone();
         let (tx, rx) = mpsc::channel(100);
@@ -253,7 +316,8 @@ impl AgentService for AgentServiceImpl {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
             loop {
                 interval.tick().await;
-                match storage::job_queries::get_jobs_for_node(state.database.pool(), &node_id).await {
+                match storage::job_queries::get_jobs_for_node(state.database.pool(), &node_id).await
+                {
                     Ok(jobs) => {
                         for job in jobs {
                             tracing::debug!(
@@ -275,20 +339,35 @@ impl AgentService for AgentServiceImpl {
         Ok(Response::new(stream))
     }
 
-    type ReportJobLogsStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<LogAck, Status>> + Send>>;
+    type ReportJobLogsStream =
+        std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<LogAck, Status>> + Send>>;
 
-    async fn report_job_logs(&self, request: Request<Streaming<JobLogEntry>>) -> Result<Response<Self::ReportJobLogsStream>, Status> {
+    async fn report_job_logs(
+        &self,
+        request: Request<Streaming<JobLogEntry>>,
+    ) -> Result<Response<Self::ReportJobLogsStream>, Status> {
         let mut stream = request.into_inner();
         let state = self.state.clone();
         let (tx, rx) = mpsc::channel(10);
 
         tokio::spawn(async move {
             while let Some(entry_result) = stream.next().await {
-                let entry = match entry_result { Ok(e) => e, Err(e) => { warn!(error = %e, "Error receiving job log"); break; } };
+                let entry = match entry_result {
+                    Ok(e) => e,
+                    Err(e) => {
+                        warn!(error = %e, "Error receiving job log");
+                        break;
+                    }
+                };
                 if let Err(e) = save_job_log(&state, &entry).await {
                     warn!(error = %e, "Failed to save job log");
                 }
-                let _ = tx.send(Ok(LogAck { job_id: entry.job_id.clone(), acknowledged_offset: entry.log_offset })).await;
+                let _ = tx
+                    .send(Ok(LogAck {
+                        job_id: entry.job_id.clone(),
+                        acknowledged_offset: entry.log_offset,
+                    }))
+                    .await;
             }
         });
 
@@ -297,27 +376,48 @@ impl AgentService for AgentServiceImpl {
         Ok(Response::new(stream))
     }
 
-    type WatchJobStatusStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<JobStatusUpdate, Status>> + Send>>;
+    type WatchJobStatusStream =
+        std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<JobStatusUpdate, Status>> + Send>>;
 
-    async fn watch_job_status(&self, request: Request<Streaming<JobStatusUpdate>>) -> Result<Response<Self::WatchJobStatusStream>, Status> {
+    async fn watch_job_status(
+        &self,
+        request: Request<Streaming<JobStatusUpdate>>,
+    ) -> Result<Response<Self::WatchJobStatusStream>, Status> {
         let mut stream = request.into_inner();
         let state = self.state.clone();
         let (tx, rx) = mpsc::channel(100);
 
         tokio::spawn(async move {
             while let Some(update_result) = stream.next().await {
-                let update = match update_result { Ok(u) => u, Err(e) => { warn!(error = %e, "Error receiving job status update"); break; } };
+                let update = match update_result {
+                    Ok(u) => u,
+                    Err(e) => {
+                        warn!(error = %e, "Error receiving job status update");
+                        break;
+                    }
+                };
                 let status_str = status_int_to_str(update.status).unwrap_or("unknown");
                 if let Err(e) = storage::job_queries::update_job_status(
-                    state.database.pool(), &update.job_id, status_str, None, None, Some(&update.message), None, None,
-                ).await {
+                    state.database.pool(),
+                    &update.job_id,
+                    status_str,
+                    None,
+                    None,
+                    Some(&update.message),
+                    None,
+                    None,
+                )
+                .await
+                {
                     warn!(error = %e, "Failed to update job status");
                 }
-                let _ = tx.send(Ok(JobStatusUpdate {
-                    job_id: update.job_id.clone(),
-                    status: update.status,
-                    message: String::new(),
-                })).await;
+                let _ = tx
+                    .send(Ok(JobStatusUpdate {
+                        job_id: update.job_id.clone(),
+                        status: update.status,
+                        message: String::new(),
+                    }))
+                    .await;
             }
         });
 
@@ -328,11 +428,17 @@ impl AgentService for AgentServiceImpl {
 
     /// Unary status report from an agent: validate the transition, persist it,
     /// free scheduler capacity on terminal states and notify WS clients.
-    async fn update_job_status(&self, request: Request<JobStatusUpdate>) -> Result<Response<JobStatusUpdate>, Status> {
+    async fn update_job_status(
+        &self,
+        request: Request<JobStatusUpdate>,
+    ) -> Result<Response<JobStatusUpdate>, Status> {
         let update = request.into_inner();
 
         let Some(to_str) = status_int_to_str(update.status) else {
-            return Err(Status::invalid_argument(format!("unknown job status: {}", update.status)));
+            return Err(Status::invalid_argument(format!(
+                "unknown job status: {}",
+                update.status
+            )));
         };
         let Some(to) = status_from_str(to_str) else {
             return Err(Status::invalid_argument("unknown job status"));
@@ -342,21 +448,32 @@ impl AgentService for AgentServiceImpl {
             .await
             .map_err(|e| Status::internal(e.to_string()))?
         else {
-            return Err(Status::not_found(format!("job {} not found", update.job_id)));
+            return Err(Status::not_found(format!(
+                "job {} not found",
+                update.job_id
+            )));
         };
 
         let Some(from) = status_from_str(&row.status) else {
-            return Err(Status::failed_precondition(format!("job in unknown state: {}", row.status)));
+            return Err(Status::failed_precondition(format!(
+                "job in unknown state: {}",
+                row.status
+            )));
         };
 
         if let Err(e) = common::job::validate_transition(from, to) {
             return Err(Status::invalid_argument(format!(
-                "invalid transition {:?} -> {:?}: {}", from, to, e
+                "invalid transition {:?} -> {:?}: {}",
+                from, to, e
             )));
         }
 
         let finished = to.is_terminal();
-        let error_message = if update.message.is_empty() { None } else { Some(update.message.as_str()) };
+        let error_message = if update.message.is_empty() {
+            None
+        } else {
+            Some(update.message.as_str())
+        };
         if let Err(e) = storage::job_queries::update_job_status(
             self.state.database.pool(),
             &update.job_id,
@@ -366,7 +483,9 @@ impl AgentService for AgentServiceImpl {
             error_message,
             None,
             finished.then(chrono::Utc::now),
-        ).await {
+        )
+        .await
+        {
             return Err(Status::internal(format!("failed to persist status: {}", e)));
         }
 
@@ -379,18 +498,36 @@ impl AgentService for AgentServiceImpl {
         Ok(Response::new(update))
     }
 
-    type HeartbeatStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<HeartbeatAck, Status>> + Send>>;
+    type HeartbeatStream =
+        std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<HeartbeatAck, Status>> + Send>>;
 
-    async fn heartbeat(&self, request: Request<Streaming<NodeHeartbeat>>) -> Result<Response<Self::HeartbeatStream>, Status> {
+    async fn heartbeat(
+        &self,
+        request: Request<Streaming<NodeHeartbeat>>,
+    ) -> Result<Response<Self::HeartbeatStream>, Status> {
         let mut stream = request.into_inner();
         let state = self.state.clone();
         let (tx, rx) = mpsc::channel(10);
 
         tokio::spawn(async move {
             while let Some(heartbeat_result) = stream.next().await {
-                let heartbeat = match heartbeat_result { Ok(h) => h, Err(e) => { warn!(error = %e, "Error receiving heartbeat"); break; } };
-                state.node_registry.update_last_seen(&heartbeat.node_id, chrono::Utc::now());
-                let _ = tx.send(Ok(HeartbeatAck { node_id: heartbeat.node_id.clone(), timestamp_ms: heartbeat.timestamp_ms, pending_job_count: 0 })).await;
+                let heartbeat = match heartbeat_result {
+                    Ok(h) => h,
+                    Err(e) => {
+                        warn!(error = %e, "Error receiving heartbeat");
+                        break;
+                    }
+                };
+                state
+                    .node_registry
+                    .update_last_seen(&heartbeat.node_id, chrono::Utc::now());
+                let _ = tx
+                    .send(Ok(HeartbeatAck {
+                        node_id: heartbeat.node_id.clone(),
+                        timestamp_ms: heartbeat.timestamp_ms,
+                        pending_job_count: 0,
+                    }))
+                    .await;
             }
         });
 
@@ -399,7 +536,10 @@ impl AgentService for AgentServiceImpl {
         Ok(Response::new(stream))
     }
 
-    async fn cancel_job(&self, request: Request<CancelJobRequest>) -> Result<Response<Job>, Status> {
+    async fn cancel_job(
+        &self,
+        request: Request<CancelJobRequest>,
+    ) -> Result<Response<Job>, Status> {
         let req = request.into_inner();
         let pool = self.state.database.pool();
 
@@ -413,8 +553,16 @@ impl AgentService for AgentServiceImpl {
         // Only active jobs can be cancelled; terminal/queued are left alone.
         if matches!(row.status.as_str(), "starting" | "running" | "stopping") {
             storage::job_queries::update_job_status(
-                pool, &req.job_id, "stopping", None, None, None, None, None,
-            ).await
+                pool,
+                &req.job_id,
+                "stopping",
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
             .map_err(|e| Status::internal(e.to_string()))?;
             self.state.ws_manager.push_job_update(&req.job_id).await;
             info!(job_id = %req.job_id, "Job cancellation persisted");
@@ -447,12 +595,18 @@ async fn evaluate_alerts(state: &AppState, report: &NodeMetricsReport) {
                     "gpu_memory_used_percent" => {
                         if gpu.memory_total_bytes > 0 {
                             gpu.memory_used_bytes as f64 / gpu.memory_total_bytes as f64 * 100.0
-                        } else { 0.0 }
+                        } else {
+                            0.0
+                        }
                     }
                     "gpu_power_watts" => gpu.power_watts as f64,
                     _ => continue,
                 };
-                if let Some(event) = state.alert_engine.evaluate(rule, &report.node_id, &gpu.uuid, value) {
+                if let Some(event) =
+                    state
+                        .alert_engine
+                        .evaluate(rule, &report.node_id, &gpu.uuid, value)
+                {
                     persist_alert_event(state, &event).await;
                 }
             }
@@ -462,12 +616,17 @@ async fn evaluate_alerts(state: &AppState, report: &NodeMetricsReport) {
                 "memory_usage_percent" => {
                     if report.memory_total_bytes > 0 {
                         report.memory_used_bytes as f64 / report.memory_total_bytes as f64 * 100.0
-                    } else { 0.0 }
+                    } else {
+                        0.0
+                    }
                 }
                 "load_1" => report.load_1,
                 _ => continue,
             };
-            if let Some(event) = state.alert_engine.evaluate(rule, &report.node_id, "", value) {
+            if let Some(event) = state
+                .alert_engine
+                .evaluate(rule, &report.node_id, "", value)
+            {
                 persist_alert_event(state, &event).await;
             }
         }
@@ -488,7 +647,9 @@ async fn persist_alert_event(state: &AppState, event: &AlertEvent) {
         event.current_value,
         event.threshold,
         None,
-    ).await {
+    )
+    .await
+    {
         warn!(error = %e, "Failed to persist alert event");
     }
     let msg = serde_json::json!({
@@ -503,7 +664,8 @@ async fn persist_alert_event(state: &AppState, event: &AlertEvent) {
             "current_value": event.current_value,
             "threshold": event.threshold,
         }
-    }).to_string();
+    })
+    .to_string();
     state.ws_manager.push_alert(msg).await;
 }
 
@@ -527,9 +689,15 @@ async fn save_metrics_to_db(state: &AppState, report: &NodeMetricsReport) -> any
         "encoder_utilization": p.encoder_utilization, "decoder_utilization": p.decoder_utilization,
     })).collect();
     let gpu_processes = serde_json::to_value(gpu_processes).ok();
-    let cpu_core_metrics: Vec<_> = report.cpu_cores.iter().map(|c| serde_json::json!({
-        "core_id": c.core_id, "usage_percent": c.usage_percent,
-    })).collect();
+    let cpu_core_metrics: Vec<_> = report
+        .cpu_cores
+        .iter()
+        .map(|c| {
+            serde_json::json!({
+                "core_id": c.core_id, "usage_percent": c.usage_percent,
+            })
+        })
+        .collect();
     let cpu_core_metrics = serde_json::to_value(cpu_core_metrics).ok();
     let network_metrics: Vec<_> = report.networks.iter().map(|n| {
         serde_json::json!({"interface_name": n.interface_name, "bytes_sent": n.bytes_sent, "bytes_recv": n.bytes_recv})
@@ -607,32 +775,7 @@ fn job_to_proto(job: &storage::models::JobRow) -> Job {
     }
 }
 
-fn db_metrics_to_proto(metrics: &storage::models::NodeMetricsRow) -> NodeMetricsReport {
-    NodeMetricsReport {
-        node_id: metrics.node_id.clone(),
-        sequence: metrics.sequence as u64,
-        timestamp_ms: metrics.timestamp_ms as u64,
-        monotonic_clock_ms: metrics.monotonic_clock_ms.map(|v| v as u64).unwrap_or(0),
-        cpu_usage_percent: metrics.cpu_usage_percent.unwrap_or(0.0),
-        cpu_cores: vec![],
-        load_1: metrics.load_1.unwrap_or(0.0),
-        load_5: metrics.load_5.unwrap_or(0.0),
-        load_15: metrics.load_15.unwrap_or(0.0),
-        memory_total_bytes: metrics.memory_total_bytes.unwrap_or(0) as u64,
-        memory_used_bytes: metrics.memory_used_bytes.unwrap_or(0) as u64,
-        swap_total_bytes: metrics.swap_total_bytes.unwrap_or(0) as u64,
-        swap_used_bytes: metrics.swap_used_bytes.unwrap_or(0) as u64,
-        uptime_seconds: metrics.uptime_seconds.unwrap_or(0) as u64,
-        boot_time_seconds: metrics.boot_time_seconds.unwrap_or(0) as u64,
-        disks: vec![],
-        networks: vec![],
-        gpus: vec![],
-        gpu_processes: vec![],
-    }
-}
-
 async fn save_job_log(state: &AppState, entry: &JobLogEntry) -> anyhow::Result<()> {
-    
     let pool = state.database.pool();
     let timestamp = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(entry.timestamp)
         .unwrap_or(chrono::Utc::now());
@@ -658,24 +801,45 @@ mod tests {
 
     fn row_with_status(status: &str) -> storage::models::JobRow {
         storage::models::JobRow {
-            job_id: "j1".into(), node_id: "n1".into(), name: "n".into(),
+            job_id: "j1".into(),
+            node_id: "n1".into(),
+            name: "n".into(),
             executable: "/bin/true".into(),
             arguments: serde_json::json!([]),
             working_directory: "/".into(),
             environment: serde_json::json!({}),
             status: status.into(),
-            pid: None, exit_code: None, error_message: None,
-            created_at: chrono::Utc::now(), started_at: None, finished_at: None,
-            created_by: "u".into(), resource_quota: None, retry_count: 0, max_retries: 0,
+            pid: None,
+            exit_code: None,
+            error_message: None,
+            created_at: chrono::Utc::now(),
+            started_at: None,
+            finished_at: None,
+            created_by: "u".into(),
+            resource_quota: None,
+            retry_count: 0,
+            max_retries: 0,
         }
     }
 
     #[test]
     fn test_job_to_proto_status_mapping() {
-        assert_eq!(job_to_proto(&row_with_status("starting")).status, JobStatus::Starting as i32);
-        assert_eq!(job_to_proto(&row_with_status("stopping")).status, JobStatus::Stopping as i32);
-        assert_eq!(job_to_proto(&row_with_status("running")).status, JobStatus::Running as i32);
-        assert_eq!(job_to_proto(&row_with_status("queued")).status, JobStatus::Queued as i32);
+        assert_eq!(
+            job_to_proto(&row_with_status("starting")).status,
+            JobStatus::Starting as i32
+        );
+        assert_eq!(
+            job_to_proto(&row_with_status("stopping")).status,
+            JobStatus::Stopping as i32
+        );
+        assert_eq!(
+            job_to_proto(&row_with_status("running")).status,
+            JobStatus::Running as i32
+        );
+        assert_eq!(
+            job_to_proto(&row_with_status("queued")).status,
+            JobStatus::Queued as i32
+        );
     }
 
     #[test]
