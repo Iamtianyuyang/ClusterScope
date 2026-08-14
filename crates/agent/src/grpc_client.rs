@@ -217,11 +217,16 @@ impl AgentClient {
                                 // Nothing to kill — never started or already gone.
                                 let _ = client
                                     .update_job_status(JobStatusUpdate {
-                                        job_id,
+                                        job_id: job_id.clone(),
                                         status: protocol::JobStatus::Cancelled as i32,
                                         message: "cancelled before start".to_string(),
                                     })
                                     .await;
+                                // Drop the cancel marker for a job that never
+                                // ran: otherwise the entry lives forever and a
+                                // future re-dispatch of the same job_id would be
+                                // skipped by the poll loop's is_cancelled check.
+                                runtime.cancelled.lock().await.remove(&job_id);
                             }
                         });
                     } else {
