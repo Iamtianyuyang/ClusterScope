@@ -102,7 +102,8 @@ async fn run(
                         state.tab = ui::Tab::from_index(state.tab.index() + 1);
                     }
                     KeyCode::BackTab => {
-                        state.tab = ui::Tab::from_index(state.tab.index() + 2);
+                        // +len-1 == -1 (mod len): Shift-Tab walks tabs backwards.
+                        state.tab = ui::Tab::from_index(state.tab.index() + ui::Tab::ALL.len() - 1);
                     }
                     KeyCode::Char('j') | KeyCode::Down => {
                         let gpu_count = state
