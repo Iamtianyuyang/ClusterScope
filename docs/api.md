@@ -33,6 +33,12 @@ Authorization: Bearer <token>
 
 Query params: `node_id`, `start_time_ms`, `end_time_ms`
 
+Raw rows cover the last 24 hours. Older ranges are served from the hourly
+(7 days) and daily (90 days) aggregate tables; aggregated rows carry
+`cpu_usage_percent` / `memory_usage_percent` / `gpu_utilization_percent`
+plus a `source` tag (`hourly` / `daily`) and `timestamp_ms`, merged with
+raw rows and sorted by timestamp.
+
 ### Jobs
 
 | Method | Path | Description |

@@ -265,7 +265,13 @@ cargo test --workspace
 
 - 进程级 SM 采样依赖驱动持续提供样本(本机 NVIDIA GPU 驱动下为 `—`,优雅降级)
 - gRPC 未启用 TLS(`tls_enabled` 已预留),生产建议配合内网/VPN 或自行加 TLS
-- 调度器为容量感知的简单 FIFO(按节点 GPU 数与字母序),无优先级/抢占
+- 调度器为容量感知的简单 FIFO(无优先级/抢占);`node_id` 作为首选节点,满时自动改派到其它在线节点
 - 任务取消通过 SIGTERM 通知进程组,部分进程可能自行忽略信号(可配 force 后升级为 SIGKILL)
 - Web 前端使用 Ant Design + ECharts,尚未实现告警规则的可视化编辑(可通过 REST API 管理)
-- 生产建议:PostgreSQL 独立账号、`auth_required: true` 并定期轮换 JWT secret
+- 历史曲线:原始数据保留 24h,更早范围来自小时级(7 天)与天级(90 天)聚合,聚合行只有平均利用率,无逐 GPU 明细
+- `cluster/info` 中 `idle_gpus` / `avg_gpu_utilization` / `active_alerts` 无数据时为 JSON `null`(不会伪造 0)
+- 生产建议:PostgreSQL 独立账号、`auth_required: true`、设置 `agent_token` 并定期轮换 JWT secret
+
+## Agent 认证(agent_token)
+
+gRPC 控制面默认无认证(适合可信内网)。在不可信网络部署时,server 配置 `agent_token`(或环境变量 `AGENT_TOKEN`),每个 agent 在 `agent.yaml` 里配置相同值(或 `--agent-token`),所有 gRPC 调用都会带上 `Authorization: Bearer <token>`;token 不匹配的调用被拒绝。生成随机 token:`openssl rand -hex 32`。
