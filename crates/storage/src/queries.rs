@@ -236,6 +236,27 @@ pub async fn update_node_gpu_count(pool: &PgPool, node_id: &str, gpu_count: i32)
     Ok(())
 }
 
+/// Whether a node has ever registered (used to validate job targets).
+pub async fn node_exists(pool: &PgPool, node_id: &str) -> Result<bool> {
+    let (exists,): (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM node_info WHERE node_id = $1)",
+    )
+    .bind(node_id)
+    .fetch_one(pool)
+    .await
+    .context("Failed to check node existence")?;
+    Ok(exists)
+}
+
+/// Delete job log rows older than `cutoff` (retention for the logs table).
+pub async fn prune_old_job_logs(pool: &PgPool, cutoff: chrono::DateTime<chrono::Utc>) -> Result<usize> {
+    let result = sqlx::query("DELETE FROM job_logs WHERE timestamp < $1")
+        .bind(cutoff)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected() as usize)
+}
+
 /// Aggregate GPU utilization across the latest metrics report of every node.
 ///
 /// Returns `(avg_utilization_percent, busy_gpu_count, total_gpu_count)`

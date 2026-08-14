@@ -79,6 +79,7 @@ pub async fn execute_job(
     if runtime.is_cancelled(&job_id).await {
         info!(job_id = %job_id, "Job cancelled before start");
         report_status(client, &job_id, JobStatus::Cancelled, "cancelled before start").await;
+        runtime.cancelled.lock().await.remove(&job_id);
         return Ok(());
     }
 
@@ -110,6 +111,7 @@ pub async fn execute_job(
         Err(e) => {
             error!(job_id = %job_id, error = %e, "Failed to spawn process");
             report_status(client, &job_id, JobStatus::Failed, &format!("spawn failed: {}", e)).await;
+            runtime.cancelled.lock().await.remove(&job_id);
             return Ok(());
         }
     };
@@ -187,6 +189,10 @@ pub async fn execute_job(
             report_status(client, &job_id, JobStatus::Failed, &format!("wait failed: {}", e)).await;
         }
     }
+
+    // The job is finished: drop cancel bookkeeping so the set does not grow
+    // without bound on long-lived agents.
+    runtime.cancelled.lock().await.remove(&job_id);
 
     Ok(())
 }

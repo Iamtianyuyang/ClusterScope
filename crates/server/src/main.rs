@@ -288,6 +288,16 @@ async fn run_background_tasks(state: Arc<AppState>) {
             }
         }
 
+        // Job log retention: keep the last 30 days of task output.
+        if cycle % 60 == 0 { // every 10 minutes
+            if let Err(e) = storage::queries::prune_old_job_logs(
+                state.database.pool(),
+                Utc::now() - ChronoDuration::days(30),
+            ).await {
+                warn!(error = %e, "Failed to prune old job logs");
+            }
+        }
+
         // Hourly rollups every 10 minutes; daily every hour.
         if cycle % 60 == 0 {
             if let Err(e) = storage::aggregation::aggregate_to_hourly(state.database.pool()).await {

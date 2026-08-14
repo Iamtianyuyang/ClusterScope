@@ -213,6 +213,14 @@ impl AgentClient {
                         });
                     } else {
                         info!(job_id = %job.job_id, name = %job.name, "Received pending job");
+                        // Skip when this job is already running locally: the
+                        // server re-sends `starting` jobs every 5s until our
+                        // `running` report lands, so without this guard a
+                        // lost status report would spawn a second process.
+                        if self.job_runtime.pids.lock().await.contains_key(&job.job_id) {
+                            tracing::debug!(job_id = %job.job_id, "Job already running locally — skipping duplicate");
+                            continue;
+                        }
                         // Execute the job concurrently so long-running jobs do
                         // not block polling for new jobs / cancellations.
                         let config = self.config.clone();
