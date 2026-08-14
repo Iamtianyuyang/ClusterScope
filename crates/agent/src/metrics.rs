@@ -444,38 +444,37 @@ impl MetricsCollector {
             {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
-                        let fields: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
-                        if fields.len() < 2 {
+                    let fields: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
+                    if fields.len() < 2 {
+                        continue;
+                    }
+
+                    let pid = fields[0].parse::<u32>().ok().filter(|&p| p > 0);
+                    if let Some(pid) = pid {
+                        if seen_pids.contains(&pid) {
                             continue;
                         }
+                        seen_pids.insert(pid);
 
-                        let pid = fields[0].parse::<u32>().ok().filter(|&p| p > 0);
-                        if let Some(pid) = pid {
-                            if seen_pids.contains(&pid) {
-                                continue;
-                            }
-                            seen_pids.insert(pid);
+                        let (username, command) = process_user_command(pid);
 
-                            let (username, command) = process_user_command(pid);
-
-                            report.gpu_processes.push(protocol::GpuProcess {
-                                pid,
-                                username,
-                                command,
-                                gpu_uuid: gpu_uuid.clone(),
-                                gpu_memory_bytes: parse_opt::<u64>(fields[1])
-                                    .map(|mib| mib * 1024 * 1024),
-                                cpu_percent: 0.0,
-                                system_memory_bytes: 0,
-                                started_at: 0,
-                                container_name: String::new(),
-                                gpu_indices: vec![],
-                                sm_utilization: None,
-                                memory_utilization: None,
-                                encoder_utilization: None,
-                                decoder_utilization: None,
-                            });
-                        }
+                        report.gpu_processes.push(protocol::GpuProcess {
+                            pid,
+                            username,
+                            command,
+                            gpu_uuid: gpu_uuid.clone(),
+                            gpu_memory_bytes: parse_opt::<u64>(fields[1])
+                                .map(|mib| mib * 1024 * 1024),
+                            cpu_percent: 0.0,
+                            system_memory_bytes: 0,
+                            started_at: 0,
+                            container_name: String::new(),
+                            gpu_indices: vec![],
+                            sm_utilization: None,
+                            memory_utilization: None,
+                            encoder_utilization: None,
+                            decoder_utilization: None,
+                        });
                     }
                 }
             }
