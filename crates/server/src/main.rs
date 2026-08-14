@@ -88,6 +88,9 @@ async fn main() -> anyhow::Result<()> {
     let grpc_addr = config.grpc_addr.parse::<SocketAddr>()?;
     let agent_service = grpc::AgentServiceImpl::new(state.clone());
     let agent_token = config.agent_token.clone();
+    // tonic's interceptor API fixes the Err type to Status (176 bytes);
+    // boxing is not possible without changing the interceptor signature.
+    #[allow(clippy::result_large_err)]
     let interceptor = move |req: tonic::Request<()>| {
         if agent_token.is_empty() {
             // No token configured: accept any caller (trusted network only).
