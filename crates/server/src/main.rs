@@ -394,15 +394,64 @@ async fn run_scheduler_cycle(state: &Arc<AppState>) {
     }
 
     // Re-queue jobs stuck in 'starting' (agent died / server restarted) and
-    // free the scheduler's in-memory capacity accounting for them.
-    if let Ok(requeued) = storage::job_queries::reset_stale_starting_jobs(
+    // free the scheduler's in-memory capacity accounting for them. Only
+    // requeue when the assigned node is no longer online: a slow-but-alive
+    // agent (heavy load, hung NFS) must not be raced by a second dispatch
+    // that would run the job twice on two nodes.
+    if let Ok(stale) = storage::job_queries::list_stale_starting_jobs(
         state.database.pool(),
         Utc::now() - ChronoDuration::minutes(10),
     )
     .await
     {
-        for job_id in requeued {
-            state.scheduler.remove_running(&job_id).await;
+        for (job_id, node_id) in stale {
+            let node_alive = state
+                .node_registry
+                .get(&node_id)
+                .map(|n| n.status == common::node_registry::NodeStatus::Online)
+                .unwrap_or(false);
+            if node_alive {
+                // Agent still healthy (it reports heartbeats) — it may just
+                // be slow to spawn; leave the job assigned.
+                continue;
+            }
+            if let Err(e) =
+                storage::job_queries::requeue_stale_job(state.database.pool(), &job_id).await
+            {
+                warn!(error = %e, job_id = %job_id, "Failed to requeue stale starting job");
+            } else {
+                state.scheduler.remove_running(&job_id).await;
+            }
+        }
+    }
+
+    // Recycle jobs whose node died: running/stopping jobs on a node that has
+    // been offline past the dead-node cutoff are marked 'lost' so their
+    // scheduler capacity is freed and the state surfaces in the UI. Only
+    // truly-dead nodes qualify (offline > 10 min) — a brief partition must
+    // not orphan a live process that would later report a rejected status.
+    let dead_cutoff = Utc::now() - ChronoDuration::minutes(10);
+    let dead_nodes: Vec<String> = state
+        .node_registry
+        .list()
+        .into_iter()
+        .filter(|n| {
+            n.status == common::node_registry::NodeStatus::Offline && n.last_seen < dead_cutoff
+        })
+        .map(|n| n.node_id)
+        .collect();
+    if !dead_nodes.is_empty()
+        && let Ok(lost_ids) = storage::job_queries::mark_lost_jobs_on_nodes(
+            state.database.pool(),
+            &dead_nodes,
+            "node offline — job presumed lost",
+        )
+        .await
+    {
+        for job_id in lost_ids {
+            state.scheduler.complete_job(&job_id, JobStatus::Lost).await;
+            state.ws_manager.push_job_update(&job_id).await;
+            info!(job_id = %job_id, "Job marked lost (node offline)");
         }
     }
 

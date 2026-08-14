@@ -106,11 +106,15 @@ message GpuMetrics {
     string name = 3;
     float utilization_gpu = 4;
     float utilization_memory = 5;
-    uint64 memory_total_bytes = 6;
-    uint64 memory_used_bytes = 7;
-    float temperature_celsius = 8;
-    float power_watts = 9;
-    float power_limit_watts = 10;
+    // Presence-bearing fields: an agent that cannot read a sensor reports
+    // the field as unset rather than fabricating 0 (fake alerts / bogus
+    // utilization data). Old agents keep sending plain values, which still
+    // deserialize as Some(...) — wire-compatible in both directions.
+    optional uint64 memory_total_bytes = 6;
+    optional uint64 memory_used_bytes = 7;
+    optional float temperature_celsius = 8;
+    optional float power_watts = 9;
+    optional float power_limit_watts = 10;
     optional float fan_speed_percent = 11;
     optional uint64 pcie_tx_bytes_per_second = 12;
     optional uint64 pcie_rx_bytes_per_second = 13;
@@ -135,7 +139,9 @@ message GpuProcess {
     string username = 2;
     string command = 3;
     string gpu_uuid = 4;
-    uint64 gpu_memory_bytes = 5;
+    // Unset when the driver cannot report the process' VRAM usage
+    // (UsedGpuMemory::Unavailable, nvidia-smi "[N/A]"); never fabricate 0.
+    optional uint64 gpu_memory_bytes = 5;
     float cpu_percent = 6;
     uint64 system_memory_bytes = 7;
     int64 started_at = 8;
@@ -233,6 +239,9 @@ message JobDefinition {
     google.protobuf.Timestamp created_at = 20;
     string created_by = 21;
     string description = 22;
+    // GPU requirements for scheduling, e.g. "gpu:2" (see scheduler).
+    // Additive field: old clients omit it and default to 1 GPU.
+    string resource_quota = 23;
 }
 
 message Job {

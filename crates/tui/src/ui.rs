@@ -154,10 +154,13 @@ impl AppState {
                 .gpus
                 .iter()
                 .map(|g| {
-                    let mem_pct = if g.memory_total_bytes > 0 {
-                        g.memory_used_bytes as f64 / g.memory_total_bytes as f64 * 100.0
-                    } else {
-                        0.0
+                    // Unknown memory (agent could not read it) renders as an
+                    // empty history sample rather than a fabricated 0%.
+                    let mem_pct = match (g.memory_used_bytes, g.memory_total_bytes) {
+                        (Some(used), Some(total)) if total > 0 => {
+                            used as f64 / total as f64 * 100.0
+                        }
+                        _ => 0.0,
                     };
                     (g.utilization_gpu, mem_pct)
                 })
@@ -293,17 +296,27 @@ enum CellMode {
 /// Tiny:   ` >0 100% 10.0G`
 fn gpu_cell(g: &crate::api::GpuInfo, sel: bool, mode: CellMode) -> Vec<Span<'static>> {
     let idle = g.utilization_gpu < BUSY_PCT;
-    let vram = format!(
-        "{}/{}",
-        fmt_vram(g.memory_used_bytes),
-        fmt_total(g.memory_total_bytes)
-    );
-    let vram_used = fmt_vram(g.memory_used_bytes);
-    let mem_pct = if g.memory_total_bytes > 0 {
-        g.memory_used_bytes as f64 / g.memory_total_bytes as f64 * 100.0
-    } else {
-        0.0
+    let vram = match (g.memory_used_bytes, g.memory_total_bytes) {
+        (Some(used), Some(total)) => format!("{}/{}", fmt_vram(used), fmt_total(total)),
+        _ => "n/a".to_string(),
     };
+    let vram_used = g
+        .memory_used_bytes
+        .map(fmt_vram)
+        .unwrap_or_else(|| "n/a".to_string());
+    let mem_pct = match (g.memory_used_bytes, g.memory_total_bytes) {
+        (Some(used), Some(total)) if total > 0 => used as f64 / total as f64 * 100.0,
+        _ => 0.0,
+    };
+    // "--" for an unreadable temperature sensor (never a fake 0°).
+    let temp_span = match g.temperature_celsius {
+        Some(t) => Span::styled(
+            format!(" {:>2}°", t as u64),
+            Style::default().fg(temp_color(t)),
+        ),
+        None => Span::styled(" --°", Style::default().fg(DIM)),
+    };
+    let temp_span_medium = temp_span.clone();
 
     let idx = Span::styled(
         format!(" {}{:<2}", if sel { ">" } else { " " }, g.index),
@@ -346,10 +359,7 @@ fn gpu_cell(g: &crate::api::GpuInfo, sel: bool, mode: CellMode) -> Vec<Span<'sta
                 format!(" {:<7}", vram),
                 Style::default().fg(mem_color(mem_pct)),
             ),
-            Span::styled(
-                format!(" {:>2}°", g.temperature_celsius as u64),
-                Style::default().fg(temp_color(g.temperature_celsius)),
-            ),
+            temp_span,
         ],
         CellMode::Medium => vec![
             idx,
@@ -358,10 +368,7 @@ fn gpu_cell(g: &crate::api::GpuInfo, sel: bool, mode: CellMode) -> Vec<Span<'sta
                 format!(" {:<8}", vram),
                 Style::default().fg(mem_color(mem_pct)),
             ),
-            Span::styled(
-                format!(" {:>2}°", g.temperature_celsius as u64),
-                Style::default().fg(temp_color(g.temperature_celsius)),
-            ),
+            temp_span_medium,
         ],
         CellMode::Short => vec![
             idx,
@@ -1071,7 +1078,12 @@ fn draw_process(f: &mut Frame, app: &AppState, header_area: Rect, table_area: Re
             }),
         )));
         cells.push(Cell::from(Span::styled(
-            format!("{:>7}", fmt_vram(p.gpu_memory_bytes)),
+            format!(
+                "{:>7}",
+                p.gpu_memory_bytes
+                    .map(fmt_vram)
+                    .unwrap_or_else(|| "n/a".to_string())
+            ),
             Style::default().fg(NORMAL),
         )));
         cells.push(Cell::from(Span::styled(

@@ -277,7 +277,8 @@ impl AgentService for AgentServiceImpl {
             started_at: None,
             finished_at: None,
             created_by: job_def.created_by.clone(),
-            resource_quota: None,
+            resource_quota: (!job_def.resource_quota.is_empty())
+                .then(|| job_def.resource_quota.clone()),
             retry_count: 0,
             max_retries: 0,
         };
@@ -285,6 +286,9 @@ impl AgentService for AgentServiceImpl {
         if let Err(e) = storage::job_queries::insert_job(self.state.database.pool(), &job_row).await
         {
             warn!(error = %e, "Failed to save job");
+            // Do not pretend the job exists: report the failure so the
+            // caller does not schedule against a phantom job.
+            return Err(Status::internal(format!("failed to save job: {}", e)));
         }
 
         Ok(Response::new(Job {
@@ -304,7 +308,7 @@ impl AgentService for AgentServiceImpl {
             finished_at: None,
             created_by: job_def.created_by,
             log_offset: 0,
-            resource_quota: String::new(),
+            resource_quota: job_def.resource_quota,
             retry_count: 0,
             max_retries: 0,
         }))
@@ -606,16 +610,26 @@ async fn evaluate_alerts(state: &AppState, report: &NodeMetricsReport) {
         if metric.starts_with("gpu_") {
             for gpu in &report.gpus {
                 let value = match metric {
-                    "gpu_temperature" => gpu.temperature_celsius as f64,
+                    // Presence-bearing metrics: an unset sensor (agent could
+                    // not read it) must NOT be evaluated as 0 — that would
+                    // fire fake alerts (e.g. `gpu_temperature < 30`).
+                    "gpu_temperature" => match gpu.temperature_celsius {
+                        Some(t) => t as f64,
+                        None => continue,
+                    },
                     "gpu_utilization" => gpu.utilization_gpu as f64,
                     "gpu_memory_used_percent" => {
-                        if gpu.memory_total_bytes > 0 {
-                            gpu.memory_used_bytes as f64 / gpu.memory_total_bytes as f64 * 100.0
-                        } else {
-                            0.0
+                        match (gpu.memory_used_bytes, gpu.memory_total_bytes) {
+                            (Some(used), Some(total)) if total > 0 => {
+                                used as f64 / total as f64 * 100.0
+                            }
+                            _ => continue,
                         }
                     }
-                    "gpu_power_watts" => gpu.power_watts as f64,
+                    "gpu_power_watts" => match gpu.power_watts {
+                        Some(w) => w as f64,
+                        None => continue,
+                    },
                     _ => continue,
                 };
                 if let Some(event) =
