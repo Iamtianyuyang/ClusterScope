@@ -162,7 +162,7 @@ impl RegistryManager {
         let thresholds = self.thresholds.read();
         let mut nodes = self.nodes.write();
 
-        for (_node_id, entry) in nodes.iter_mut() {
+        for entry in nodes.values_mut() {
             let elapsed = (now - entry.last_seen).num_seconds() as u64;
 
             if elapsed <= thresholds.online_secs {
