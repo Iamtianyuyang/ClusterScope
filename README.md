@@ -1,7 +1,7 @@
 # ClusterScope
 
 <p align="center">
-  <img src="assets/icon.svg" width="96" height="96" alt="ClusterScope" />
+  <img src="assets/icon.png" width="96" height="96" alt="ClusterScope" />
 </p>
 
 ```
@@ -12,7 +12,7 @@
                                                   ████████████████████
 ```
 
-**ClusterScope** — 轻量级 Linux GPU 集群监控平台。终端仪表盘 + 分布式采集,普通用户即可运行,**无需 root**。
+**ClusterScope** — 轻量级 Linux GPU 集群监控平台。终端仪表盘(TUI)+ 分布式采集,普通用户即可运行,**无需 root**。
 
 <p align="center">
   <a href="https://github.com/Iamtianyuyang/ClusterScope/releases"><img alt="Release" src="https://img.shields.io/badge/release-v0.1.1-2aa198"></a>
@@ -22,7 +22,7 @@
 </p>
 
 - **Agent**:部署在每台 GPU 节点,通过 **NVML** 采集 GPU 利用率/显存/温度/功耗/进程,`/proc` 尽力读取进程用户名与命令行(权限不足自动降级)
-- **Server**:聚合所有节点,提供 REST API,持久化到 PostgreSQL
+- **Server**:聚合所有节点,提供 REST API 与任务调度,持久化到 PostgreSQL
 - **TUI**:ratatui 终端仪表盘 —— 多节点横向一屏总览、GPU 表格、GPU 进程面板、实时折线图(Trend)
 
 ```
@@ -36,17 +36,17 @@
              │   Agent   │        │    Agent    │       │    Agent    │
              │ node-01   │        │ node-02     │       │ node-03     │
              └───────────┘        └─────────────┘       └─────────────┘
-                   └──────────┬──────────┴──────────┬──────────┘
-                        ┌────▼────┐           ┌─────▼─────┐
-                        │PostgreSQL│           │ (已移除) Redis│
-                        └─────────┘           └───────────┘
+                   └──────────┬──────────┴──────────┐
+                        ┌────▼────┐
+                        │PostgreSQL│
+                        └─────────┘
 ```
 
 ## 快速开始
 
 ### 1. 获取二进制
 
-**方式 A:直接下载 Release 包(推荐)**
+**方式 A:直接下载 Release 包**
 
 ```bash
 curl -L -O https://github.com/Iamtianyuyang/ClusterScope/releases/download/v0.1.1/clusterscope-v0.1.1-linux-x86_64.tar.gz
@@ -54,7 +54,7 @@ tar xzf clusterscope-v0.1.1-linux-x86_64.tar.gz
 # 得到 clusterscope-agent / clusterscope-server / clusterscope-tui
 ```
 
-**方式 B:源码编译**
+**方式 B:源码编译**(需要 protoc,见 `docs/`)
 
 ```bash
 cargo build --release
@@ -68,7 +68,7 @@ cp deploy/server.yaml.example server.yaml
 clusterscope-server server.yaml
 ```
 
-无 root 时可编译 PostgreSQL 到用户目录(参考 `docs/`),或 `docker-compose up`(`deploy/`)。
+无 root 时可用 `docker compose up`(`deploy/docker-compose.yml`,只含 postgres + server)。
 
 ### 3. 部署 Agent(免密 ssh,无需 root)
 
@@ -178,6 +178,7 @@ GPU  PID      USER      SM     VRAM     CPU    COMMAND
   - 尽力而为:无权限/进程消失 → 显示 `—` / `<restricted>`,**不报错、不退出、不影响 GPU 指标**
 - nvidia-smi 仅作 NVML 初始化失败时的回退
 - 采集频率与 UI 渲染分离:指标 2s 一次,UI 刷新独立
+- CPU 使用率由同一 sysinfo 实例跨周期计算(避免首刷恒 0),swap 等真实入库,采不到报不可用、不伪造 0
 
 ## 配置
 
@@ -188,9 +189,10 @@ grpc_addr: "0.0.0.0:50051"
 http_addr: "0.0.0.0:8080"
 postgres_url: "postgresql://user:pass@localhost:5432/clusterscope"
 jwt_secret: "change-me-to-a-long-random-string"
+agent_token: ""                # 空 = gRPC 不做认证(仅限可信内网);非空则 agent 必须携带相同 token
 default_admin_username: "admin"
 default_admin_password: "admin123"
-auth_required: false        # false = 只读 API 免密码(GET 开放,写操作仍需 JWT)
+auth_required: false           # false = 只读 API 免密码(GET 开放,写操作仍需 JWT)
 ```
 
 ### agent.yaml(可多机共享)
@@ -199,10 +201,47 @@ auth_required: false        # false = 只读 API 免密码(GET 开放,写操作�
 server_addr: "http://192.168.1.12:50051"
 node_id: ""                  # 空 = 自动使用本机 hostname(共享 HOME 集群推荐)
 node_id_file: ~/.config/clusterscope/node_id
+agent_token: ""              # 与 server 的 agent_token 一致
 report_interval_secs: 2
 log_dir: ~/.config/clusterscope/logs
 collect_process_details: true   # 尽力读取进程 USER/COMMAND,失败自动降级
 ```
+
+## Agent 认证(agent_token)
+
+gRPC 控制面默认无认证(适合可信内网)。在不可信网络部署时,server 配置 `agent_token`(或环境变量 `AGENT_TOKEN`),
+每个 agent 在 `agent.yaml` 里配置相同值(或 `--agent-token`),所有 gRPC 调用都会带上 `Authorization: Bearer <token>`;
+token 不匹配的调用被拒绝。生成随机 token:`openssl rand -hex 32`。
+
+## 任务与告警(通过 REST API 管理)
+
+TUI 以只读方式展示任务与告警;提交任务、停任务、管理告警规则使用 REST API(需要 JWT):
+
+```bash
+# 登录拿 token(auth_required: false 时只读接口可免 token)
+TOKEN=$(curl -s -X POST http://SERVER:8080/api/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"admin123"}' | jq -r .access_token)
+
+# 提交任务(调度器按 GPU 容量派发到 online 节点;node_id 为首选节点,满时自动改派)
+curl -X POST http://SERVER:8080/api/jobs -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"node_id":"node-01","name":"train","executable":"/usr/bin/python3",
+       "arguments":["train.py","--epochs", "10"],"working_directory":"/home/user/work",
+       "environment":{"CUDA_VISIBLE_DEVICES":"0"}}'
+
+# 停任务(agent 收到 stopping 后 SIGTERM 进程组)
+curl -X DELETE http://SERVER:8080/api/jobs/<job_id> -H "Authorization: Bearer $TOKEN"
+
+# 建告警规则(metric: gpu_temperature / gpu_utilization / gpu_memory_used_percent /
+#            gpu_power_watts / cpu_usage_percent / memory_usage_percent / load_1)
+curl -X POST http://SERVER:8080/api/alerts/rules -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"高温","metric":"gpu_temperature","operator":"gte","threshold":85,
+       "duration_seconds":60,"severity":"critical"}'
+```
+
+完整接口见 `docs/api.md`。
 
 ## 服务管理
 
@@ -215,8 +254,21 @@ ssh node-01 'systemctl --user restart clusterscope-agent'
 journalctl --user -u clusterscope-agent         # 日志
 ```
 
-- Server 重启后,Agent 每 60s 自动重新注册,无需人工干预
+- Server 重启后,Agent 每 60s 自动重新注册,无需人工干预;调度器从 DB 恢复运行中任务,容量不丢失
 - 节点状态 online / degraded / offline 自动切换
+- 同一台机器只应运行一个 agent(重复实例会互相挤掉上报数据)
+
+## 数据保留
+
+| 数据 | 保留 |
+|------|------|
+| 原始指标(2s 粒度) | 24 小时 |
+| 小时级聚合 | 7 天 |
+| 天级聚合 | 90 天 |
+| 任务日志(job_logs) | 30 天 |
+| 节点/任务/告警/审计 | 长期 |
+
+TUI 与 REST 的历史查询自动合并三档粒度;超过 24h 的历史只有平均利用率,无逐 GPU 明细。
 
 ## 项目结构
 
@@ -226,7 +278,7 @@ crates/
 ├── protocol/    # gRPC protobuf(含 GpuProcess 进程模型)
 ├── storage/     # PostgreSQL 访问层
 ├── agent/       # 节点采集器(NVML + /proc + gRPC)
-├── server/      # 中央服务(REST/WS/gRPC/认证)
+├── server/      # 中央服务(REST/gRPC/认证/调度)
 ├── scheduler/   # GPU 感知任务调度
 └── tui/         # 终端仪表盘(ratatui)
 deploy/          # systemd、docker-compose、install-agent.sh、tui.sh
@@ -237,6 +289,8 @@ docs/            # 架构与 API 文档
 ## 测试
 
 ```bash
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
 cargo test --workspace
 ```
 
@@ -246,11 +300,7 @@ cargo test --workspace
 - gRPC 未启用 TLS(`tls_enabled` 已预留),生产建议配合内网/VPN 或自行加 TLS
 - 调度器为容量感知的简单 FIFO(无优先级/抢占);`node_id` 作为首选节点,满时自动改派到其它在线节点
 - 任务取消通过 SIGTERM 通知进程组,部分进程可能自行忽略信号(可配 force 后升级为 SIGKILL)
-- 当前只保留 TUI 终端仪表盘(Web 前端已移除);告警规则等管理操作通过 REST API 完成
+- 当前只保留 TUI 终端仪表盘(Web 前端已移除);任务/告警管理通过 REST API 完成
 - 历史曲线:原始数据保留 24h,更早范围来自小时级(7 天)与天级(90 天)聚合,聚合行只有平均利用率,无逐 GPU 明细
 - `cluster/info` 中 `idle_gpus` / `avg_gpu_utilization` / `active_alerts` 无数据时为 JSON `null`(不会伪造 0)
 - 生产建议:PostgreSQL 独立账号、`auth_required: true`、设置 `agent_token` 并定期轮换 JWT secret
-
-## Agent 认证(agent_token)
-
-gRPC 控制面默认无认证(适合可信内网)。在不可信网络部署时,server 配置 `agent_token`(或环境变量 `AGENT_TOKEN`),每个 agent 在 `agent.yaml` 里配置相同值(或 `--agent-token`),所有 gRPC 调用都会带上 `Authorization: Bearer <token>`;token 不匹配的调用被拒绝。生成随机 token:`openssl rand -hex 32`。
