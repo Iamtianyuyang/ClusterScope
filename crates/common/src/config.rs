@@ -23,6 +23,10 @@ pub struct AgentConfig {
     pub tls_cert_path: Option<PathBuf>,
     pub tls_key_path: Option<PathBuf>,
     pub tls_ca_path: Option<PathBuf>,
+    /// Shared secret sent to the server as `Authorization: Bearer <token>`
+    /// on every gRPC call. Empty = no auth (server must be on a trusted
+    /// network or have `agent_token` unset too).
+    pub agent_token: String,
 }
 
 impl Default for AgentConfig {
@@ -48,6 +52,7 @@ impl Default for AgentConfig {
             tls_cert_path: None,
             tls_key_path: None,
             tls_ca_path: None,
+            agent_token: String::new(),
         }
     }
 }
@@ -81,6 +86,9 @@ pub struct ServerConfig {
     /// When false, all GET (read-only) API endpoints skip JWT auth —
     /// convenient for LAN monitoring dashboards (TUI/web) without login.
     pub auth_required: bool,
+    /// Shared secret agents must present on every gRPC call.
+    /// Empty = gRPC accepts any caller (insecure; trusted network only).
+    pub agent_token: String,
 }
 
 impl Default for ServerConfig {
@@ -110,6 +118,7 @@ impl Default for ServerConfig {
             default_admin_username: "admin".to_string(),
             default_admin_password: "admin".to_string(),
             auth_required: true,
+            agent_token: String::new(),
         }
     }
 }

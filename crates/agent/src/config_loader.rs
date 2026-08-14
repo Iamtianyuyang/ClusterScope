@@ -26,6 +26,10 @@ pub fn load_config(cli: &crate::Cli) -> Result<AgentConfig> {
         config.node_id = Some(node_id.clone());
     }
     
+    if let Some(token) = &cli.agent_token {
+        config.agent_token = token.clone();
+    }
+    
     // Override node_id_file if specified via config_dir
     if let Some(config_dir) = &cli.config_dir {
         config.node_id_file = config_dir.join("node_id");

@@ -38,6 +38,9 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: clusterscope-secret-change-me
       AUTH_REQUIRED: "false"
+      # Shared secret for agent <-> server gRPC. Change it and set the same
+      # value in every agent's agent.yaml (or `--agent-token`).
+      AGENT_TOKEN: change-me-too-agent-token
     depends_on:
       postgres:
         condition: service_healthy

@@ -23,6 +23,9 @@ struct Cli {
     
     #[arg(long)]
     node_id: Option<String>,
+    
+    #[arg(long)]
+    agent_token: Option<String>,
 }
 
 /// Connect to the server with exponential backoff (never gives up).
