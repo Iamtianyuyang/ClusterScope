@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use common::config::AgentConfig;
 use protocol::{AgentServiceClient, Job, JobLogEntry, JobStatus, JobStatusUpdate};
 use std::collections::{HashMap, HashSet};
@@ -102,9 +102,17 @@ pub async fn execute_job(
 
     // Create log directory
     let log_dir = config.log_dir.join(&job_id);
-    tokio::fs::create_dir_all(&log_dir)
-        .await
-        .with_context(|| format!("Failed to create log dir for job {}", job_id))?;
+    if let Err(e) = tokio::fs::create_dir_all(&log_dir).await {
+        // The poll loop inserted a placeholder pid (0) for this job: drop it
+        // so a later re-send is not skipped forever (job would stay stuck in
+        // `starting`). The job itself is left for the server to requeue.
+        runtime.pids.lock().await.remove(&job_id);
+        return Err(anyhow::anyhow!(
+            "Failed to create log dir for job {}: {}",
+            job_id,
+            e
+        ));
+    }
 
     // Start process
     let mut cmd = Command::new(&executable);

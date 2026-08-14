@@ -196,9 +196,11 @@ pub async fn list_stale_starting_jobs(
 
 /// Requeue a single stale starting job. Status-guarded so a job that
 /// completed (or was cancelled) between the list and this update is never
-/// rewritten.
-pub async fn requeue_stale_job(pool: &PgPool, job_id: &str) -> Result<()> {
-    sqlx::query(
+/// rewritten. Returns the number of rows actually updated (0 when the job
+/// left `starting` in the meantime — the caller must not free scheduler
+/// capacity for a job that is still running elsewhere).
+pub async fn requeue_stale_job(pool: &PgPool, job_id: &str) -> Result<u64> {
+    let result = sqlx::query(
         r#"
         UPDATE jobs
         SET status = 'queued', started_at = NULL, pid = NULL, error_message = NULL
@@ -209,7 +211,7 @@ pub async fn requeue_stale_job(pool: &PgPool, job_id: &str) -> Result<()> {
     .execute(pool)
     .await
     .context("Failed to requeue stale starting job")?;
-    Ok(())
+    Ok(result.rows_affected())
 }
 
 /// Mark running/stopping jobs on dead nodes as 'lost' (agent death would
