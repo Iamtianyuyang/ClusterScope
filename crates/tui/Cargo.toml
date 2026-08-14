@@ -10,7 +10,6 @@ path = "src/main.rs"
 
 [dependencies]
 tokio.workspace = true
-tracing.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
@@ -19,4 +18,3 @@ chrono.workspace = true
 clap.workspace = true
 ratatui = "0.29"
 crossterm = "0.28"
-unicode-width = "0.1"
