@@ -291,6 +291,14 @@ impl AlertEngine {
         }
     }
 
+    /// Drop all in-memory instances of a rule (called when the rule is
+    /// deleted, so stale state cannot surface via `get_alert_state`).
+    pub fn remove_rule(&self, rule_id: &str) {
+        self.instances
+            .write()
+            .retain(|key, _| key.rule_id != rule_id);
+    }
+
     pub fn clear(&self) {
         self.instances.write().clear();
     }
@@ -398,6 +406,27 @@ mod tests {
 
         let event = engine.evaluate(&rule, "node-1", "gpu-0", 90.0);
         assert!(event.is_none());
+    }
+
+    #[test]
+    fn test_remove_rule_drops_instances() {
+        let engine = AlertEngine::new();
+        let rule = make_rule("rule-1", "gpu_temperature", 85.0, 30);
+        engine.evaluate(&rule, "node-1", "gpu-0", 90.0);
+        engine.evaluate(&rule, "node-1", "gpu-1", 90.0);
+        assert_eq!(engine.get_all_states().len(), 2);
+
+        // Deleting the rule must drop every instance of it.
+        engine.remove_rule("rule-1");
+        assert!(engine.get_all_states().is_empty());
+
+        // Other rules are untouched.
+        let other = make_rule("rule-2", "gpu_temperature", 85.0, 30);
+        engine.evaluate(&other, "node-1", "gpu-0", 90.0);
+        engine.remove_rule("rule-1");
+        assert_eq!(engine.get_all_states().len(), 1);
+        engine.remove_rule("rule-2");
+        assert!(engine.get_all_states().is_empty());
     }
 
     #[test]
