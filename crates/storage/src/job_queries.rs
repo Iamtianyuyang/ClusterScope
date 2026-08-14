@@ -1,3 +1,7 @@
+// sqlx's `bind` accepts both owned values and references; clippy's
+// needless-borrow lint prefers owned, but &field keeps the row usable.
+#![allow(clippy::needless_borrows_for_generic_args)]
+
 use crate::models::JobRow;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -16,7 +20,11 @@ pub async fn insert_job(pool: &PgPool, job: &JobRow) -> Result<()> {
         "#,
     )
     .bind(&job.job_id)
-    .bind(if job.node_id.is_empty() { None::<String> } else { Some(job.node_id.clone()) })
+    .bind(if job.node_id.is_empty() {
+        None::<String>
+    } else {
+        Some(job.node_id.clone())
+    })
     .bind(&job.name)
     .bind(&job.executable)
     .bind(&job.arguments)
@@ -36,7 +44,7 @@ pub async fn insert_job(pool: &PgPool, job: &JobRow) -> Result<()> {
     .execute(pool)
     .await
     .context("Failed to insert job")?;
-    
+
     Ok(())
 }
 
@@ -104,7 +112,13 @@ pub async fn list_jobs(
     for v in &bind_values {
         count_q = count_q.bind(v);
     }
-    let total: i64 = count_q.fetch_optional(pool).await.ok().flatten().map(|(t,)| t).unwrap_or(0);
+    let total: i64 = count_q
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten()
+        .map(|(t,)| t)
+        .unwrap_or(0);
 
     let mut q = sqlx::query_as::<_, JobRow>(&list_sql);
     for v in &bind_values {
@@ -140,11 +154,7 @@ pub async fn get_jobs_for_node(pool: &PgPool, node_id: &str) -> Result<Vec<JobRo
 }
 
 /// Assign a queued job to a node (scheduler dispatch) and mark it starting.
-pub async fn assign_job_to_node(
-    pool: &PgPool,
-    job_id: &str,
-    node_id: &str,
-) -> Result<()> {
+pub async fn assign_job_to_node(pool: &PgPool, job_id: &str, node_id: &str) -> Result<()> {
     sqlx::query(
         r#"
         UPDATE jobs SET node_id = $2, status = 'starting', started_at = NOW()
@@ -163,7 +173,10 @@ pub async fn assign_job_to_node(
 /// restarted before their agent picked them up, or the agent died).
 /// Returns the job_ids that were requeued so the scheduler can drop them
 /// from its in-memory running set.
-pub async fn reset_stale_starting_jobs(pool: &PgPool, cutoff: DateTime<Utc>) -> Result<Vec<String>> {
+pub async fn reset_stale_starting_jobs(
+    pool: &PgPool,
+    cutoff: DateTime<Utc>,
+) -> Result<Vec<String>> {
     let rows: Vec<(String,)> = sqlx::query_as(
         r#"
         UPDATE jobs
@@ -215,6 +228,7 @@ pub async fn list_active_jobs(pool: &PgPool) -> Result<Vec<JobRow>> {
     .context("Failed to list active jobs")
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn update_job_status(
     pool: &PgPool,
     job_id: &str,
@@ -247,7 +261,7 @@ pub async fn update_job_status(
     .execute(pool)
     .await
     .context("Failed to update job status")?;
-    
+
     Ok(())
 }
 

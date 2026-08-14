@@ -96,7 +96,8 @@ impl Default for ServerConfig {
         Self {
             grpc_addr: "0.0.0.0:50051".to_string(),
             http_addr: "0.0.0.0:8080".to_string(),
-            postgres_url: "postgresql://clusterscope:clusterscope@localhost:5432/clusterscope".to_string(),
+            postgres_url: "postgresql://clusterscope:clusterscope@localhost:5432/clusterscope"
+                .to_string(),
             redis_url: "redis://localhost:6379".to_string(),
             jwt_secret: "default-secret-change-me".to_string(),
             jwt_access_expiry_secs: 3600,

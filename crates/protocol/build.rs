@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_client(true)
         .build_server(true)
         .out_dir(&out_dir)
-        .compile(&[proto_file], &[proto_dir])?;
+        .compile_protos(&[proto_file], &[proto_dir])?;
 
     println!("cargo:rerun-if-changed=../../proto/clusterscope.proto");
     Ok(())
