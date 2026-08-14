@@ -17,13 +17,6 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redisdata:/data
-
   server:
     build:
       context: ..
@@ -31,28 +24,17 @@ services:
     ports:
       - "8080:8080"
       - "50051:50051"
-      - "9090:9090"
     environment:
       # The server reads these env vars (POSTGRES_URL / JWT_SECRET / ...)
       POSTGRES_URL: postgresql://clusterscope:clusterscope@postgres:5432/clusterscope
-      REDIS_URL: redis://redis:6379
       JWT_SECRET: clusterscope-secret-change-me
       AUTH_REQUIRED: "false"
+      # Shared secret for agent <-> server gRPC. Change it and set the same
+      # value in every agent's agent.yaml (or `--agent-token`).
+      AGENT_TOKEN: change-me-too-agent-token
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_started
-
-  web:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.web
-    ports:
-      - "3000:80"
-    depends_on:
-      - server
 
 volumes:
   pgdata:
-  redisdata:

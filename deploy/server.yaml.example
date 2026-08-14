@@ -15,3 +15,8 @@ default_admin_password: "admin123"
 # false = read-only API (GET/HEAD) works without a token; writes still require JWT.
 # Recommended for trusted LAN monitoring (passwordless TUI).
 auth_required: false
+
+# Shared secret agents must present on every gRPC call (Authorization: Bearer).
+# Empty = gRPC accepts any caller — only safe on a trusted network.
+# Generate with: openssl rand -hex 32
+agent_token: ""

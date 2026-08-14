@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_audit_log(
     pool: &PgPool,
     user: &str,
@@ -15,7 +16,7 @@ pub async fn insert_audit_log(
     source_ip: Option<&str>,
 ) -> Result<String> {
     let log_id = Uuid::new_v4().to_string();
-    
+
     sqlx::query(
         r#"
         INSERT INTO audit_logs (log_id, username, action, target, target_type, details, result, source_ip)
@@ -33,7 +34,7 @@ pub async fn insert_audit_log(
     .execute(pool)
     .await
     .context("Failed to insert audit log")?;
-    
+
     Ok(log_id)
 }
 
@@ -47,9 +48,9 @@ pub async fn list_audit_logs(
     page_size: i64,
 ) -> Result<(Vec<AuditLogRow>, i64)> {
     let offset = page * page_size;
-    
+
     let mut conditions = vec!["1=1".to_string()];
-    
+
     if let Some(_user) = user {
         conditions.push(format!("username = ${}", conditions.len() + 1));
     }
@@ -62,9 +63,9 @@ pub async fn list_audit_logs(
     if let Some(_end) = end_time {
         conditions.push(format!("timestamp <= ${}", conditions.len() + 1));
     }
-    
+
     let where_clause = conditions.join(" AND ");
-    
+
     let total_query = format!("SELECT COUNT(*) FROM audit_logs WHERE {}", where_clause);
     let query = format!(
         r#"
@@ -76,10 +77,10 @@ pub async fn list_audit_logs(
         conditions.len() + 1,
         conditions.len() + 2,
     );
-    
+
     let total: Option<(i64,)> = sqlx::query_as(&total_query).fetch_optional(pool).await?;
     let total = total.map(|(t,)| t).unwrap_or(0);
-    
+
     let mut q = sqlx::query_as::<_, AuditLogRow>(&query);
     if user.is_some() {
         q = q.bind(user);
@@ -99,6 +100,6 @@ pub async fn list_audit_logs(
         .fetch_all(pool)
         .await
         .context("Failed to list audit logs")?;
-    
+
     Ok((logs, total))
 }

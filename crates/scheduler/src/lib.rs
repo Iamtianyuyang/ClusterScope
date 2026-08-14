@@ -2,8 +2,7 @@ use common::job::{Job, JobStatus};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::time::Duration;
-use tracing::{info, warn};
+use tracing::info;
 
 /// GPU job scheduler for ClusterScope.
 ///
@@ -20,6 +19,16 @@ pub struct Scheduler {
     node_gpu_capacity: Arc<Mutex<HashMap<String, u32>>>,
 }
 
+impl Default for Scheduler {
+    fn default() -> Self {
+        Self {
+            job_queue: Arc::new(Mutex::new(Vec::new())),
+            running_jobs: Arc::new(Mutex::new(BTreeMap::new())),
+            node_gpu_capacity: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
 /// Parse the number of GPUs a job requires from its `resource_quota`.
 ///
 /// Supported formats: `"2"`, `"gpu:2"`, `"gpus:4"`, `"GPU=2"`; anything
@@ -30,7 +39,9 @@ pub fn parse_gpu_requirement(quota: &str) -> u32 {
         return 1;
     }
     // Extract the first integer from the string ("gpu:2" -> 2, "3" -> 3).
-    let digits: String = s.chars().skip_while(|c| !c.is_ascii_digit())
+    let digits: String = s
+        .chars()
+        .skip_while(|c| !c.is_ascii_digit())
         .take_while(|c| c.is_ascii_digit())
         .collect();
     if digits.is_empty() {
@@ -41,16 +52,22 @@ pub fn parse_gpu_requirement(quota: &str) -> u32 {
 
 impl Scheduler {
     pub fn new() -> Self {
-        Self {
-            job_queue: Arc::new(Mutex::new(Vec::new())),
-            running_jobs: Arc::new(Mutex::new(BTreeMap::new())),
-            node_gpu_capacity: Arc::new(Mutex::new(HashMap::new())),
-        }
+        Self::default()
     }
 
-    pub async fn enqueue(&self, job: Job) {
+    /// Add a job to the queue. Returns false when the job is already queued
+    /// or already dispatched — the server re-loads queued jobs from the DB
+    /// every cycle, so dedup here prevents queue growth and duplicate
+    /// dispatch while jobs wait for capacity.
+    pub async fn enqueue(&self, job: Job) -> bool {
         let mut queue = self.job_queue.lock().await;
+        let running = self.running_jobs.lock().await;
+        if running.contains_key(&job.job_id) || queue.iter().any(|j| j.job_id == job.job_id) {
+            return false;
+        }
+        drop(running);
         queue.push(job);
+        true
     }
 
     /// Try to dispatch queued jobs to nodes with free GPU capacity.
@@ -62,7 +79,12 @@ impl Scheduler {
 
         for job in queue.drain(..) {
             let gpu_required = parse_gpu_requirement(&job.resource_quota);
-            match self.find_node_for_job(gpu_required).await {
+            let preferred = if job.node_id.is_empty() {
+                None
+            } else {
+                Some(job.node_id.as_str())
+            };
+            match self.find_node_for_job(gpu_required, preferred).await {
                 Some(node_id) => {
                     let mut job = job;
                     job.node_id = node_id.clone();
@@ -100,34 +122,69 @@ impl Scheduler {
         }
     }
 
+    /// Remove a job from the running set without a terminal transition
+    /// (e.g. a stale `starting` job was requeued by the server).
+    pub async fn remove_running(&self, job_id: &str) {
+        self.running_jobs.lock().await.remove(job_id);
+    }
+
+    /// Repopulate the running set from the DB after a server restart so GPU
+    /// capacity accounting survives restarts.
+    pub async fn restore_running(&self, jobs: Vec<Job>) {
+        let mut running = self.running_jobs.lock().await;
+        for job in jobs {
+            if job.status.is_running() {
+                running.insert(job.job_id.clone(), job);
+            }
+        }
+    }
+
     pub async fn set_node_gpu_capacity(&self, node_id: &str, capacity: u32) {
-        self.node_gpu_capacity.lock().await.insert(node_id.to_string(), capacity);
+        self.node_gpu_capacity
+            .lock()
+            .await
+            .insert(node_id.to_string(), capacity);
     }
 
     /// GPUs currently in use on `node_id` (sum of running jobs' requirements).
     async fn gpus_in_use(&self, node_id: &str) -> u32 {
         let running = self.running_jobs.lock().await;
-        running.values()
+        running
+            .values()
             .filter(|j| j.node_id == node_id)
             .map(|j| parse_gpu_requirement(&j.resource_quota))
             .sum()
     }
 
     pub async fn get_available_gpu_count(&self, node_id: &str) -> u32 {
-        let capacity = self.node_gpu_capacity.lock().await.get(node_id).copied().unwrap_or(0);
+        let capacity = self
+            .node_gpu_capacity
+            .lock()
+            .await
+            .get(node_id)
+            .copied()
+            .unwrap_or(0);
         let used = self.gpus_in_use(node_id).await;
         capacity.saturating_sub(used)
     }
 
-    /// Pick the alphabetically-first node with enough free capacity for a job
-    /// requiring `gpu_required` GPUs. Returns `None` if no node qualifies.
-    pub async fn find_node_for_job(&self, gpu_required: u32) -> Option<String> {
+    /// Pick a node with enough free capacity for a job requiring
+    /// `gpu_required` GPUs. When `preferred` names an online node with
+    /// capacity, it wins; otherwise the alphabetically-first candidate is
+    /// chosen. Returns `None` if no node qualifies.
+    pub async fn find_node_for_job(
+        &self,
+        gpu_required: u32,
+        preferred: Option<&str>,
+    ) -> Option<String> {
         let running = self.running_jobs.lock().await;
         let capacity = self.node_gpu_capacity.lock().await;
 
-        let mut candidates: Vec<&String> = capacity.iter()
+        let mut candidates: Vec<&String> = capacity
+            .iter()
             .filter(|(node, cap)| {
-                let used: u32 = running.values()
+                let used: u32 = running
+                    .values()
                     .filter(|j| j.node_id == **node)
                     .map(|j| parse_gpu_requirement(&j.resource_quota))
                     .sum();
@@ -136,57 +193,11 @@ impl Scheduler {
             .map(|(n, _)| n)
             .collect();
 
+        if let Some(pref) = preferred.filter(|p| candidates.iter().any(|n| n.as_str() == *p)) {
+            return Some(pref.to_string());
+        }
         candidates.sort();
         candidates.into_iter().next().cloned()
-    }
-}
-
-/// Run the scheduler loop.
-pub async fn run_scheduler(scheduler: Arc<Scheduler>, database: storage::DatabasePool) {
-    let mut interval = tokio::time::interval(Duration::from_secs(10));
-
-    loop {
-        interval.tick().await;
-
-        // Load pending jobs from database
-        if let Ok((jobs, _)) = storage::job_queries::list_jobs(
-            database.pool(),
-            None,
-            Some("queued"),
-            None,
-            0,
-            100,
-        ).await {
-            for job in jobs {
-                let job = Job {
-                    job_id: job.job_id.clone(),
-                    node_id: job.node_id.clone(),
-                    name: job.name.clone(),
-                    executable: job.executable.clone(),
-                    arguments: serde_json::from_value(job.arguments).unwrap_or_default(),
-                    working_directory: job.working_directory.clone(),
-                    environment: serde_json::from_value(job.environment).unwrap_or_default(),
-                    status: JobStatus::Queued,
-                    pid: None,
-                    exit_code: None,
-                    error_message: None,
-                    created_at: job.created_at,
-                    started_at: job.started_at,
-                    finished_at: job.finished_at,
-                    created_by: job.created_by.clone(),
-                    resource_quota: job.resource_quota.unwrap_or_default(),
-                    retry_count: job.retry_count as u32,
-                    max_retries: job.max_retries as u32,
-                };
-                scheduler.enqueue(job).await;
-            }
-        }
-
-        // Try to schedule jobs
-        let scheduled = scheduler.schedule().await;
-        if scheduled.is_empty() {
-            warn!("No jobs scheduled in this cycle");
-        }
     }
 }
 
@@ -263,13 +274,88 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_enqueue_dedup() {
+        let scheduler = Scheduler::new();
+        scheduler.set_node_gpu_capacity("node-1", 4).await;
+
+        // First enqueue wins; duplicates are ignored (the server reloads
+        // queued jobs from the DB every cycle).
+        assert!(scheduler.enqueue(make_test_job("job-1", "")).await);
+        assert!(!scheduler.enqueue(make_test_job("job-1", "")).await);
+
+        // Once dispatched, re-enqueuing is also ignored.
+        let scheduled = scheduler.schedule().await;
+        assert_eq!(scheduled.len(), 1);
+        assert!(!scheduler.enqueue(make_test_job("job-1", "")).await);
+    }
+
+    #[tokio::test]
+    async fn test_schedule_prefers_requested_node() {
+        let scheduler = Scheduler::new();
+        scheduler.set_node_gpu_capacity("node-a", 4).await;
+        scheduler.set_node_gpu_capacity("node-b", 4).await;
+
+        // node-b is requested and has capacity -> it wins over node-a.
+        scheduler.enqueue(make_test_job("job-1", "node-b")).await;
+        let scheduled = scheduler.schedule().await;
+        assert_eq!(scheduled.len(), 1);
+        assert_eq!(scheduled[0].node_id, "node-b");
+    }
+
+    #[tokio::test]
+    async fn test_schedule_falls_back_when_preferred_full() {
+        let scheduler = Scheduler::new();
+        scheduler.set_node_gpu_capacity("node-a", 4).await;
+        scheduler.set_node_gpu_capacity("node-b", 1).await;
+
+        // node-b is requested but only has room for one 1-GPU job.
+        scheduler.enqueue(make_test_job("job-1", "node-b")).await;
+        scheduler.enqueue(make_test_job("job-2", "node-b")).await;
+        let scheduled = scheduler.schedule().await;
+        assert_eq!(scheduled.len(), 2);
+        assert_eq!(scheduled[0].node_id, "node-b");
+        // Second copy falls back to node-a instead of waiting forever.
+        assert_eq!(scheduled[1].node_id, "node-a");
+    }
+
+    #[tokio::test]
+    async fn test_remove_running_frees_capacity() {
+        let scheduler = Scheduler::new();
+        scheduler.set_node_gpu_capacity("node-1", 2).await;
+        scheduler
+            .enqueue(make_test_job_with_quota("job-1", "", "gpu:2"))
+            .await;
+        scheduler.schedule().await;
+        assert_eq!(scheduler.get_available_gpu_count("node-1").await, 0);
+
+        // Simulate the server requeueing a stale 'starting' job.
+        scheduler.remove_running("job-1").await;
+        assert_eq!(scheduler.get_available_gpu_count("node-1").await, 2);
+    }
+
+    #[tokio::test]
+    async fn test_restore_running() {
+        let scheduler = Scheduler::new();
+        scheduler.set_node_gpu_capacity("node-1", 2).await;
+
+        let mut job = make_test_job_with_quota("job-1", "node-1", "gpu:2");
+        job.status = JobStatus::Running;
+        scheduler.restore_running(vec![job]).await;
+        assert_eq!(scheduler.get_available_gpu_count("node-1").await, 0);
+    }
+
+    #[tokio::test]
     async fn test_schedule_respects_capacity() {
         let scheduler = Scheduler::new();
         scheduler.set_node_gpu_capacity("node-1", 2).await;
 
         // Two 2-GPU jobs on a 2-GPU node: only the first can run.
-        scheduler.enqueue(make_test_job_with_quota("job-1", "", "gpu:2")).await;
-        scheduler.enqueue(make_test_job_with_quota("job-2", "", "gpu:2")).await;
+        scheduler
+            .enqueue(make_test_job_with_quota("job-1", "", "gpu:2"))
+            .await;
+        scheduler
+            .enqueue(make_test_job_with_quota("job-2", "", "gpu:2"))
+            .await;
 
         let scheduled = scheduler.schedule().await;
         assert_eq!(scheduled.len(), 1);
@@ -289,7 +375,9 @@ mod tests {
         scheduler.set_node_gpu_capacity("node-b", 4).await;
 
         // node-a is alphabetically first but too small for a 2-GPU job.
-        scheduler.enqueue(make_test_job_with_quota("job-1", "", "gpu:2")).await;
+        scheduler
+            .enqueue(make_test_job_with_quota("job-1", "", "gpu:2"))
+            .await;
         let scheduled = scheduler.schedule().await;
 
         assert_eq!(scheduled.len(), 1);
@@ -301,7 +389,9 @@ mod tests {
         let scheduler = Scheduler::new();
         scheduler.set_node_gpu_capacity("node-1", 2).await;
 
-        scheduler.enqueue(make_test_job_with_quota("job-1", "", "gpu:2")).await;
+        scheduler
+            .enqueue(make_test_job_with_quota("job-1", "", "gpu:2"))
+            .await;
         scheduler.schedule().await;
         assert_eq!(scheduler.get_available_gpu_count("node-1").await, 0);
 
@@ -309,7 +399,9 @@ mod tests {
         assert_eq!(scheduler.get_available_gpu_count("node-1").await, 2);
 
         // The queued second job can now run.
-        scheduler.enqueue(make_test_job_with_quota("job-2", "", "gpu:2")).await;
+        scheduler
+            .enqueue(make_test_job_with_quota("job-2", "", "gpu:2"))
+            .await;
         let scheduled = scheduler.schedule().await;
         assert_eq!(scheduled.len(), 1);
         assert_eq!(scheduled[0].job_id, "job-2");

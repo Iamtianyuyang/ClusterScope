@@ -12,7 +12,7 @@ pub async fn create_user(
     password_hash: &str,
 ) -> Result<String> {
     let user_id = Uuid::new_v4().to_string();
-    
+
     sqlx::query(
         r#"
         INSERT INTO users (user_id, username, email, role, password_hash, enabled)
@@ -27,28 +27,24 @@ pub async fn create_user(
     .execute(pool)
     .await
     .context("Failed to create user")?;
-    
+
     Ok(user_id)
 }
 
 pub async fn get_user_by_username(pool: &PgPool, username: &str) -> Result<Option<UserRow>> {
-    sqlx::query_as::<_, UserRow>(
-        "SELECT * FROM users WHERE username = $1",
-    )
-    .bind(username)
-    .fetch_optional(pool)
-    .await
-    .context("Failed to get user by username")
+    sqlx::query_as::<_, UserRow>("SELECT * FROM users WHERE username = $1")
+        .bind(username)
+        .fetch_optional(pool)
+        .await
+        .context("Failed to get user by username")
 }
 
 pub async fn get_user_by_id(pool: &PgPool, user_id: &str) -> Result<Option<UserRow>> {
-    sqlx::query_as::<_, UserRow>(
-        "SELECT * FROM users WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_optional(pool)
-    .await
-    .context("Failed to get user by id")
+    sqlx::query_as::<_, UserRow>("SELECT * FROM users WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+        .context("Failed to get user by id")
 }
 
 pub async fn list_users(pool: &PgPool) -> Result<Vec<UserRow>> {
@@ -80,7 +76,7 @@ pub async fn update_user(
     .execute(pool)
     .await
     .context("Failed to update user")?;
-    
+
     Ok(())
 }
 
@@ -90,7 +86,7 @@ pub async fn delete_user(pool: &PgPool, user_id: &str) -> Result<()> {
         .execute(pool)
         .await
         .context("Failed to delete user")?;
-    
+
     Ok(())
 }
 
@@ -108,7 +104,7 @@ pub async fn record_login(pool: &PgPool, user_id: &str) -> Result<()> {
     .execute(pool)
     .await
     .context("Failed to record login")?;
-    
+
     Ok(())
 }
 
@@ -135,7 +131,7 @@ pub async fn record_failed_login(
     .execute(pool)
     .await
     .context("Failed to record failed login")?;
-    
+
     Ok(())
 }
 
@@ -157,7 +153,7 @@ pub async fn add_refresh_token(
     .execute(pool)
     .await
     .context("Failed to add refresh token")?;
-    
+
     Ok(())
 }
 
@@ -167,7 +163,7 @@ pub async fn revoke_refresh_token(pool: &PgPool, token: &str) -> Result<()> {
         .execute(pool)
         .await
         .context("Failed to revoke refresh token")?;
-    
+
     Ok(())
 }
 

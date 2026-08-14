@@ -1,3 +1,7 @@
+// sqlx's `bind` accepts both owned values and references; clippy's
+// needless-borrow lint prefers owned, but &field keeps the row usable.
+#![allow(clippy::needless_borrows_for_generic_args)]
+
 use crate::models::JobRow;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -16,7 +20,11 @@ pub async fn insert_job(pool: &PgPool, job: &JobRow) -> Result<()> {
         "#,
     )
     .bind(&job.job_id)
-    .bind(if job.node_id.is_empty() { None::<String> } else { Some(job.node_id.clone()) })
+    .bind(if job.node_id.is_empty() {
+        None::<String>
+    } else {
+        Some(job.node_id.clone())
+    })
     .bind(&job.name)
     .bind(&job.executable)
     .bind(&job.arguments)
@@ -36,7 +44,7 @@ pub async fn insert_job(pool: &PgPool, job: &JobRow) -> Result<()> {
     .execute(pool)
     .await
     .context("Failed to insert job")?;
-    
+
     Ok(())
 }
 
@@ -104,7 +112,13 @@ pub async fn list_jobs(
     for v in &bind_values {
         count_q = count_q.bind(v);
     }
-    let total: i64 = count_q.fetch_optional(pool).await.ok().flatten().map(|(t,)| t).unwrap_or(0);
+    let total: i64 = count_q
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten()
+        .map(|(t,)| t)
+        .unwrap_or(0);
 
     let mut q = sqlx::query_as::<_, JobRow>(&list_sql);
     for v in &bind_values {
@@ -140,11 +154,7 @@ pub async fn get_jobs_for_node(pool: &PgPool, node_id: &str) -> Result<Vec<JobRo
 }
 
 /// Assign a queued job to a node (scheduler dispatch) and mark it starting.
-pub async fn assign_job_to_node(
-    pool: &PgPool,
-    job_id: &str,
-    node_id: &str,
-) -> Result<()> {
+pub async fn assign_job_to_node(pool: &PgPool, job_id: &str, node_id: &str) -> Result<()> {
     sqlx::query(
         r#"
         UPDATE jobs SET node_id = $2, status = 'starting', started_at = NOW()
@@ -161,21 +171,64 @@ pub async fn assign_job_to_node(
 
 /// Re-queue jobs stuck in `starting` past the cutoff (e.g. the server
 /// restarted before their agent picked them up, or the agent died).
-pub async fn reset_stale_starting_jobs(pool: &PgPool, cutoff: DateTime<Utc>) -> Result<usize> {
-    let result = sqlx::query(
+/// Returns the job_ids that were requeued so the scheduler can drop them
+/// from its in-memory running set.
+pub async fn reset_stale_starting_jobs(
+    pool: &PgPool,
+    cutoff: DateTime<Utc>,
+) -> Result<Vec<String>> {
+    let rows: Vec<(String,)> = sqlx::query_as(
         r#"
         UPDATE jobs
         SET status = 'queued', started_at = NULL, pid = NULL, error_message = NULL
         WHERE status = 'starting' AND started_at < $1
+        RETURNING job_id
         "#,
     )
     .bind(cutoff)
-    .execute(pool)
+    .fetch_all(pool)
     .await
     .context("Failed to reset stale starting jobs")?;
-    Ok(result.rows_affected() as usize)
+    Ok(rows.into_iter().map(|(id,)| id).collect())
 }
 
+/// Queued jobs waiting for a node, oldest first (FIFO scheduling order).
+pub async fn list_queued_jobs(pool: &PgPool, limit: i64) -> Result<Vec<JobRow>> {
+    sqlx::query_as::<_, JobRow>(
+        r#"
+        SELECT job_id, COALESCE(node_id, '') AS node_id, name, executable, arguments,
+       working_directory, environment, status, pid, exit_code, error_message,
+       created_at, started_at, finished_at, created_by, resource_quota,
+       retry_count, max_retries FROM jobs
+        WHERE status = 'queued'
+        ORDER BY created_at ASC
+        LIMIT $1
+        "#,
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .context("Failed to list queued jobs")
+}
+
+/// Jobs currently occupying capacity (used to rebuild the scheduler's
+/// in-memory running set after a server restart).
+pub async fn list_active_jobs(pool: &PgPool) -> Result<Vec<JobRow>> {
+    sqlx::query_as::<_, JobRow>(
+        r#"
+        SELECT job_id, COALESCE(node_id, '') AS node_id, name, executable, arguments,
+       working_directory, environment, status, pid, exit_code, error_message,
+       created_at, started_at, finished_at, created_by, resource_quota,
+       retry_count, max_retries FROM jobs
+        WHERE status IN ('starting', 'running', 'stopping')
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+    .context("Failed to list active jobs")
+}
+
+#[allow(clippy::too_many_arguments)]
 pub async fn update_job_status(
     pool: &PgPool,
     job_id: &str,
@@ -208,7 +261,7 @@ pub async fn update_job_status(
     .execute(pool)
     .await
     .context("Failed to update job status")?;
-    
+
     Ok(())
 }
 

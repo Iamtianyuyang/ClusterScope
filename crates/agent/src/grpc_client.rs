@@ -1,8 +1,7 @@
 use anyhow::{Context, Result};
 use common::config::AgentConfig;
 use protocol::{
-    AgentServiceClient, Job, JobDefinition, JobLogEntry, JobStatusUpdate, NodeHeartbeat,
-    NodeInfo, NodeMetricsReport,
+    AgentServiceClient, JobLogEntry, JobStatusUpdate, NodeHeartbeat, NodeInfo, NodeMetricsReport,
 };
 use tokio::time::Duration;
 use tokio_stream::StreamExt;
@@ -13,7 +12,10 @@ fn local_ip() -> String {
     use std::net::UdpSocket;
     match UdpSocket::bind("0.0.0.0:0") {
         Ok(sock) => match sock.connect("192.0.2.1:80") {
-            Ok(()) => sock.local_addr().map(|a| a.ip().to_string()).unwrap_or_default(),
+            Ok(()) => sock
+                .local_addr()
+                .map(|a| a.ip().to_string())
+                .unwrap_or_default(),
             Err(_) => String::new(),
         },
         Err(_) => String::new(),
@@ -25,6 +27,8 @@ pub struct AgentClient {
     client: AgentServiceClient<tonic::transport::Channel>,
     node_id: String,
     config: AgentConfig,
+    /// Authorization metadata attached to every request when a token is set.
+    auth: Option<tonic::metadata::MetadataValue<tonic::metadata::Ascii>>,
     /// Per-process monotonic report sequence. Seeded with the wall-clock
     /// millis so that after a restart the sequence jumps forward — the
     /// server-side dedup cache (node:seq) never mistakes new reports for
@@ -34,11 +38,7 @@ pub struct AgentClient {
 }
 
 impl AgentClient {
-    pub async fn new(
-        server_addr: String,
-        node_id: String,
-        config: AgentConfig,
-    ) -> Result<Self> {
+    pub async fn new(server_addr: String, node_id: String, config: AgentConfig) -> Result<Self> {
         let channel = tonic::transport::Channel::from_shared(server_addr.clone())
             .context("Invalid server address")?
             .connect_timeout(Duration::from_secs(10))
@@ -47,24 +47,43 @@ impl AgentClient {
             .map_err(|e| {
                 anyhow::anyhow!("Failed to connect to server at {}: {}", server_addr, e)
             })?;
-        
+
         let client = AgentServiceClient::new(channel);
-        
+
         info!("Connected to server at {}", server_addr);
-        
+
         let seed = chrono::Utc::now().timestamp_millis() as u64;
+        let auth = if config.agent_token.is_empty() {
+            None
+        } else {
+            let value = format!("Bearer {}", config.agent_token)
+                .parse::<tonic::metadata::MetadataValue<tonic::metadata::Ascii>>()
+                .map_err(|e| anyhow::anyhow!("invalid agent_token: {}", e))?;
+            Some(value)
+        };
         Ok(Self {
             client,
             node_id,
             config,
+            auth,
             sequence: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(seed)),
             job_runtime: std::sync::Arc::new(crate::job_executor::JobRuntime::new()),
         })
     }
-    
+
+    /// Attach the agent token to a request (when configured).
+    fn authed<T>(&self, mut request: tonic::Request<T>) -> tonic::Request<T> {
+        if let Some(token) = &self.auth {
+            request
+                .metadata_mut()
+                .insert("authorization", token.clone());
+        }
+        request
+    }
+
     pub async fn register(&mut self) -> Result<()> {
         let node_info = self.build_node_info();
-        let request = tonic::Request::new(node_info);
+        let request = self.authed(tonic::Request::new(node_info));
         let _ = self.client.register(request).await?;
         info!(node_id = %self.node_id, "Registered with server");
         Ok(())
@@ -85,7 +104,11 @@ impl AgentClient {
         };
 
         let hostname = sysinfo::System::host_name().unwrap_or_default();
-        let cpu_model = sys.cpus().first().map(|c| c.brand().to_string()).unwrap_or_default();
+        let cpu_model = sys
+            .cpus()
+            .first()
+            .map(|c| c.brand().to_string())
+            .unwrap_or_default();
         let cpu_cores = sys.cpus().len() as u32;
         let memory_total_bytes = sys.total_memory();
 
@@ -105,16 +128,19 @@ impl AgentClient {
     }
 
     pub async fn report_metrics(&mut self, mut report: NodeMetricsReport) -> Result<()> {
-        let seq = self.sequence.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        let seq = self
+            .sequence
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
         report.node_id = self.node_id.clone();
         report.sequence = seq;
-        
-        let request = tonic::Request::new(tokio_stream::iter(vec![report]));
-        
+
+        let request = self.authed(tonic::Request::new(tokio_stream::iter(vec![report])));
+
         self.client.report_metrics(request).await?;
         Ok(())
     }
-    
+
     pub async fn send_heartbeat(&mut self) -> Result<()> {
         let heartbeat = NodeHeartbeat {
             node_id: self.node_id.clone(),
@@ -122,47 +148,36 @@ impl AgentClient {
             status: 1, // Online
             ..Default::default()
         };
-        
-        let request = tonic::Request::new(tokio_stream::iter(vec![heartbeat]));
-        
+
+        let request = self.authed(tonic::Request::new(tokio_stream::iter(vec![heartbeat])));
+
         let _response = self.client.heartbeat(request).await?;
         Ok(())
     }
-    
-    pub async fn submit_job(&mut self, job: JobDefinition) -> Result<Job> {
-        let request = tonic::Request::new(job);
-        let response = self.client.submit_job(request).await?;
-        Ok(response.into_inner())
-    }
-    
+
     /// Report a job status transition (running/succeeded/failed/…).
-    pub async fn update_job_status(&mut self, job_id: &str, status: i32, message: &str) -> Result<()> {
+    pub async fn update_job_status(
+        &mut self,
+        job_id: &str,
+        status: i32,
+        message: &str,
+    ) -> Result<()> {
         let update = protocol::JobStatusUpdate {
             job_id: job_id.to_string(),
             status,
             message: message.to_string(),
         };
-        let request = tonic::Request::new(update);
+        let request = self.authed(tonic::Request::new(update));
         let _ = self.client.update_job_status(request).await?;
         Ok(())
     }
-    
+
     pub async fn report_job_logs(&mut self, _job_id: &str, logs: Vec<JobLogEntry>) -> Result<()> {
-        let request = tonic::Request::new(tokio_stream::iter(logs));
+        let request = self.authed(tonic::Request::new(tokio_stream::iter(logs)));
         let _response = self.client.report_job_logs(request).await?;
         Ok(())
     }
-    
-    pub async fn cancel_job(&mut self, job_id: &str, force: bool) -> Result<Job> {
-        let request = tonic::Request::new(protocol::CancelJobRequest {
-            node_id: self.node_id.clone(),
-            job_id: job_id.to_string(),
-            force,
-        });
-        let response = self.client.cancel_job(request).await?;
-        Ok(response.into_inner())
-    }
-    
+
     pub async fn watch_jobs(&mut self) {
         loop {
             match self.poll_pending_jobs().await {
@@ -174,17 +189,16 @@ impl AgentClient {
             }
         }
     }
-    
+
     async fn poll_pending_jobs(&mut self) -> Result<()> {
         let node_info = NodeInfo {
             node_id: self.node_id.clone(),
             ..Default::default()
         };
-        
-        let request = tonic::Request::new(node_info);
-        let mut stream = self.client.get_pending_jobs(request).await?
-            .into_inner();
-        
+
+        let request = self.authed(tonic::Request::new(node_info));
+        let mut stream = self.client.get_pending_jobs(request).await?.into_inner();
+
         while let Some(job_result) = stream.next().await {
             match job_result {
                 Ok(job) => {
@@ -201,15 +215,25 @@ impl AgentClient {
                             let running = runtime.request_cancel(&job_id).await;
                             if !running {
                                 // Nothing to kill — never started or already gone.
-                                let _ = client.update_job_status(JobStatusUpdate {
-                                    job_id,
-                                    status: protocol::JobStatus::Cancelled as i32,
-                                    message: "cancelled before start".to_string(),
-                                }).await;
+                                let _ = client
+                                    .update_job_status(JobStatusUpdate {
+                                        job_id,
+                                        status: protocol::JobStatus::Cancelled as i32,
+                                        message: "cancelled before start".to_string(),
+                                    })
+                                    .await;
                             }
                         });
                     } else {
                         info!(job_id = %job.job_id, name = %job.name, "Received pending job");
+                        // Skip when this job is already running locally: the
+                        // server re-sends `starting` jobs every 5s until our
+                        // `running` report lands, so without this guard a
+                        // lost status report would spawn a second process.
+                        if self.job_runtime.pids.lock().await.contains_key(&job.job_id) {
+                            tracing::debug!(job_id = %job.job_id, "Job already running locally — skipping duplicate");
+                            continue;
+                        }
                         // Execute the job concurrently so long-running jobs do
                         // not block polling for new jobs / cancellations.
                         let config = self.config.clone();
@@ -221,7 +245,9 @@ impl AgentClient {
                                 job,
                                 &mut client,
                                 &runtime,
-                            ).await {
+                            )
+                            .await
+                            {
                                 warn!(error = %e, "Job execution failed");
                             }
                         });
@@ -232,7 +258,7 @@ impl AgentClient {
                 }
             }
         }
-        
+
         Ok(())
     }
 }
