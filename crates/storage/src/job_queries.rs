@@ -161,19 +161,58 @@ pub async fn assign_job_to_node(
 
 /// Re-queue jobs stuck in `starting` past the cutoff (e.g. the server
 /// restarted before their agent picked them up, or the agent died).
-pub async fn reset_stale_starting_jobs(pool: &PgPool, cutoff: DateTime<Utc>) -> Result<usize> {
-    let result = sqlx::query(
+/// Returns the job_ids that were requeued so the scheduler can drop them
+/// from its in-memory running set.
+pub async fn reset_stale_starting_jobs(pool: &PgPool, cutoff: DateTime<Utc>) -> Result<Vec<String>> {
+    let rows: Vec<(String,)> = sqlx::query_as(
         r#"
         UPDATE jobs
         SET status = 'queued', started_at = NULL, pid = NULL, error_message = NULL
         WHERE status = 'starting' AND started_at < $1
+        RETURNING job_id
         "#,
     )
     .bind(cutoff)
-    .execute(pool)
+    .fetch_all(pool)
     .await
     .context("Failed to reset stale starting jobs")?;
-    Ok(result.rows_affected() as usize)
+    Ok(rows.into_iter().map(|(id,)| id).collect())
+}
+
+/// Queued jobs waiting for a node, oldest first (FIFO scheduling order).
+pub async fn list_queued_jobs(pool: &PgPool, limit: i64) -> Result<Vec<JobRow>> {
+    sqlx::query_as::<_, JobRow>(
+        r#"
+        SELECT job_id, COALESCE(node_id, '') AS node_id, name, executable, arguments,
+       working_directory, environment, status, pid, exit_code, error_message,
+       created_at, started_at, finished_at, created_by, resource_quota,
+       retry_count, max_retries FROM jobs
+        WHERE status = 'queued'
+        ORDER BY created_at ASC
+        LIMIT $1
+        "#,
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .context("Failed to list queued jobs")
+}
+
+/// Jobs currently occupying capacity (used to rebuild the scheduler's
+/// in-memory running set after a server restart).
+pub async fn list_active_jobs(pool: &PgPool) -> Result<Vec<JobRow>> {
+    sqlx::query_as::<_, JobRow>(
+        r#"
+        SELECT job_id, COALESCE(node_id, '') AS node_id, name, executable, arguments,
+       working_directory, environment, status, pid, exit_code, error_message,
+       created_at, started_at, finished_at, created_by, resource_quota,
+       retry_count, max_retries FROM jobs
+        WHERE status IN ('starting', 'running', 'stopping')
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+    .context("Failed to list active jobs")
 }
 
 pub async fn update_job_status(

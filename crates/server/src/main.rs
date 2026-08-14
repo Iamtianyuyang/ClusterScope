@@ -60,6 +60,14 @@ async fn main() -> anyhow::Result<()> {
     let ws_manager = ws_handler::WsManager::new();
     let alert_engine = common::alert::AlertEngine::new();
 
+    // Rebuild the scheduler's in-memory running set from the DB so GPU
+    // capacity accounting survives a server restart.
+    let scheduler = Arc::new(Scheduler::new());
+    if let Ok(rows) = storage::job_queries::list_active_jobs(database.pool()).await {
+        let jobs: Vec<common::job::Job> = rows.iter().filter_map(job_row_to_job).collect();
+        scheduler.restore_running(jobs).await;
+    }
+
     let state = Arc::new(AppState {
         config: config.clone(),
         database,
@@ -67,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
         alert_engine,
         alert_rules: parking_lot::RwLock::new(Vec::new()),
         node_registry,
-        scheduler: Arc::new(Scheduler::new()),
+        scheduler,
         jwt_secret: config.jwt_secret.clone(),
         seen_reports: std::sync::Arc::new(parking_lot::RwLock::new(
             lru::LruCache::new(std::num::NonZeroUsize::new(100000).unwrap())
@@ -304,22 +312,32 @@ async fn run_background_tasks(state: Arc<AppState>) {
 /// assignment (status -> 'starting') so the target agent picks it up.
 async fn run_scheduler_cycle(state: &Arc<AppState>) {
     // Refresh per-node GPU capacity from the registry (learned from metrics).
+    // Only online nodes are schedulable; offline/degraded nodes get zero
+    // capacity so the scheduler never dispatches to a dead node.
     for node in state.node_registry.list() {
-        state.scheduler.set_node_gpu_capacity(&node.node_id, node.gpu_count).await;
+        let capacity = if node.status == common::node_registry::NodeStatus::Online {
+            node.gpu_count
+        } else {
+            0
+        };
+        state.scheduler.set_node_gpu_capacity(&node.node_id, capacity).await;
     }
 
-    // Re-queue jobs stuck in 'starting' (agent died / server restarted).
-    if let Err(e) = storage::job_queries::reset_stale_starting_jobs(
+    // Re-queue jobs stuck in 'starting' (agent died / server restarted) and
+    // free the scheduler's in-memory capacity accounting for them.
+    if let Ok(requeued) = storage::job_queries::reset_stale_starting_jobs(
         state.database.pool(),
         Utc::now() - ChronoDuration::minutes(10),
     ).await {
-        warn!(error = %e, "Failed to reset stale starting jobs");
+        for job_id in requeued {
+            state.scheduler.remove_running(&job_id).await;
+        }
     }
 
-    // Load queued jobs and hand them to the capacity-aware scheduler.
-    if let Ok((rows, _)) = storage::job_queries::list_jobs(
-        state.database.pool(), None, Some("queued"), None, 0, 100,
-    ).await {
+    // Load queued jobs (oldest first) and hand them to the capacity-aware
+    // scheduler. The scheduler dedups by job_id, so reloading every cycle is
+    // safe and never grows the queue while jobs wait for capacity.
+    if let Ok(rows) = storage::job_queries::list_queued_jobs(state.database.pool(), 1000).await {
         for row in rows {
             if let Some(job) = job_row_to_job(&row) {
                 state.scheduler.enqueue(job).await;
