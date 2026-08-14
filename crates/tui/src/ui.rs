@@ -635,7 +635,7 @@ fn node_panel(f: &mut Frame, app: &AppState, node: &Node, area: Rect, selected: 
         };
 
         // Roomier panels keep the original single-column table with header.
-        if mode == CellMode::Full && avail - used >= n + 1 {
+        if mode == CellMode::Full && avail - used > n {
             lines.push(Line::from(vec![Span::styled(
                 " GPU  UTIL      VRAM   TEMP".to_string(),
                 Style::default().fg(DIM),
