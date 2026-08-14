@@ -6,9 +6,9 @@ pub mod agents {
     }
 }
 
-pub use agents::clusterscope::v1::*;
 pub use agent_service_client::AgentServiceClient;
 pub use agent_service_server::{AgentService, AgentServiceServer};
+pub use agents::clusterscope::v1::*;
 pub use central_service_client::CentralServiceClient;
 pub use central_service_server::{CentralService, CentralServiceServer};
 

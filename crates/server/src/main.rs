@@ -1,11 +1,11 @@
 use axum::{
-    routing::{delete, get, post},
     Router,
+    routing::{delete, get, post},
 };
 use chrono::{Duration as ChronoDuration, Utc};
 use common::alert::AlertRule;
 use common::config::ServerConfig;
-use common::job::{status_from_str, Job, JobStatus};
+use common::job::{Job, JobStatus, status_from_str};
 use protocol::AgentServiceServer;
 use scheduler::Scheduler;
 
@@ -15,12 +15,10 @@ use tokio::net::TcpListener;
 use tonic::transport::Server;
 use tracing::{info, warn};
 
-
 mod auth_middleware;
-mod ws_handler;
-mod handlers;
 mod grpc;
-
+mod handlers;
+mod ws_handler;
 
 struct AppState {
     config: ServerConfig,
@@ -60,6 +58,14 @@ async fn main() -> anyhow::Result<()> {
     let ws_manager = ws_handler::WsManager::new();
     let alert_engine = common::alert::AlertEngine::new();
 
+    // Rebuild the scheduler's in-memory running set from the DB so GPU
+    // capacity accounting survives a server restart.
+    let scheduler = Arc::new(Scheduler::new());
+    if let Ok(rows) = storage::job_queries::list_active_jobs(database.pool()).await {
+        let jobs: Vec<common::job::Job> = rows.iter().filter_map(job_row_to_job).collect();
+        scheduler.restore_running(jobs).await;
+    }
+
     let state = Arc::new(AppState {
         config: config.clone(),
         database,
@@ -67,11 +73,11 @@ async fn main() -> anyhow::Result<()> {
         alert_engine,
         alert_rules: parking_lot::RwLock::new(Vec::new()),
         node_registry,
-        scheduler: Arc::new(Scheduler::new()),
+        scheduler,
         jwt_secret: config.jwt_secret.clone(),
-        seen_reports: std::sync::Arc::new(parking_lot::RwLock::new(
-            lru::LruCache::new(std::num::NonZeroUsize::new(100000).unwrap())
-        )),
+        seen_reports: std::sync::Arc::new(parking_lot::RwLock::new(lru::LruCache::new(
+            std::num::NonZeroUsize::new(100000).unwrap(),
+        ))),
     });
 
     // Background tasks
@@ -81,28 +87,52 @@ async fn main() -> anyhow::Result<()> {
     // gRPC server
     let grpc_addr = config.grpc_addr.parse::<SocketAddr>()?;
     let agent_service = grpc::AgentServiceImpl::new(state.clone());
+    let agent_token = config.agent_token.clone();
+    let interceptor = move |req: tonic::Request<()>| {
+        if agent_token.is_empty() {
+            // No token configured: accept any caller (trusted network only).
+            return Ok(req);
+        }
+        let authorized = req
+            .metadata()
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .map(|t| t == agent_token)
+            .unwrap_or(false);
+        if authorized {
+            Ok(req)
+        } else {
+            Err(tonic::Status::unauthenticated("invalid agent token"))
+        }
+    };
 
     let grpc_handle = tokio::spawn(async move {
         Server::builder()
-            .add_service(AgentServiceServer::new(agent_service))
+            .add_service(AgentServiceServer::with_interceptor(
+                agent_service,
+                interceptor,
+            ))
             .serve(grpc_addr)
             .await
     });
 
     info!(addr = %config.grpc_addr, "gRPC server started");
+    if config.agent_token.is_empty() {
+        warn!(
+            "agent_token is empty — gRPC accepts any caller; set AGENT_TOKEN for untrusted networks"
+        );
+    }
 
     // HTTP server (REST + WebSocket, both on http_addr)
     let http_state = state.clone();
     let http_router = build_http_router(http_state);
 
     let http_addr = config.http_addr.parse::<SocketAddr>()?;
-    let http_handle = tokio::spawn(async move {
-        axum::serve(
-            TcpListener::bind(http_addr).await?,
-            http_router,
-        )
-        .await
-    });
+    let http_handle =
+        tokio::spawn(
+            async move { axum::serve(TcpListener::bind(http_addr).await?, http_router).await },
+        );
 
     info!(addr = %config.http_addr, "HTTP server started");
 
@@ -123,9 +153,13 @@ async fn main() -> anyhow::Result<()> {
 ///   CLUSTERSCOPE_HTTP_ADDR / HTTP_ADDR
 ///   CLUSTERSCOPE_GRPC_ADDR / GRPC_ADDR
 ///   CLUSTERSCOPE_AUTH_REQUIRED / AUTH_REQUIRED
+///   CLUSTERSCOPE_AGENT_TOKEN / AGENT_TOKEN
 fn load_config() -> anyhow::Result<ServerConfig> {
     let args: Vec<String> = std::env::args().collect();
-    let config_path = args.get(1).map(|s| s.as_str()).unwrap_or("/etc/clusterscope/server.yaml");
+    let config_path = args
+        .get(1)
+        .map(|s| s.as_str())
+        .unwrap_or("/etc/clusterscope/server.yaml");
 
     let mut config = if std::path::Path::new(config_path).exists() {
         let content = std::fs::read_to_string(config_path)
@@ -140,7 +174,7 @@ fn load_config() -> anyhow::Result<ServerConfig> {
     };
 
     let env = |name: &str, current: String| -> String {
-        std::env::var(&format!("CLUSTERSCOPE_{}", name))
+        std::env::var(format!("CLUSTERSCOPE_{}", name))
             .or_else(|_| std::env::var(name))
             .unwrap_or(current)
     };
@@ -148,12 +182,17 @@ fn load_config() -> anyhow::Result<ServerConfig> {
     config.jwt_secret = env("JWT_SECRET", config.jwt_secret);
     config.http_addr = env("HTTP_ADDR", config.http_addr);
     config.grpc_addr = env("GRPC_ADDR", config.grpc_addr);
-    if let Ok(v) = std::env::var("CLUSTERSCOPE_AUTH_REQUIRED").or_else(|_| std::env::var("AUTH_REQUIRED")) {
+    if let Ok(v) =
+        std::env::var("CLUSTERSCOPE_AUTH_REQUIRED").or_else(|_| std::env::var("AUTH_REQUIRED"))
+    {
         config.auth_required = v.eq_ignore_ascii_case("true") || v == "1";
     }
-    if let Ok(v) = std::env::var("CLUSTERSCOPE_DEFAULT_ADMIN_PASSWORD").or_else(|_| std::env::var("DEFAULT_ADMIN_PASSWORD")) {
+    if let Ok(v) = std::env::var("CLUSTERSCOPE_DEFAULT_ADMIN_PASSWORD")
+        .or_else(|_| std::env::var("DEFAULT_ADMIN_PASSWORD"))
+    {
         config.default_admin_password = v;
     }
+    config.agent_token = env("AGENT_TOKEN", config.agent_token);
 
     // Refuse obviously insecure configurations when auth is enforced.
     if config.auth_required
@@ -177,18 +216,36 @@ fn build_http_router(state: Arc<AppState>) -> Router {
 
     // Admin-only: user management + alert rule management (writes).
     let admin_routes = Router::new()
-        .route("/users", get(handlers::list_users).post(handlers::create_user))
-        .route("/users/{id}", get(handlers::get_user).patch(handlers::update_user).delete(handlers::delete_user))
+        .route(
+            "/users",
+            get(handlers::list_users).post(handlers::create_user),
+        )
+        .route(
+            "/users/{id}",
+            get(handlers::get_user)
+                .patch(handlers::update_user)
+                .delete(handlers::delete_user),
+        )
         .route("/alerts/rules", post(handlers::create_alert_rule))
-        .route("/alerts/rules/{rule_id}", delete(handlers::delete_alert_rule))
-        .route("/alerts/rules/{rule_id}/ack", post(handlers::acknowledge_alert))
-        .route_layer(axum::middleware::from_fn(auth_middleware::require_admin_middleware));
+        .route(
+            "/alerts/rules/{rule_id}",
+            delete(handlers::delete_alert_rule),
+        )
+        .route(
+            "/alerts/rules/{rule_id}/ack",
+            post(handlers::acknowledge_alert),
+        )
+        .route_layer(axum::middleware::from_fn(
+            auth_middleware::require_admin_middleware,
+        ));
 
     // Operator+: job submission and cancellation.
     let operator_routes = Router::new()
         .route("/jobs", post(handlers::create_job))
         .route("/jobs/{job_id}", delete(handlers::stop_job))
-        .route_layer(axum::middleware::from_fn(auth_middleware::require_operator_middleware));
+        .route_layer(axum::middleware::from_fn(
+            auth_middleware::require_operator_middleware,
+        ));
 
     // Read-only monitoring routes (any authenticated user).
     let read_routes = Router::new()
@@ -200,7 +257,10 @@ fn build_http_router(state: Arc<AppState>) -> Router {
         .route("/jobs/{job_id}", get(handlers::get_job))
         .route("/jobs/{job_id}/logs", get(handlers::get_job_logs))
         .route("/alerts/rules", get(handlers::list_alert_rules))
-        .route("/alerts/rules/{rule_id}/state", get(handlers::get_alert_state))
+        .route(
+            "/alerts/rules/{rule_id}/state",
+            get(handlers::get_alert_state),
+        )
         .route("/alerts/events", get(handlers::list_alert_events))
         .route("/cluster/info", get(handlers::get_cluster_info))
         .route("/audit-logs", get(handlers::list_audit_logs))
@@ -247,29 +307,47 @@ async fn run_background_tasks(state: Arc<AppState>) {
         refresh_alert_rules(&state).await;
 
         // Self-heal stale alert instances (server restarts lose engine state).
-        if cycle % 12 == 0 { // every 2 minutes
-            if let Err(e) = storage::alert_queries::expire_stale_alerts(
+        // every 2 minutes
+        if cycle.is_multiple_of(12)
+            && let Err(e) = storage::alert_queries::expire_stale_alerts(
                 state.database.pool(),
                 Utc::now() - ChronoDuration::minutes(10),
-            ).await {
-                warn!(error = %e, "Failed to expire stale alerts");
-            }
+            )
+            .await
+        {
+            warn!(error = %e, "Failed to expire stale alerts");
+        }
+
+        // Job log retention: keep the last 30 days of task output (every 10
+        // minutes).
+        if cycle.is_multiple_of(60)
+            && let Err(e) = storage::queries::prune_old_job_logs(
+                state.database.pool(),
+                Utc::now() - ChronoDuration::days(30),
+            )
+            .await
+        {
+            warn!(error = %e, "Failed to prune old job logs");
         }
 
         // Hourly rollups every 10 minutes; daily every hour.
-        if cycle % 60 == 0 {
+        if cycle.is_multiple_of(60) {
             if let Err(e) = storage::aggregation::aggregate_to_hourly(state.database.pool()).await {
                 warn!(error = %e, "Failed to aggregate hourly metrics");
             }
-            if let Err(e) = storage::aggregation::cleanup_hourly_data(state.database.pool(), 7).await {
+            if let Err(e) =
+                storage::aggregation::cleanup_hourly_data(state.database.pool(), 7).await
+            {
                 warn!(error = %e, "Failed to clean hourly metrics");
             }
         }
-        if cycle % 360 == 0 {
+        if cycle.is_multiple_of(360) {
             if let Err(e) = storage::aggregation::aggregate_to_daily(state.database.pool()).await {
                 warn!(error = %e, "Failed to aggregate daily metrics");
             }
-            if let Err(e) = storage::aggregation::cleanup_daily_data(state.database.pool(), 90).await {
+            if let Err(e) =
+                storage::aggregation::cleanup_daily_data(state.database.pool(), 90).await
+            {
                 warn!(error = %e, "Failed to clean daily metrics");
             }
         }
@@ -280,22 +358,37 @@ async fn run_background_tasks(state: Arc<AppState>) {
 /// assignment (status -> 'starting') so the target agent picks it up.
 async fn run_scheduler_cycle(state: &Arc<AppState>) {
     // Refresh per-node GPU capacity from the registry (learned from metrics).
+    // Only online nodes are schedulable; offline/degraded nodes get zero
+    // capacity so the scheduler never dispatches to a dead node.
     for node in state.node_registry.list() {
-        state.scheduler.set_node_gpu_capacity(&node.node_id, node.gpu_count).await;
+        let capacity = if node.status == common::node_registry::NodeStatus::Online {
+            node.gpu_count
+        } else {
+            0
+        };
+        state
+            .scheduler
+            .set_node_gpu_capacity(&node.node_id, capacity)
+            .await;
     }
 
-    // Re-queue jobs stuck in 'starting' (agent died / server restarted).
-    if let Err(e) = storage::job_queries::reset_stale_starting_jobs(
+    // Re-queue jobs stuck in 'starting' (agent died / server restarted) and
+    // free the scheduler's in-memory capacity accounting for them.
+    if let Ok(requeued) = storage::job_queries::reset_stale_starting_jobs(
         state.database.pool(),
         Utc::now() - ChronoDuration::minutes(10),
-    ).await {
-        warn!(error = %e, "Failed to reset stale starting jobs");
+    )
+    .await
+    {
+        for job_id in requeued {
+            state.scheduler.remove_running(&job_id).await;
+        }
     }
 
-    // Load queued jobs and hand them to the capacity-aware scheduler.
-    if let Ok((rows, _)) = storage::job_queries::list_jobs(
-        state.database.pool(), None, Some("queued"), None, 0, 100,
-    ).await {
+    // Load queued jobs (oldest first) and hand them to the capacity-aware
+    // scheduler. The scheduler dedups by job_id, so reloading every cycle is
+    // safe and never grows the queue while jobs wait for capacity.
+    if let Ok(rows) = storage::job_queries::list_queued_jobs(state.database.pool(), 1000).await {
         for row in rows {
             if let Some(job) = job_row_to_job(&row) {
                 state.scheduler.enqueue(job).await;
@@ -307,8 +400,12 @@ async fn run_scheduler_cycle(state: &Arc<AppState>) {
     for job in scheduled {
         info!(job_id = %job.job_id, node_id = %job.node_id, "Job dispatched");
         if let Err(e) = storage::job_queries::assign_job_to_node(
-            state.database.pool(), &job.job_id, &job.node_id,
-        ).await {
+            state.database.pool(),
+            &job.job_id,
+            &job.node_id,
+        )
+        .await
+        {
             warn!(error = %e, job_id = %job.job_id, "Failed to persist job dispatch");
         }
         state.ws_manager.push_job_update(&job.job_id).await;

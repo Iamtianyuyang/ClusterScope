@@ -1,6 +1,6 @@
 use axum::{
     extract::{Request, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     middleware::Next,
     response::Response,
 };
@@ -46,9 +46,7 @@ pub async fn readonly_middleware(
 
     // Read-only requests are public in this mode — but if a non-empty token
     // IS supplied it must be valid, and its claims are attached for role gates.
-    if request.method() == axum::http::Method::GET
-        || request.method() == axum::http::Method::HEAD
-    {
+    if request.method() == axum::http::Method::GET || request.method() == axum::http::Method::HEAD {
         if let Ok(Some(token)) = extract_token(&request) {
             if token.is_empty() {
                 // Empty bearer token == no token (e.g. tools that always

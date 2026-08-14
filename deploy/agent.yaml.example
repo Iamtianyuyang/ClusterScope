@@ -26,3 +26,6 @@ disk_mounts:
 # Read process details (/proc/<pid>) best-effort; degrades to "unknown" when
 # restricted. Never requires root.
 collect_process_details: true
+
+# Must match the server's agent_token (empty on both sides = no auth).
+agent_token: ""

@@ -4,9 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[repr(u8)]
 pub enum JobStatus {
+    #[default]
     Queued = 0,
     Starting = 1,
     Running = 2,
@@ -21,7 +22,7 @@ impl JobStatus {
     pub fn to_u8(self) -> u8 {
         self as u8
     }
-    
+
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0 => Some(Self::Queued),
@@ -35,19 +36,16 @@ impl JobStatus {
             _ => None,
         }
     }
-    
+
     pub fn is_terminal(self) -> bool {
-        matches!(self, Self::Succeeded | Self::Failed | Self::Cancelled | Self::Lost)
+        matches!(
+            self,
+            Self::Succeeded | Self::Failed | Self::Cancelled | Self::Lost
+        )
     }
-    
+
     pub fn is_running(self) -> bool {
         matches!(self, Self::Starting | Self::Running | Self::Stopping)
-    }
-}
-
-impl Default for JobStatus {
-    fn default() -> Self {
-        Self::Queued
     }
 }
 
@@ -68,9 +66,9 @@ const VALID_TRANSITIONS: &[(JobStatus, JobStatus)] = &[
     (JobStatus::Stopping, JobStatus::Failed),
     (JobStatus::Stopping, JobStatus::Cancelled),
     (JobStatus::Stopping, JobStatus::Lost),
-    (JobStatus::Succeeded, JobStatus::Queued),  // retry
-    (JobStatus::Failed, JobStatus::Queued),     // retry
-    (JobStatus::Cancelled, JobStatus::Queued),  // retry
+    (JobStatus::Succeeded, JobStatus::Queued), // retry
+    (JobStatus::Failed, JobStatus::Queued),    // retry
+    (JobStatus::Cancelled, JobStatus::Queued), // retry
 ];
 
 pub fn can_transition(from: JobStatus, to: JobStatus) -> bool {
@@ -134,6 +132,7 @@ pub struct JobDefinition {
 }
 
 impl JobDefinition {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         node_id: String,
         name: String,
@@ -207,11 +206,11 @@ impl Job {
             max_retries: def.max_retries,
         }
     }
-    
+
     pub fn transition_to(&mut self, new_status: JobStatus) -> Result<(), AppError> {
         validate_transition(self.status, new_status)?;
         self.status = new_status;
-        
+
         match new_status {
             JobStatus::Starting | JobStatus::Running => {
                 self.started_at = Some(Utc::now());
@@ -221,7 +220,7 @@ impl Job {
             }
             _ => {}
         }
-        
+
         Ok(())
     }
 }
@@ -238,32 +237,32 @@ pub struct JobLogEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_valid_transitions() {
         assert!(can_transition(JobStatus::Queued, JobStatus::Starting));
         assert!(can_transition(JobStatus::Starting, JobStatus::Running));
         assert!(can_transition(JobStatus::Running, JobStatus::Stopping));
         assert!(can_transition(JobStatus::Stopping, JobStatus::Succeeded));
-        
+
         // Terminal states can't go anywhere except retry
         assert!(!can_transition(JobStatus::Succeeded, JobStatus::Running));
         assert!(can_transition(JobStatus::Succeeded, JobStatus::Queued));
     }
-    
+
     #[test]
     fn test_invalid_transitions() {
         assert!(!can_transition(JobStatus::Running, JobStatus::Queued));
         assert!(!can_transition(JobStatus::Succeeded, JobStatus::Failed));
         assert!(!can_transition(JobStatus::Queued, JobStatus::Running));
     }
-    
+
     #[test]
     fn test_transition_validation() {
         assert!(validate_transition(JobStatus::Queued, JobStatus::Starting).is_ok());
         assert!(validate_transition(JobStatus::Queued, JobStatus::Running).is_err());
     }
-    
+
     #[test]
     fn test_job_status_is_terminal() {
         assert!(JobStatus::Succeeded.is_terminal());
@@ -273,12 +272,12 @@ mod tests {
         assert!(!JobStatus::Running.is_terminal());
         assert!(!JobStatus::Starting.is_terminal());
     }
-    
+
     #[test]
     fn test_job_creation_from_definition() {
         let mut env = HashMap::new();
         env.insert("CUDA_VISIBLE_DEVICES".to_string(), "0".to_string());
-        
+
         let def = JobDefinition {
             job_id: "job-1".to_string(),
             node_id: "node-1".to_string(),
@@ -293,14 +292,14 @@ mod tests {
             description: "test".to_string(),
             max_retries: 3,
         };
-        
+
         let job = Job::from_definition(&def);
         assert_eq!(job.job_id, def.job_id);
         assert_eq!(job.status, JobStatus::Queued);
         assert!(job.pid.is_none());
         assert!(job.started_at.is_none());
     }
-    
+
     #[test]
     fn test_job_transition_sets_timestamps() {
         let mut job = Job::from_definition(&JobDefinition {
@@ -317,13 +316,13 @@ mod tests {
             description: String::new(),
             max_retries: 0,
         });
-        
+
         job.transition_to(JobStatus::Starting).unwrap();
         assert!(job.started_at.is_some());
-        
+
         job.transition_to(JobStatus::Running).unwrap();
         assert!(job.started_at.is_some());
-        
+
         job.transition_to(JobStatus::Succeeded).unwrap();
         assert!(job.started_at.is_some());
         assert!(job.finished_at.is_some());
