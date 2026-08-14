@@ -415,12 +415,18 @@ async fn run_scheduler_cycle(state: &Arc<AppState>) {
                 // be slow to spawn; leave the job assigned.
                 continue;
             }
-            if let Err(e) =
-                storage::job_queries::requeue_stale_job(state.database.pool(), &job_id).await
-            {
-                warn!(error = %e, job_id = %job_id, "Failed to requeue stale starting job");
-            } else {
-                state.scheduler.remove_running(&job_id).await;
+            // Only free scheduler capacity when the requeue actually took
+            // effect: a 0-row update means the job left `starting` in the
+            // meantime (e.g. a slow agent finally reported running) and is
+            // still occupying its node's GPUs.
+            match storage::job_queries::requeue_stale_job(state.database.pool(), &job_id).await {
+                Ok(1) => {
+                    state.scheduler.remove_running(&job_id).await;
+                }
+                Ok(_) => {} // 0 rows (job left `starting`) or an unexpected multi-row update
+                Err(e) => {
+                    warn!(error = %e, job_id = %job_id, "Failed to requeue stale starting job");
+                }
             }
         }
     }
