@@ -1,8 +1,6 @@
 use anyhow::{Context, Result};
 use common::config::AgentConfig;
-use protocol::{
-    AgentServiceClient, JobLogEntry, JobStatusUpdate, NodeHeartbeat, NodeInfo, NodeMetricsReport,
-};
+use protocol::{AgentServiceClient, JobStatusUpdate, NodeHeartbeat, NodeInfo, NodeMetricsReport};
 use tokio::time::Duration;
 use tokio_stream::StreamExt;
 use tracing::{info, warn};
