@@ -23,6 +23,7 @@ pub struct NodeMetricsRow {
     pub network_metrics: Option<serde_json::Value>,
     pub disk_metrics: Option<serde_json::Value>,
     pub cpu_core_metrics: Option<serde_json::Value>,
+    pub cpu_processes: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
 }
 

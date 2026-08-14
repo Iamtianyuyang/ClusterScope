@@ -729,6 +729,17 @@ async fn save_metrics_to_db(state: &AppState, report: &NodeMetricsReport) -> any
         })
         .collect();
     let cpu_core_metrics = serde_json::to_value(cpu_core_metrics).ok();
+    let cpu_processes: Vec<_> = report
+        .cpu_processes
+        .iter()
+        .map(|p| {
+            serde_json::json!({
+                "pid": p.pid, "username": p.username, "command": p.command,
+                "cpu_percent": p.cpu_percent, "memory_bytes": p.memory_bytes,
+            })
+        })
+        .collect();
+    let cpu_processes = serde_json::to_value(cpu_processes).ok();
     let network_metrics: Vec<_> = report.networks.iter().map(|n| {
         serde_json::json!({"interface_name": n.interface_name, "bytes_sent": n.bytes_sent, "bytes_recv": n.bytes_recv})
     }).collect();
@@ -759,6 +770,7 @@ async fn save_metrics_to_db(state: &AppState, report: &NodeMetricsReport) -> any
         network_metrics,
         disk_metrics,
         cpu_core_metrics,
+        cpu_processes,
     )
     .await?;
     Ok(())

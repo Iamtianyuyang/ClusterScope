@@ -1,4 +1,4 @@
-use crate::api::{AlertEvent, AlertRule, GpuInfo, Job, Node, NodeMetrics};
+use crate::api::{AlertEvent, AlertRule, CpuCore, GpuInfo, Job, Node, NodeMetrics};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -103,7 +103,8 @@ pub struct AppState {
     pub rules: Vec<AlertRule>,
     pub events: Vec<AlertEvent>,
     pub selected_node: usize,
-    pub selected_gpu: usize, // within selected node
+    pub selected_gpu: usize,  // within selected node
+    pub show_cpu_procs: bool, // process panel: GPU procs vs top CPU procs
     pub help: bool,
     pub error: Option<String>,
     pub last_refresh_at: std::time::Instant,
@@ -121,6 +122,7 @@ impl AppState {
             events: vec![],
             selected_node: 0,
             selected_gpu: 0,
+            show_cpu_procs: false,
             help: false,
             error: None,
             last_refresh_at: std::time::Instant::now(),
@@ -389,6 +391,44 @@ fn gpu_cell(g: &crate::api::GpuInfo, sel: bool, mode: CellMode) -> Vec<Span<'sta
     }
 }
 
+/// One row of per-core utilization bars (` cores ██░░██ …`, grouped by 8,
+/// one block per core). Hot cores (>=90%) turn yellow, busy ones white,
+/// idle ones dim — a single runaway core is visible at a glance. Truncates
+/// with `…` when the panel is narrower than the core count.
+fn core_bar_line(cores: &[CpuCore], width: usize) -> Line<'static> {
+    let max_chars = width.saturating_sub(7).max(3);
+    let mut spans = vec![
+        Span::styled(" cores", Style::default().fg(NORMAL)),
+        Span::raw(" "),
+    ];
+    let mut taken = 0usize;
+    for c in cores {
+        let sep = if taken > 0 && taken.is_multiple_of(8) {
+            1
+        } else {
+            0
+        };
+        if taken + sep + 1 > max_chars {
+            spans.push(Span::styled("…", Style::default().fg(DIM)));
+            break;
+        }
+        if sep == 1 {
+            spans.push(Span::raw(" "));
+            taken += 1;
+        }
+        let (ch, color) = if c.usage_percent >= 90.0 {
+            ("█", Color::Yellow)
+        } else if c.usage_percent >= BUSY_PCT as f32 {
+            ("█", NORMAL)
+        } else {
+            ("░", DIM)
+        };
+        spans.push(Span::styled(ch, Style::default().fg(color)));
+        taken += 1;
+    }
+    Line::from(spans)
+}
+
 // ===== draw =====
 
 pub fn draw(f: &mut Frame, app: &AppState) {
@@ -428,6 +468,12 @@ fn draw_topbar(f: &mut Frame, app: &AppState, area: Rect) {
         .flat_map(|m| m.gpus.iter())
         .filter(|g| g.utilization_gpu >= BUSY_PCT)
         .count();
+    // Cluster-wide CPU: mean over the nodes that reported metrics. Skipped
+    // entirely when nothing has arrived yet — no fabricated 0.
+    let cpu_avg: Option<f64> = {
+        let vals: Vec<f64> = app.metrics.values().map(|m| m.cpu_usage_percent).collect();
+        (!vals.is_empty()).then(|| vals.iter().sum::<f64>() / vals.len() as f64)
+    };
     let ago = app.last_refresh_at.elapsed().as_secs();
 
     let mut spans: Vec<Span> = vec![
@@ -446,6 +492,12 @@ fn draw_topbar(f: &mut Frame, app: &AppState, area: Rect) {
             Style::default().fg(DIM),
         ),
     ];
+    if let Some(cpu) = cpu_avg {
+        spans.push(Span::styled(
+            format!(" · CPU {:>3.0}%", cpu),
+            Style::default().fg(if cpu >= 90.0 { Color::Yellow } else { NORMAL }),
+        ));
+    }
     if app.rules.is_empty() && app.events.is_empty() {
         spans.push(Span::styled("     0 alerts", Style::default().fg(DIM)));
     } else {
@@ -662,6 +714,15 @@ fn node_panel(f: &mut Frame, app: &AppState, node: &Node, area: Rect, selected: 
         }
     }
 
+    // per-core CPU bars — right after the GPU table, before the summary
+    // (agent reports per-core usage; nothing to show when it is unknown).
+    if avail > used
+        && let Some(cores) = m.map(|m| m.cpu_cores.as_slice()).filter(|c| !c.is_empty())
+    {
+        lines.push(core_bar_line(cores, w));
+        used += 1;
+    }
+
     // summary (CPU/MEM/GPU) if space remains
     if avail > used {
         let mut sum = Vec::new();
@@ -729,15 +790,26 @@ pub fn draw_trend_full(f: &mut Frame, app: &AppState, area: Rect) {
         })
         .unwrap_or_else(|| "-".to_string());
 
+    // Per-core usage snapshot of the selected node (live bars, not history).
+    let cores: Vec<CpuCore> = sel
+        .and_then(|n| app.metrics.get(&n.node_id))
+        .map(|m| m.cpu_cores.clone())
+        .unwrap_or_default();
+
     // History is keyed by node_id; fall back to the cluster average.
     let (cpu, gpus_util, gpus_mem) = match sel.and_then(|n| app.history.get(&n.node_id)) {
         Some(h) if !h.cpu.is_empty() => (h.cpu.clone(), h.gpus.clone(), h.gpus_mem.clone()),
         _ => cluster_average_history(app),
     };
 
+    let mut constraints = vec![Constraint::Length(1)]; // header
+    if !cores.is_empty() {
+        constraints.push(Constraint::Length(1)); // per-core bars
+    }
+    constraints.push(Constraint::Min(3)); // chart grid
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Min(3)])
+        .constraints(constraints)
         .split(area);
 
     // Header: node + line legend.
@@ -763,7 +835,16 @@ pub fn draw_trend_full(f: &mut Frame, app: &AppState, area: Rect) {
     ]);
     f.render_widget(Paragraph::new(header), chunks[0]);
 
-    let grid = chunks[1];
+    let grid = if cores.is_empty() {
+        chunks[1]
+    } else {
+        f.render_widget(
+            Paragraph::new(core_bar_line(&cores, chunks[1].width as usize)),
+            chunks[1],
+        );
+        chunks[2]
+    };
+
     if cpu.is_empty() {
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
@@ -941,29 +1022,35 @@ fn cluster_average_history(
 // ---- Process panel ----
 
 fn draw_process(f: &mut Frame, app: &AppState, header_area: Rect, table_area: Rect) {
-    // On the Trend tab show every user's processes across all GPUs; on the
-    // other tabs keep the selected GPU's processes.
-    let all_gpus = app.tab == Tab::Trend;
-
-    // header: "Processes" + selected node/gpu, then a divider line
     let sel_node = app.nodes.get(app.selected_node);
-    let (node_label, gpu_label) = match sel_node {
+    let node_label = match sel_node {
         Some(n) => {
             let host = if n.hostname.is_empty() {
                 &n.node_id
             } else {
                 &n.hostname
             };
-            (
-                host.clone(),
-                if all_gpus {
-                    "all GPUs".to_string()
-                } else {
-                    app.selected_gpu.to_string()
-                },
-            )
+            host.clone()
         }
-        None => ("-".to_string(), "-".to_string()),
+        None => "-".to_string(),
+    };
+    let node_online = sel_node.map(|n| n.status == "online").unwrap_or(false);
+
+    // `p` toggles between GPU processes and the node's top CPU processes.
+    if app.show_cpu_procs {
+        draw_cpu_processes(f, app, &node_label, node_online, header_area, table_area);
+        return;
+    }
+
+    // On the Trend tab show every user's processes across all GPUs; on the
+    // other tabs keep the selected GPU's processes.
+    let all_gpus = app.tab == Tab::Trend;
+
+    // header: "Processes" + selected node/gpu, then a divider line
+    let gpu_label = if all_gpus {
+        "all GPUs".to_string()
+    } else {
+        app.selected_gpu.to_string()
     };
     f.render_widget(
         Paragraph::new(vec![
@@ -990,7 +1077,6 @@ fn draw_process(f: &mut Frame, app: &AppState, header_area: Rect, table_area: Re
     } else {
         app.selected_processes()
     };
-    let node_online = sel_node.map(|n| n.status == "online").unwrap_or(false);
 
     if !node_online {
         f.render_widget(
@@ -1132,6 +1218,118 @@ fn draw_process(f: &mut Frame, app: &AppState, header_area: Rect, table_area: Re
     f.render_widget(table, table_area);
 }
 
+/// Top CPU-consuming host processes of the selected node (agent-reported
+/// top-N, sorted defensively so the busiest is first).
+fn draw_cpu_processes(
+    f: &mut Frame,
+    app: &AppState,
+    node_label: &str,
+    node_online: bool,
+    header_area: Rect,
+    table_area: Rect,
+) {
+    f.render_widget(
+        Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled(
+                    " Processes (CPU)",
+                    Style::default().fg(NORMAL).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("      {} / top CPU", node_label),
+                    Style::default().fg(DIM),
+                ),
+            ]),
+            Line::from(Span::styled(
+                "─".repeat(header_area.width as usize),
+                Style::default().fg(DIM),
+            )),
+        ]),
+        header_area,
+    );
+
+    let mut procs: Vec<&crate::api::SystemProcess> = app
+        .nodes
+        .get(app.selected_node)
+        .and_then(|n| app.metrics.get(&n.node_id))
+        .map(|m| m.cpu_processes.iter().collect())
+        .unwrap_or_default();
+    procs.sort_by(|a, b| b.cpu_percent.total_cmp(&a.cpu_percent));
+
+    if !node_online {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                " node offline",
+                Style::default().fg(DIM),
+            ))),
+            table_area,
+        );
+        return;
+    }
+    if procs.is_empty() {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                " No CPU process data yet (agent samples every few seconds).",
+                Style::default().fg(DIM),
+            ))),
+            table_area,
+        );
+        return;
+    }
+
+    let mut rows: Vec<Row> = Vec::new();
+    for p in &procs {
+        let user = if p.username.is_empty() || p.username == "unknown" {
+            "—"
+        } else {
+            &p.username
+        };
+        let cmd = if p.command.is_empty() || p.command == "unknown" {
+            "<restricted>"
+        } else {
+            &p.command
+        };
+        rows.push(Row::new(vec![
+            Cell::from(Span::styled(
+                format!("{:>7}", p.pid),
+                Style::default().fg(NORMAL),
+            )),
+            Cell::from(Span::styled(
+                format!("{:<8}", truncate(user, 8)),
+                Style::default().fg(NORMAL),
+            )),
+            Cell::from(Span::styled(
+                format!("{:>4.0}%", p.cpu_percent),
+                Style::default().fg(if p.cpu_percent >= 90.0 {
+                    Color::Yellow
+                } else {
+                    NORMAL
+                }),
+            )),
+            Cell::from(Span::styled(
+                format!("{:>7}", fmt_vram(p.memory_bytes)),
+                Style::default().fg(NORMAL),
+            )),
+            Cell::from(Span::styled(
+                truncate(cmd, table_area.width.saturating_sub(38) as usize),
+                Style::default().fg(NORMAL),
+            )),
+        ]));
+    }
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Length(8),
+            Constraint::Length(9),
+            Constraint::Length(5),
+            Constraint::Length(8),
+            Constraint::Min(5),
+        ],
+    )
+    .header(Row::new(vec!["PID", "USER", "CPU", "MEM", "COMMAND"]).style(Style::default().fg(DIM)));
+    f.render_widget(table, table_area);
+}
+
 fn truncate(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         s.to_string()
@@ -1146,9 +1344,9 @@ fn truncate(s: &str, max: usize) -> String {
 
 fn draw_footer(f: &mut Frame, app: &AppState, area: Rect) {
     let text = if app.help {
-        " j/k GPU    h/l node    Tab tabs    Enter details    r refresh    1/2/3/4 views    q quit "
+        " j/k GPU    h/l node    p procs    Tab tabs    Enter details    r refresh    1/2/3/4 views    q quit "
     } else {
-        " j/k GPU    h/l node    Tab tabs    r refresh    ? help    q quit "
+        " j/k GPU    h/l node    p procs    Tab tabs    r refresh    ? help    q quit "
     };
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(text, Style::default().fg(DIM)))),
@@ -1326,4 +1524,43 @@ fn draw_alerts(f: &mut Frame, app: &AppState, area: Rect) {
     .header(Row::new(vec!["NODE", "GPU", "STATE", "VALUE", "TIME"]).style(Style::default().fg(DIM)))
     .block(Block::default().borders(Borders::ALL).title(" Events "));
     f.render_widget(events_table, chunks[1]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn render(line: &Line<'static>) -> String {
+        line.spans.iter().map(|s| s.content.as_ref()).collect()
+    }
+
+    fn core(usage: f32) -> CpuCore {
+        CpuCore {
+            core_id: 0,
+            usage_percent: usage,
+        }
+    }
+
+    #[test]
+    fn core_bar_empty_renders_label_only() {
+        let line = core_bar_line(&[], 40);
+        assert_eq!(render(&line), " cores ");
+    }
+
+    #[test]
+    fn core_bar_groups_by_eight_and_truncates() {
+        // 24 cores, 19 bar slots at width 26: a space every 8 displayed
+        // bars -> groups of 8/7/2, then "…" for the rest.
+        let line = core_bar_line(&vec![core(50.0); 24], 26);
+        assert_eq!(render(&line), " cores ████████ ███████ ██…");
+    }
+
+    #[test]
+    fn core_bar_marks_hot_cores() {
+        let line = core_bar_line(&[core(95.0), core(50.0), core(0.0)], 40);
+        assert_eq!(render(&line), " cores ██░");
+        assert_eq!(line.spans[2].style.fg, Some(Color::Yellow)); // hot
+        assert_eq!(line.spans[3].style.fg, Some(NORMAL)); // busy
+        assert_eq!(line.spans[4].style.fg, Some(DIM)); // idle
+    }
 }
