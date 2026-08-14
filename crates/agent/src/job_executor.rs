@@ -27,17 +27,23 @@ impl JobRuntime {
     }
 
     /// Send SIGTERM to the process group of a running job (if any).
-    /// Returns true when the job was running and got the signal.
+    /// Returns true when the runtime owns the job (killed, or a spawn is in
+    /// flight and will observe the cancel); false when the job was never
+    /// seen — the caller reports it as cancelled-before-start.
     pub async fn request_cancel(&self, job_id: &str) -> bool {
         self.cancelled.lock().await.insert(job_id.to_string());
         let pids = self.pids.lock().await;
-        if let Some(&pid) = pids.get(job_id) {
-            unsafe {
-                libc::kill(-(pid as i32), libc::SIGTERM);
+        match pids.get(job_id).copied() {
+            Some(pid) if pid > 0 => {
+                unsafe {
+                    libc::kill(-(pid as i32), libc::SIGTERM);
+                }
+                true
             }
-            true
-        } else {
-            false
+            // Placeholder (0) = spawn in flight: the executor's
+            // is_cancelled checks terminate and report it. Kill nothing.
+            Some(_) => true,
+            None => false,
         }
     }
 
@@ -88,6 +94,9 @@ pub async fn execute_job(
         )
         .await;
         runtime.cancelled.lock().await.remove(&job_id);
+        // Drop the poll-loop placeholder so the job id is free for a
+        // future dispatch.
+        runtime.pids.lock().await.remove(&job_id);
         return Ok(());
     }
 
@@ -126,6 +135,8 @@ pub async fn execute_job(
             )
             .await;
             runtime.cancelled.lock().await.remove(&job_id);
+            // Drop the poll-loop placeholder (spawn never happened).
+            runtime.pids.lock().await.remove(&job_id);
             return Ok(());
         }
     };

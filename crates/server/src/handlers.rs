@@ -457,7 +457,7 @@ pub async fn create_job(
         started_at: None,
         finished_at: None,
         created_by: claims.sub.clone(),
-        resource_quota: None,
+        resource_quota: req.resource_quota.filter(|s| !s.trim().is_empty()),
         retry_count: 0,
         max_retries: 0,
     };
@@ -498,6 +498,9 @@ pub struct JobCreateRequest {
     pub working_directory: String,
     #[serde(default)]
     pub environment: serde_json::Map<String, serde_json::Value>,
+    /// GPU requirements for the scheduler, e.g. "gpu:2". Empty = 1 GPU.
+    #[serde(default)]
+    pub resource_quota: Option<String>,
 }
 
 pub async fn list_jobs(

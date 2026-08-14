@@ -226,14 +226,33 @@ impl AgentClient {
                         });
                     } else {
                         info!(job_id = %job.job_id, name = %job.name, "Received pending job");
-                        // Skip when this job is already running locally: the
-                        // server re-sends `starting` jobs every 5s until our
-                        // `running` report lands, so without this guard a
-                        // lost status report would spawn a second process.
+                        // Skip when this job is already running locally OR a
+                        // spawn is in flight: the server re-sends `starting`
+                        // jobs every 5s until our `running` report lands, so
+                        // without this guard a lost status report would spawn
+                        // a second process.
                         if self.job_runtime.pids.lock().await.contains_key(&job.job_id) {
                             tracing::debug!(job_id = %job.job_id, "Job already running locally — skipping duplicate");
                             continue;
                         }
+                        // Skip jobs the server already asked us to cancel
+                        // before we ever saw them (placeholder never inserted).
+                        if self.job_runtime.is_cancelled(&job.job_id).await {
+                            tracing::debug!(job_id = %job.job_id, "Job already cancelled — skipping");
+                            continue;
+                        }
+                        // Reserve the job id *before* spawning: spawn can take
+                        // longer than the 5s re-poll window (slow NFS, high
+                        // load), and without a placeholder the next poll would
+                        // start a second copy of the same job. The placeholder
+                        // pid (0) is replaced with the real pid by
+                        // execute_job once the process exists, and cleaned up
+                        // on every exit path.
+                        self.job_runtime
+                            .pids
+                            .lock()
+                            .await
+                            .insert(job.job_id.clone(), 0);
                         // Execute the job concurrently so long-running jobs do
                         // not block polling for new jobs / cancellations.
                         let config = self.config.clone();

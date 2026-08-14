@@ -319,6 +319,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_complete_job_lost_frees_capacity() {
+        let scheduler = Scheduler::new();
+        scheduler.set_node_gpu_capacity("node-1", 2).await;
+        scheduler
+            .enqueue(make_test_job_with_quota("job-1", "", "gpu:2"))
+            .await;
+        scheduler.schedule().await;
+        assert_eq!(scheduler.get_available_gpu_count("node-1").await, 0);
+
+        // Node died: the server marks the job lost and frees the capacity.
+        scheduler.complete_job("job-1", JobStatus::Lost).await;
+        let running = scheduler.get_running_jobs().await;
+        assert!(running.is_empty());
+        assert_eq!(scheduler.get_available_gpu_count("node-1").await, 2);
+    }
+
+    #[tokio::test]
     async fn test_remove_running_frees_capacity() {
         let scheduler = Scheduler::new();
         scheduler.set_node_gpu_capacity("node-1", 2).await;

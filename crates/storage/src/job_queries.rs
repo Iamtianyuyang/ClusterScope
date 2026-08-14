@@ -170,25 +170,69 @@ pub async fn assign_job_to_node(pool: &PgPool, job_id: &str, node_id: &str) -> R
 }
 
 /// Re-queue jobs stuck in `starting` past the cutoff (e.g. the server
-/// restarted before their agent picked them up, or the agent died).
-/// Returns the job_ids that were requeued so the scheduler can drop them
-/// from its in-memory running set.
-pub async fn reset_stale_starting_jobs(
+/// List jobs stuck in 'starting' past the cutoff (agent may be dead —
+/// e.g. the server restarted before the agent picked them up, or the
+/// agent died).
+/// Returns (job_id, assigned node_id) so the caller can check whether the
+/// node is still alive before requeueing — a slow-but-alive agent must not
+/// be raced by a second dispatch (double-run).
+pub async fn list_stale_starting_jobs(
     pool: &PgPool,
     cutoff: DateTime<Utc>,
-) -> Result<Vec<String>> {
-    let rows: Vec<(String,)> = sqlx::query_as(
+) -> Result<Vec<(String, String)>> {
+    let rows: Vec<(String, String)> = sqlx::query_as(
         r#"
-        UPDATE jobs
-        SET status = 'queued', started_at = NULL, pid = NULL, error_message = NULL
+        SELECT job_id, COALESCE(node_id, '') AS node_id
+        FROM jobs
         WHERE status = 'starting' AND started_at < $1
-        RETURNING job_id
         "#,
     )
     .bind(cutoff)
     .fetch_all(pool)
     .await
-    .context("Failed to reset stale starting jobs")?;
+    .context("Failed to list stale starting jobs")?;
+    Ok(rows)
+}
+
+/// Requeue a single stale starting job. Status-guarded so a job that
+/// completed (or was cancelled) between the list and this update is never
+/// rewritten.
+pub async fn requeue_stale_job(pool: &PgPool, job_id: &str) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE jobs
+        SET status = 'queued', started_at = NULL, pid = NULL, error_message = NULL
+        WHERE job_id = $1 AND status = 'starting'
+        "#,
+    )
+    .bind(job_id)
+    .execute(pool)
+    .await
+    .context("Failed to requeue stale starting job")?;
+    Ok(())
+}
+
+/// Mark running/stopping jobs on dead nodes as 'lost' (agent death would
+/// otherwise leave them occupying scheduler capacity forever). Returns the
+/// affected job ids so the caller can free in-memory scheduler state.
+pub async fn mark_lost_jobs_on_nodes(
+    pool: &PgPool,
+    node_ids: &[String],
+    message: &str,
+) -> Result<Vec<String>> {
+    let rows: Vec<(String,)> = sqlx::query_as(
+        r#"
+        UPDATE jobs
+        SET status = 'lost', finished_at = NOW(), error_message = $2
+        WHERE node_id = ANY($1) AND status IN ('running', 'stopping')
+        RETURNING job_id
+        "#,
+    )
+    .bind(node_ids)
+    .bind(message)
+    .fetch_all(pool)
+    .await
+    .context("Failed to mark lost jobs")?;
     Ok(rows.into_iter().map(|(id,)| id).collect())
 }
 
