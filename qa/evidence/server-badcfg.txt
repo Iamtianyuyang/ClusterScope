@@ -1,0 +1,2 @@
+Error: Config file not found: /nonexistent/qa.yaml
+exit=1

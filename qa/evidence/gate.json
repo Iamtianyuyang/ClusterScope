@@ -1,0 +1,59 @@
+{
+  "profile": "quality",
+  "startedAt": "2026-10-06T20:34:56.749Z",
+  "finishedAt": "2026-10-06T20:35:04.870Z",
+  "commit": "5ee70a3",
+  "pass": false,
+  "gates": {
+    "build": {
+      "pass": true
+    },
+    "tests": {
+      "pass": true,
+      "total": 44,
+      "failed": 0
+    },
+    "scope": {
+      "pass": true,
+      "scope": 1,
+      "failedUnits": 0,
+      "files": 33
+    },
+    "complexity": {
+      "pass": false,
+      "functions": 316,
+      "offenders": 21,
+      "maxComplexity": 23
+    },
+    "warnings": {
+      "pass": true,
+      "warnings": 0
+    },
+    "tidy": {
+      "pass": true,
+      "ran": true,
+      "findings": 0
+    },
+    "duplication": {
+      "pass": true,
+      "ratio": 0,
+      "clones": 0
+    },
+    "crap": {
+      "pass": false,
+      "maxCrap": 552,
+      "offenders": 45,
+      "instrumentedFunctions": 316
+    },
+    "arch": {
+      "pass": true,
+      "violations": 0,
+      "edges": 0,
+      "skipped": "没有配置 commands.arch（架构依赖检查）"
+    },
+    "coverage": {
+      "pass": false,
+      "lineCoverage": 0.207
+    }
+  }
+}

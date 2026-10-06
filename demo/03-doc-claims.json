@@ -1,0 +1,18 @@
+{
+  "title": "证据 3 — 文档 ↔ 实现：7 条硬性不一致（静态检查，不需要 server）",
+  "cwd": "..",
+  "steps": [
+    { "say": "这份脚本把 README / docs 里可机器验证的声称逐条对到代码上；实测 7 条 FAIL，全部是审查结论" },
+    { "run": "sh qa/harness/doc-claims-checks.sh 2>&1 | grep -E 'FAIL|DOC-CHECKS'", "timeoutSec": 120 },
+    { "say": "1) 仓库没有 LICENSE，README 的徽章与链接指向不存在的 blob/master/LICENSE" },
+    { "run": "test -f LICENSE && echo LICENSE-OK || echo LICENSE-MISSING; grep -n 'license = ' Cargo.toml; grep -c 'blob/master/LICENSE' README.md" },
+    { "say": "2) docs/architecture.md:62 还写着已废弃的保留策略 2s→1min→10min；实现是原始 24h + 小时 7d + 天 90d" },
+    { "run": "grep -n '1min' docs/architecture.md; grep -n 'RAW_RETENTION_MS\\|HOURLY_RETENTION_MS' crates/server/src/handlers.rs" },
+    { "say": "3) README:355 承诺取消可升级到 SIGKILL；代码里 SIGKILL 一次都没有，只有 SIGTERM 打进程组" },
+    { "run": "echo \"SIGKILL hits: $(grep -rn SIGKILL crates/ | wc -l)\"; grep -n 'SIGTERM' crates/agent/src/job_executor.rs" },
+    { "say": "4) clusterscope-server 不支持 --help：手读 argv[1] 当配置路径（依赖了 clap 却没用），exit 1" },
+    { "run": "./target/release/clusterscope-server --help; echo \"exit=$?\"; echo '--- tui 的 --help 正常 ---'; ./target/release/clusterscope-tui --help | head -3" },
+    { "say": "5) 默认管理员口令：文档写 admin123，serde 默认值是 admin —— 省略该键时初始口令与文档不同" },
+    { "run": "grep -n default_admin_password crates/common/src/config.rs README.md deploy/server.yaml.example" }
+  ]
+}

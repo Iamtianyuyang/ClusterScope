@@ -1,0 +1,12 @@
+{
+  "ran": true,
+  "label": "静态检查（lint）",
+  "checks": "fmt",
+  "pass": true,
+  "summary": {
+    "findings": 0,
+    "accepted": 0,
+    "byCheck": {}
+  },
+  "findings": []
+}

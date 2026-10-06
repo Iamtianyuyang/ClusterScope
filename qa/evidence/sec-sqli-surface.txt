@@ -1,0 +1,14 @@
+crates/storage/src/audit_queries.rs:69:    let total_query = format!("SELECT COUNT(*) FROM audit_logs WHERE {}", where_clause);
+crates/storage/src/job_queries.rs:99:    let count_sql = format!("SELECT COUNT(*) FROM jobs {}", where_sql);
+--- format-in-query outside queries.rs ---
+0
+--- bind count per file ---
+crates/storage/src/aggregation.rs:4
+crates/storage/src/alert_queries.rs:40
+crates/storage/src/audit_queries.rs:14
+crates/storage/src/job_queries.rs:39
+crates/storage/src/lib.rs:4
+crates/storage/src/migrations.rs:0
+crates/storage/src/models.rs:0
+crates/storage/src/queries.rs:49
+crates/storage/src/user_queries.rs:20

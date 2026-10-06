@@ -1,0 +1,16 @@
+CHECK CON-REQUEUE-STALE-STARTING: PASS expected=queued actual=queued
+CHECK CON-REQUEUE-CLEARS-STARTED-AT: PASS expected=t actual=t
+CHECK CON-CAPACITY-FIRST-RUNS: PASS expected=running actual=running
+CHECK CON-CAPACITY-SECOND-QUEUED: PASS expected=queued actual=queued
+NOTE job B after cancelling A: running
+CHECK CON-CAPACITY-FREED-DISPATCHES: PASS expected=1 actual=1
+NOTE alert events for the rule: at firing=2, 10s later=2 (5 metrics reports in between)
+CHECK CON-ALERT-DEDUP-NO-REPEAT: PASS expected=1 actual=1
+CHECK CON-ALERT-DEDUP-SINGLE-TARGET: PASS expected=1 actual=1
+CHECK CON-ALERT-FIRING-EVENT: PASS expected=1 actual=1
+CHECK CON-JOB-PID-PERSISTED: FAIL expected=1 actual=0
+NOTE jobs rows: 16, with pid: 0
+NOTE agent log records real pids: 5 spawn lines
+CHECK CON-RETRY-NEVER-USED: PASS expected=0 actual=0
+----
+CONCURRENCY-CHECKS: FAILURES PRESENT

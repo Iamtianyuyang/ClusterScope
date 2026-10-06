@@ -1,0 +1,11 @@
+ClusterScope GPU cluster monitor (TUI)
+
+Usage: clusterscope-tui [OPTIONS]
+
+Options:
+  -s, --server <SERVER>      Server base URL [default: http://127.0.0.1:8080]
+  -u, --username <USERNAME>  Username (optional when the server runs in read-only mode)
+  -p, --password <PASSWORD>  Password (optional when the server runs in read-only mode)
+  -i, --interval <INTERVAL>  Refresh interval in seconds [default: 3]
+  -h, --help                 Print help
+exit=0

@@ -1,0 +1,10 @@
+tui v0.1.1 (/public/tianyuyang/code/ClusterScope-review/gh-line/crates/tui)
+├── anyhow v1.0.104
+├── chrono v0.4.45
+├── clap v4.6.4
+├── crossterm v0.28.1
+├── ratatui v0.29.0
+├── reqwest v0.12.28
+├── serde v1.0.229
+├── serde_json v1.0.151
+└── tokio v1.53.1

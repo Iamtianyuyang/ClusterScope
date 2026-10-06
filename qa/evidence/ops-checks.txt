@@ -1,0 +1,47 @@
+CHECK CLI-HELP-AGENT-EXIT: PASS expected=0 actual=0
+CHECK CLI-HELP-AGENT-MENTIONS-CONFIG: PASS expected=0 actual=0
+CHECK CLI-HELP-TUI-EXIT: PASS expected=0 actual=0
+CHECK CLI-HELP-TUI-MENTIONS-SERVER: PASS expected=0 actual=0
+NOTE server --help exit=1 output: Error: Config file not found: --help
+CHECK CLI-HELP-SERVER-EXIT: FAIL expected=0 actual=1
+CHECK CLI-SERVER-MISSING-CONFIG-EXIT: PASS expected=1 actual=1
+NOTE listening ports: 111 1191 18085 22 3389 43023 4330 44321 50051 5432 6013 6015 6016 6017 631 8080 
+CHECK PORT-8080: PASS expected=0 actual=0
+CHECK PORT-50051: PASS expected=0 actual=0
+CHECK PORT-9090-NOT-LISTENING: PASS expected=0 actual=0
+CHECK PROM-METRIC-NODES-TOTAL: PASS expected=0 actual=0
+CHECK PROM-METRIC-NODES-ONLINE: PASS expected=0 actual=0
+CHECK MIGRATION-RESTART-HEALTHY: PASS expected=200 actual=200
+CHECK MIGRATION-ADMIN-SINGLE: PASS expected=1 actual=1
+NOTE admin rows before restart=1 after=1
+NOTE node re-appeared after 0s
+CHECK NODE-REAPPEARS-AFTER-RESTART: PASS expected=1 actual=1
+CHECK AGENT-REPORT-CADENCE-2S: PASS expected=1 actual=1
+NOTE node_metrics rows in the last 20s: 10 (2s cadence => ~10)
+CHECK RETENTION-RAW-OLD-PRUNED: PASS expected=0 actual=0
+CHECK RETENTION-RAW-FRESH-KEPT: PASS expected=1 actual=1
+CHECK HISTORY-HOURLY-SOURCE: PASS expected=1 actual=1
+CHECK HISTORY-DAILY-SOURCE: FAIL expected=1 actual=0
+CHECK HISTORY-SORTED: PASS expected=1 actual=1
+CHECK HISTORY-MISSING-PARAMS-400: PASS expected=400 actual=400
+NOTE cluster/info with no metrics: {"idle_gpus":null,"avg_gpu_utilization":null,"active_alerts":0,"running_jobs":0}
+CHECK CLUSTER-INFO-NULL-IDLE-AND-AVG: PASS expected=1 actual=1
+CHECK CLUSTER-INFO-NULL-ACTIVE-ALERTS: FAIL expected=1 actual=0
+DEADKEY redis_url: usages_outside_config.rs=0
+DEADKEY prometheus_enabled: usages_outside_config.rs=0
+DEADKEY prometheus_addr: usages_outside_config.rs=0
+DEADKEY ws_heartbeat_interval_secs: usages_outside_config.rs=0
+DEADKEY ws_slow_threshold_ms: usages_outside_config.rs=0
+DEADKEY ws_max_backlog: usages_outside_config.rs=0
+DEADKEY max_concurrent_ws_clients: usages_outside_config.rs=0
+DEADKEY tls_enabled: usages_outside_config.rs=0
+DEADKEY node_labels: usages_outside_config.rs=0
+DEADKEY max_cached_reports: usages_outside_config.rs=0
+DEADKEY reconnect_initial_delay_secs: usages_outside_config.rs=0
+DEADKEY reconnect_max_delay_secs: usages_outside_config.rs=0
+DEADKEY disk_mounts: usages_outside_config.rs=0
+DEADKEY log_level: usages_outside_config.rs=0
+DEADKEY collect_process_details: usages_outside_config.rs=0
+NOTE dead keys above are recorded by qa/docs-consistency.qa.md (expectation: 0 usages)
+----
+OPS-CHECKS: FAILURES PRESENT

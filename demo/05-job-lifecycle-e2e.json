@@ -1,0 +1,14 @@
+{
+  "title": "证据 5 — 任务生命周期端到端 + 告警去重 + WebSocket 广播（真实 agent，6 张 L20）",
+  "cwd": "..",
+  "steps": [
+    { "say": "起 server 与 agent（agent 用 NVML/nvidia-smi 上报本机 6 张真实 L20）" },
+    { "run": "sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01", "timeoutSec": 120 },
+    { "say": "端到端：短任务跑到 succeeded 且日志按 offset 入库；sleep 300 任务被取消后进程组不残留；终态任务再停返回 409、未知 id 返回 404" },
+    { "run": "sh qa/harness/job-e2e.sh", "timeoutSec": 300 },
+    { "say": "同一个脚本还验证告警规则真的会被真实指标触发、删除规则级联删掉事件，以及 /ws 仍在推送 metrics_update / job_update" },
+    { "run": "tail -14 gauntlet-out/qa/evidence/ws-check.txt" },
+    { "say": "收尾：只按 PID 文件停自己起的 agent 与 server" },
+    { "run": "sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh", "timeoutSec": 60 }
+  ]
+}

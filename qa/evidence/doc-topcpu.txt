@@ -1,0 +1,6 @@
+37:    have_process_baseline: bool,
+51:            have_process_baseline: false,
+495:const TOP_CPU_PROCESSES: usize = 15;
+520:        if !self.have_process_baseline {
+521:            self.have_process_baseline = true;
+531:        for (cpu, pid, mem) in procs.into_iter().take(TOP_CPU_PROCESSES) {

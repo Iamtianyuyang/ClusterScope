@@ -1,0 +1,3739 @@
+{
+  "engine": "builtin",
+  "thresholds": {
+    "crapMax": 8,
+    "complexityMax": 10,
+    "functionLinesMax": 60,
+    "nestingMax": 4,
+    "paramsMax": 7,
+    "lineCoverageMin": 0.9,
+    "mutationScoreMin": 1,
+    "duplicationMax": 0.03,
+    "warningsMax": 0,
+    "tidyMax": 0,
+    "staticScopeMin": 1,
+    "cppcheckMax": 0
+  },
+  "summary": {
+    "productionFiles": 33,
+    "translationUnits": 33,
+    "failedUnits": 0,
+    "functions": 316,
+    "cudaFunctions": 0,
+    "maxComplexity": 23,
+    "maxLines": 196,
+    "maxNesting": 7,
+    "maxParams": 9,
+    "offenders": 21,
+    "warnings": 0,
+    "codeLines": 7030,
+    "scope": 1
+  },
+  "gates": {
+    "scope": {
+      "pass": true
+    },
+    "complexity": {
+      "pass": false
+    },
+    "warnings": {
+      "pass": true
+    }
+  },
+  "files": [
+    {
+      "file": "crates/agent/src/config_loader.rs",
+      "lines": 24,
+      "status": "ok"
+    },
+    {
+      "file": "crates/agent/src/grpc_client.rs",
+      "lines": 170,
+      "status": "ok"
+    },
+    {
+      "file": "crates/agent/src/job_executor.rs",
+      "lines": 200,
+      "status": "ok"
+    },
+    {
+      "file": "crates/agent/src/main.rs",
+      "lines": 112,
+      "status": "ok"
+    },
+    {
+      "file": "crates/agent/src/metrics.rs",
+      "lines": 484,
+      "status": "ok"
+    },
+    {
+      "file": "crates/agent/src/node_identity.rs",
+      "lines": 19,
+      "status": "ok"
+    },
+    {
+      "file": "crates/common/src/alert.rs",
+      "lines": 324,
+      "status": "ok"
+    },
+    {
+      "file": "crates/common/src/auth.rs",
+      "lines": 118,
+      "status": "ok"
+    },
+    {
+      "file": "crates/common/src/config.rs",
+      "lines": 99,
+      "status": "ok"
+    },
+    {
+      "file": "crates/common/src/error.rs",
+      "lines": 27,
+      "status": "ok"
+    },
+    {
+      "file": "crates/common/src/job.rs",
+      "lines": 249,
+      "status": "ok"
+    },
+    {
+      "file": "crates/common/src/lib.rs",
+      "lines": 6,
+      "status": "ok"
+    },
+    {
+      "file": "crates/common/src/node_registry.rs",
+      "lines": 172,
+      "status": "ok"
+    },
+    {
+      "file": "crates/protocol/build.rs",
+      "lines": 14,
+      "status": "ok"
+    },
+    {
+      "file": "crates/protocol/src/lib.rs",
+      "lines": 10,
+      "status": "ok"
+    },
+    {
+      "file": "crates/scheduler/src/lib.rs",
+      "lines": 271,
+      "status": "ok"
+    },
+    {
+      "file": "crates/server/src/auth_middleware.rs",
+      "lines": 86,
+      "status": "ok"
+    },
+    {
+      "file": "crates/server/src/grpc.rs",
+      "lines": 656,
+      "status": "ok"
+    },
+    {
+      "file": "crates/server/src/handlers.rs",
+      "lines": 728,
+      "status": "ok"
+    },
+    {
+      "file": "crates/server/src/main.rs",
+      "lines": 329,
+      "status": "ok"
+    },
+    {
+      "file": "crates/server/src/ws_handler.rs",
+      "lines": 138,
+      "status": "ok"
+    },
+    {
+      "file": "crates/storage/src/aggregation.rs",
+      "lines": 93,
+      "status": "ok"
+    },
+    {
+      "file": "crates/storage/src/alert_queries.rs",
+      "lines": 208,
+      "status": "ok"
+    },
+    {
+      "file": "crates/storage/src/audit_queries.rs",
+      "lines": 79,
+      "status": "ok"
+    },
+    {
+      "file": "crates/storage/src/job_queries.rs",
+      "lines": 237,
+      "status": "ok"
+    },
+    {
+      "file": "crates/storage/src/lib.rs",
+      "lines": 226,
+      "status": "ok"
+    },
+    {
+      "file": "crates/storage/src/migrations.rs",
+      "lines": 0,
+      "status": "ok"
+    },
+    {
+      "file": "crates/storage/src/models.rs",
+      "lines": 122,
+      "status": "ok"
+    },
+    {
+      "file": "crates/storage/src/queries.rs",
+      "lines": 254,
+      "status": "ok"
+    },
+    {
+      "file": "crates/storage/src/user_queries.rs",
+      "lines": 139,
+      "status": "ok"
+    },
+    {
+      "file": "crates/tui/src/api.rs",
+      "lines": 178,
+      "status": "ok"
+    },
+    {
+      "file": "crates/tui/src/main.rs",
+      "lines": 98,
+      "status": "ok"
+    },
+    {
+      "file": "crates/tui/src/ui.rs",
+      "lines": 1160,
+      "status": "ok"
+    }
+  ],
+  "failed": [],
+  "functions": [
+    {
+      "name": "node_panel",
+      "line": 599,
+      "endLine": 768,
+      "complexity": 23,
+      "lines": 170,
+      "nesting": 4,
+      "params": 5,
+      "file": "crates/tui/src/ui.rs",
+      "violations": [
+        "圈复杂度 23 > 10",
+        "长度 170 行 > 60"
+      ]
+    },
+    {
+      "name": "draw_process",
+      "line": 1024,
+      "endLine": 1219,
+      "complexity": 18,
+      "lines": 196,
+      "nesting": 3,
+      "params": 4,
+      "file": "crates/tui/src/ui.rs",
+      "violations": [
+        "圈复杂度 18 > 10",
+        "长度 196 行 > 60"
+      ]
+    },
+    {
+      "name": "run_scheduler_cycle",
+      "line": 383,
+      "endLine": 492,
+      "complexity": 15,
+      "lines": 110,
+      "nesting": 4,
+      "params": 1,
+      "file": "crates/server/src/main.rs",
+      "violations": [
+        "圈复杂度 15 > 10",
+        "长度 110 行 > 60"
+      ]
+    },
+    {
+      "name": "evaluate",
+      "line": 140,
+      "endLine": 274,
+      "complexity": 12,
+      "lines": 135,
+      "nesting": 5,
+      "params": 6,
+      "file": "crates/common/src/alert.rs",
+      "violations": [
+        "圈复杂度 12 > 10",
+        "长度 135 行 > 60",
+        "嵌套 5 层 > 4"
+      ]
+    },
+    {
+      "name": "run_background_tasks",
+      "line": 314,
+      "endLine": 379,
+      "complexity": 12,
+      "lines": 66,
+      "nesting": 3,
+      "params": 1,
+      "file": "crates/server/src/main.rs",
+      "violations": [
+        "圈复杂度 12 > 10",
+        "长度 66 行 > 60"
+      ]
+    },
+    {
+      "name": "draw_cpu_processes",
+      "line": 1223,
+      "endLine": 1331,
+      "complexity": 9,
+      "lines": 109,
+      "nesting": 2,
+      "params": 7,
+      "file": "crates/tui/src/ui.rs",
+      "violations": [
+        "长度 109 行 > 60"
+      ]
+    },
+    {
+      "name": "evaluate_alerts",
+      "line": 602,
+      "endLine": 664,
+      "complexity": 9,
+      "lines": 63,
+      "nesting": 7,
+      "params": 2,
+      "file": "crates/server/src/grpc.rs",
+      "violations": [
+        "长度 63 行 > 60",
+        "嵌套 7 层 > 4"
+      ]
+    },
+    {
+      "name": "load_config",
+      "line": 5,
+      "endLine": 44,
+      "complexity": 9,
+      "lines": 40,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/agent/src/config_loader.rs",
+      "violations": []
+    },
+    {
+      "name": "load_config",
+      "line": 181,
+      "endLine": 232,
+      "complexity": 8,
+      "lines": 52,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/server/src/main.rs",
+      "violations": []
+    },
+    {
+      "name": "readonly_middleware",
+      "line": 37,
+      "endLine": 78,
+      "complexity": 8,
+      "lines": 42,
+      "nesting": 4,
+      "params": 4,
+      "file": "crates/server/src/auth_middleware.rs",
+      "violations": []
+    },
+    {
+      "name": "draw_trend_full",
+      "line": 781,
+      "endLine": 894,
+      "complexity": 7,
+      "lines": 114,
+      "nesting": 2,
+      "params": 3,
+      "file": "crates/tui/src/ui.rs",
+      "violations": [
+        "长度 114 行 > 60"
+      ]
+    },
+    {
+      "name": "report_metrics",
+      "line": 141,
+      "endLine": 250,
+      "complexity": 7,
+      "lines": 110,
+      "nesting": 4,
+      "params": 3,
+      "file": "crates/server/src/grpc.rs",
+      "violations": [
+        "长度 110 行 > 60"
+      ]
+    },
+    {
+      "name": "get_metrics_history",
+      "line": 217,
+      "endLine": 291,
+      "complexity": 7,
+      "lines": 75,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": [
+        "长度 75 行 > 60"
+      ]
+    },
+    {
+      "name": "draw_topbar",
+      "line": 463,
+      "endLine": 524,
+      "complexity": 7,
+      "lines": 62,
+      "nesting": 2,
+      "params": 3,
+      "file": "crates/tui/src/ui.rs",
+      "violations": [
+        "长度 62 行 > 60"
+      ]
+    },
+    {
+      "name": "create_alert_rule",
+      "line": 631,
+      "endLine": 699,
+      "complexity": 6,
+      "lines": 69,
+      "nesting": 1,
+      "params": 4,
+      "file": "crates/server/src/handlers.rs",
+      "violations": [
+        "长度 69 行 > 60"
+      ]
+    },
+    {
+      "name": "broadcast",
+      "line": 69,
+      "endLine": 96,
+      "complexity": 6,
+      "lines": 28,
+      "nesting": 3,
+      "params": 3,
+      "file": "crates/server/src/ws_handler.rs",
+      "violations": []
+    },
+    {
+      "name": "push",
+      "line": 73,
+      "endLine": 92,
+      "complexity": 6,
+      "lines": 20,
+      "nesting": 2,
+      "params": 3,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "login",
+      "line": 31,
+      "endLine": 95,
+      "complexity": 5,
+      "lines": 65,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": [
+        "长度 65 行 > 60"
+      ]
+    },
+    {
+      "name": "draw_nodes",
+      "line": 561,
+      "endLine": 597,
+      "complexity": 5,
+      "lines": 37,
+      "nesting": 2,
+      "params": 3,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "load_or_create",
+      "line": 12,
+      "endLine": 30,
+      "complexity": 5,
+      "lines": 19,
+      "nesting": 3,
+      "params": 1,
+      "file": "crates/agent/src/node_identity.rs",
+      "violations": []
+    },
+    {
+      "name": "update_job_status",
+      "line": 451,
+      "endLine": 519,
+      "complexity": 4,
+      "lines": 69,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/server/src/grpc.rs",
+      "violations": [
+        "长度 69 行 > 60"
+      ]
+    },
+    {
+      "name": "mini_chart",
+      "line": 899,
+      "endLine": 954,
+      "complexity": 4,
+      "lines": 56,
+      "nesting": 1,
+      "params": 5,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "create_user",
+      "line": 765,
+      "endLine": 815,
+      "complexity": 4,
+      "lines": 51,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "collect_network",
+      "line": 172,
+      "endLine": 218,
+      "complexity": 4,
+      "lines": 47,
+      "nesting": 3,
+      "params": 2,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "collect",
+      "line": 55,
+      "endLine": 97,
+      "complexity": 4,
+      "lines": 43,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "collect_system_processes",
+      "line": 503,
+      "endLine": 541,
+      "complexity": 4,
+      "lines": 39,
+      "nesting": 2,
+      "params": 2,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "ws_upgrade",
+      "line": 120,
+      "endLine": 147,
+      "complexity": 4,
+      "lines": 28,
+      "nesting": 2,
+      "params": 5,
+      "file": "crates/server/src/ws_handler.rs",
+      "violations": []
+    },
+    {
+      "name": "read_network_stats",
+      "line": 570,
+      "endLine": 594,
+      "complexity": 4,
+      "lines": 25,
+      "nesting": 3,
+      "params": 0,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "auth_middleware",
+      "line": 11,
+      "endLine": 33,
+      "complexity": 4,
+      "lines": 23,
+      "nesting": 2,
+      "params": 4,
+      "file": "crates/server/src/auth_middleware.rs",
+      "violations": []
+    },
+    {
+      "name": "check_node_status",
+      "line": 161,
+      "endLine": 176,
+      "complexity": 4,
+      "lines": 16,
+      "nesting": 2,
+      "params": 2,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "fmt_bytes",
+      "line": 302,
+      "endLine": 315,
+      "complexity": 4,
+      "lines": 14,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/tui/src/api.rs",
+      "violations": []
+    },
+    {
+      "name": "draw_alerts",
+      "line": 1432,
+      "endLine": 1527,
+      "complexity": 3,
+      "lines": 96,
+      "nesting": 2,
+      "params": 3,
+      "file": "crates/tui/src/ui.rs",
+      "violations": [
+        "长度 96 行 > 60"
+      ]
+    },
+    {
+      "name": "build_http_router",
+      "line": 234,
+      "endLine": 312,
+      "complexity": 3,
+      "lines": 79,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/server/src/main.rs",
+      "violations": [
+        "长度 79 行 > 60"
+      ]
+    },
+    {
+      "name": "create_job",
+      "line": 420,
+      "endLine": 490,
+      "complexity": 3,
+      "lines": 71,
+      "nesting": 1,
+      "params": 4,
+      "file": "crates/server/src/handlers.rs",
+      "violations": [
+        "长度 71 行 > 60"
+      ]
+    },
+    {
+      "name": "submit_job",
+      "line": 252,
+      "endLine": 315,
+      "complexity": 3,
+      "lines": 64,
+      "nesting": 2,
+      "params": 2,
+      "file": "crates/server/src/grpc.rs",
+      "violations": [
+        "长度 64 行 > 60"
+      ]
+    },
+    {
+      "name": "handle",
+      "line": 154,
+      "endLine": 212,
+      "complexity": 3,
+      "lines": 59,
+      "nesting": 6,
+      "params": 2,
+      "file": "crates/server/src/ws_handler.rs",
+      "violations": [
+        "嵌套 6 层 > 4"
+      ]
+    },
+    {
+      "name": "test_alert_state_machine",
+      "line": 347,
+      "endLine": 395,
+      "complexity": 3,
+      "lines": 49,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "watch_job_status",
+      "line": 402,
+      "endLine": 447,
+      "complexity": 3,
+      "lines": 46,
+      "nesting": 4,
+      "params": 3,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "get_pending_jobs",
+      "line": 320,
+      "endLine": 360,
+      "complexity": 3,
+      "lines": 41,
+      "nesting": 6,
+      "params": 3,
+      "file": "crates/server/src/grpc.rs",
+      "violations": [
+        "嵌套 6 层 > 4"
+      ]
+    },
+    {
+      "name": "report_job_logs",
+      "line": 365,
+      "endLine": 397,
+      "complexity": 3,
+      "lines": 33,
+      "nesting": 4,
+      "params": 3,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "draw_footer",
+      "line": 1345,
+      "endLine": 1372,
+      "complexity": 3,
+      "lines": 28,
+      "nesting": 2,
+      "params": 3,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "collect_disks",
+      "line": 146,
+      "endLine": 170,
+      "complexity": 3,
+      "lines": 25,
+      "nesting": 2,
+      "params": 2,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "default",
+      "line": 33,
+      "endLine": 57,
+      "complexity": 3,
+      "lines": 25,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/common/src/config.rs",
+      "violations": []
+    },
+    {
+      "name": "login",
+      "line": 182,
+      "endLine": 205,
+      "complexity": 3,
+      "lines": 24,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/tui/src/api.rs",
+      "violations": []
+    },
+    {
+      "name": "draw_nav",
+      "line": 528,
+      "endLine": 547,
+      "complexity": 3,
+      "lines": 20,
+      "nesting": 2,
+      "params": 3,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "parse_gpu_requirement",
+      "line": 36,
+      "endLine": 51,
+      "complexity": 3,
+      "lines": 16,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "uid_to_username",
+      "line": 645,
+      "endLine": 657,
+      "complexity": 3,
+      "lines": 13,
+      "nesting": 2,
+      "params": 1,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "get",
+      "line": 237,
+      "endLine": 249,
+      "complexity": 3,
+      "lines": 13,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/tui/src/api.rs",
+      "violations": []
+    },
+    {
+      "name": "fmt_uptime",
+      "line": 288,
+      "endLine": 299,
+      "complexity": 3,
+      "lines": 12,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/tui/src/api.rs",
+      "violations": []
+    },
+    {
+      "name": "fmt_vram",
+      "line": 252,
+      "endLine": 262,
+      "complexity": 3,
+      "lines": 11,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "enqueue",
+      "line": 62,
+      "endLine": 71,
+      "complexity": 3,
+      "lines": 10,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "temp_color",
+      "line": 220,
+      "endLine": 228,
+      "complexity": 3,
+      "lines": 9,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "mem_color",
+      "line": 230,
+      "endLine": 238,
+      "complexity": 3,
+      "lines": 9,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "util_color",
+      "line": 241,
+      "endLine": 249,
+      "complexity": 3,
+      "lines": 9,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "parse_opt",
+      "line": 545,
+      "endLine": 552,
+      "complexity": 3,
+      "lines": 8,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "restore_running",
+      "line": 133,
+      "endLine": 140,
+      "complexity": 3,
+      "lines": 8,
+      "nesting": 2,
+      "params": 2,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "refresh_token",
+      "line": 97,
+      "endLine": 152,
+      "complexity": 2,
+      "lines": 56,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "register",
+      "line": 85,
+      "endLine": 139,
+      "complexity": 2,
+      "lines": 55,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "stop_job",
+      "line": 553,
+      "endLine": 602,
+      "complexity": 2,
+      "lines": 50,
+      "nesting": 1,
+      "params": 4,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "cancel_job",
+      "line": 559,
+      "endLine": 596,
+      "complexity": 2,
+      "lines": 38,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "schedule",
+      "line": 75,
+      "endLine": 111,
+      "complexity": 2,
+      "lines": 37,
+      "nesting": 3,
+      "params": 1,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "persist_alert_event",
+      "line": 666,
+      "endLine": 700,
+      "complexity": 2,
+      "lines": 35,
+      "nesting": 2,
+      "params": 2,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "heartbeat",
+      "line": 524,
+      "endLine": 557,
+      "complexity": 2,
+      "lines": 34,
+      "nesting": 4,
+      "params": 3,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "get_job_logs",
+      "line": 291,
+      "endLine": 319,
+      "complexity": 2,
+      "lines": 29,
+      "nesting": 1,
+      "params": 6,
+      "file": "crates/storage/src/queries.rs",
+      "violations": []
+    },
+    {
+      "name": "find_node_for_job",
+      "line": 175,
+      "endLine": 201,
+      "complexity": 2,
+      "lines": 27,
+      "nesting": 1,
+      "params": 4,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "expire_stale_alerts",
+      "line": 193,
+      "endLine": 219,
+      "complexity": 2,
+      "lines": 27,
+      "nesting": 0,
+      "params": 3,
+      "file": "crates/storage/src/alert_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "smoke_collect_gpus",
+      "line": 681,
+      "endLine": 703,
+      "complexity": 2,
+      "lines": 23,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "handle_message",
+      "line": 214,
+      "endLine": 236,
+      "complexity": 2,
+      "lines": 23,
+      "nesting": 4,
+      "params": 3,
+      "file": "crates/server/src/ws_handler.rs",
+      "violations": []
+    },
+    {
+      "name": "storage::user_queries::create_user",
+      "line": 789,
+      "endLine": 808,
+      "complexity": 2,
+      "lines": 20,
+      "nesting": 1,
+      "params": 6,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "update_user",
+      "line": 853,
+      "endLine": 870,
+      "complexity": 2,
+      "lines": 18,
+      "nesting": 1,
+      "params": 4,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "smoke_sysinfo_processes",
+      "line": 712,
+      "endLine": 728,
+      "complexity": 2,
+      "lines": 17,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "request_cancel",
+      "line": 33,
+      "endLine": 48,
+      "complexity": 2,
+      "lines": 16,
+      "nesting": 3,
+      "params": 2,
+      "file": "crates/agent/src/job_executor.rs",
+      "violations": []
+    },
+    {
+      "name": "monotonic_clock_ms",
+      "line": 659,
+      "endLine": 674,
+      "complexity": 2,
+      "lines": 16,
+      "nesting": 3,
+      "params": 0,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "extract_token",
+      "line": 111,
+      "endLine": 123,
+      "complexity": 2,
+      "lines": 13,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/server/src/auth_middleware.rs",
+      "violations": []
+    },
+    {
+      "name": "test_alert_deduplication",
+      "line": 398,
+      "endLine": 409,
+      "complexity": 2,
+      "lines": 12,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "update_last_seen",
+      "line": 98,
+      "endLine": 107,
+      "complexity": 2,
+      "lines": 10,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "reset_state",
+      "line": 284,
+      "endLine": 292,
+      "complexity": 2,
+      "lines": 9,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "truncate",
+      "line": 1333,
+      "endLine": 1341,
+      "complexity": 2,
+      "lines": 9,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "authed",
+      "line": 73,
+      "endLine": 80,
+      "complexity": 2,
+      "lines": 8,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/agent/src/grpc_client.rs",
+      "violations": []
+    },
+    {
+      "name": "mini_bar",
+      "line": 272,
+      "endLine": 279,
+      "complexity": 2,
+      "lines": 8,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "complete_job",
+      "line": 117,
+      "endLine": 123,
+      "complexity": 2,
+      "lines": 7,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "node_metrics",
+      "line": 255,
+      "endLine": 261,
+      "complexity": 2,
+      "lines": 7,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/tui/src/api.rs",
+      "violations": []
+    },
+    {
+      "name": "update_status",
+      "line": 109,
+      "endLine": 114,
+      "complexity": 2,
+      "lines": 6,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "update_gpu_count",
+      "line": 117,
+      "endLine": 122,
+      "complexity": 2,
+      "lines": 6,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "sel.and_then",
+      "line": 800,
+      "endLine": 803,
+      "complexity": 2,
+      "lines": 4,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "get_cluster_info",
+      "line": 885,
+      "endLine": 939,
+      "complexity": 1,
+      "lines": 55,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "draw_jobs",
+      "line": 1376,
+      "endLine": 1430,
+      "complexity": 1,
+      "lines": 55,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "test_different_gpus",
+      "line": 433,
+      "endLine": 471,
+      "complexity": 1,
+      "lines": 39,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "build_node_info",
+      "line": 92,
+      "endLine": 126,
+      "complexity": 1,
+      "lines": 35,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/agent/src/grpc_client.rs",
+      "violations": []
+    },
+    {
+      "name": "list_audit_logs",
+      "line": 943,
+      "endLine": 977,
+      "complexity": 1,
+      "lines": 35,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "alert_rule_from_row",
+      "line": 37,
+      "endLine": 69,
+      "complexity": 1,
+      "lines": 33,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "job_to_proto",
+      "line": 786,
+      "endLine": 818,
+      "complexity": 1,
+      "lines": 33,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "insert_audit_log",
+      "line": 8,
+      "endLine": 39,
+      "complexity": 1,
+      "lines": 32,
+      "nesting": 0,
+      "params": 9,
+      "file": "crates/storage/src/audit_queries.rs",
+      "violations": [
+        "参数 9 个 > 7"
+      ]
+    },
+    {
+      "name": "list_jobs",
+      "line": 506,
+      "endLine": 536,
+      "complexity": 1,
+      "lines": 31,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "default",
+      "line": 95,
+      "endLine": 124,
+      "complexity": 1,
+      "lines": 30,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/common/src/config.rs",
+      "violations": []
+    },
+    {
+      "name": "connect",
+      "line": 209,
+      "endLine": 235,
+      "complexity": 1,
+      "lines": 27,
+      "nesting": 3,
+      "params": 4,
+      "file": "crates/tui/src/api.rs",
+      "violations": []
+    },
+    {
+      "name": "test_job_transition_sets_timestamps",
+      "line": 315,
+      "endLine": 340,
+      "complexity": 1,
+      "lines": 26,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "create_user",
+      "line": 7,
+      "endLine": 32,
+      "complexity": 1,
+      "lines": 26,
+      "nesting": 0,
+      "params": 6,
+      "file": "crates/storage/src/user_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "draw",
+      "line": 434,
+      "endLine": 459,
+      "complexity": 1,
+      "lines": 26,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "generate_jwt",
+      "line": 102,
+      "endLine": 126,
+      "complexity": 1,
+      "lines": 25,
+      "nesting": 1,
+      "params": 5,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "test_job_creation_from_definition",
+      "line": 288,
+      "endLine": 312,
+      "complexity": 1,
+      "lines": 25,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "get_metrics_history",
+      "line": 139,
+      "endLine": 163,
+      "complexity": 1,
+      "lines": 25,
+      "nesting": 0,
+      "params": 6,
+      "file": "crates/storage/src/queries.rs",
+      "violations": []
+    },
+    {
+      "name": "list_nodes",
+      "line": 156,
+      "endLine": 179,
+      "complexity": 1,
+      "lines": 24,
+      "nesting": 3,
+      "params": 2,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "aggregate_rows_to_json",
+      "line": 393,
+      "endLine": 416,
+      "complexity": 1,
+      "lines": 24,
+      "nesting": 2,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "get_job_logs",
+      "line": 604,
+      "endLine": 627,
+      "complexity": 1,
+      "lines": 24,
+      "nesting": 0,
+      "params": 4,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "from_definition",
+      "line": 187,
+      "endLine": 208,
+      "complexity": 1,
+      "lines": 22,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "make_test_job",
+      "line": 208,
+      "endLine": 229,
+      "complexity": 1,
+      "lines": 22,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "test_schedule_respects_capacity",
+      "line": 365,
+      "endLine": 386,
+      "complexity": 1,
+      "lines": 22,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "row_with_status",
+      "line": 844,
+      "endLine": 865,
+      "complexity": 1,
+      "lines": 22,
+      "nesting": 2,
+      "params": 1,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "get_user",
+      "line": 830,
+      "endLine": 851,
+      "complexity": 1,
+      "lines": 22,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "get_prometheus_metrics",
+      "line": 981,
+      "endLine": 1002,
+      "complexity": 1,
+      "lines": 22,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "job_row_to_job",
+      "line": 494,
+      "endLine": 515,
+      "complexity": 1,
+      "lines": 22,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/server/src/main.rs",
+      "violations": []
+    },
+    {
+      "name": "test_gpu_capacity_freed_after_completion",
+      "line": 405,
+      "endLine": 425,
+      "complexity": 1,
+      "lines": 21,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "delete_alert_rule_cascade",
+      "line": 113,
+      "endLine": 132,
+      "complexity": 1,
+      "lines": 20,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/alert_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "mark_lost_jobs_on_nodes",
+      "line": 220,
+      "endLine": 239,
+      "complexity": 1,
+      "lines": 20,
+      "nesting": 0,
+      "params": 4,
+      "file": "crates/storage/src/job_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "get_metrics_for_time_range",
+      "line": 196,
+      "endLine": 215,
+      "complexity": 1,
+      "lines": 20,
+      "nesting": 0,
+      "params": 4,
+      "file": "crates/storage/src/queries.rs",
+      "violations": []
+    },
+    {
+      "name": "connect_with_retry",
+      "line": 32,
+      "endLine": 50,
+      "complexity": 1,
+      "lines": 19,
+      "nesting": 3,
+      "params": 4,
+      "file": "crates/agent/src/main.rs",
+      "violations": []
+    },
+    {
+      "name": "make_rule",
+      "line": 311,
+      "endLine": 329,
+      "complexity": 1,
+      "lines": 19,
+      "nesting": 1,
+      "params": 4,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "test_remove_rule_drops_instances",
+      "line": 412,
+      "endLine": 430,
+      "complexity": 1,
+      "lines": 19,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "make_node",
+      "line": 184,
+      "endLine": 202,
+      "complexity": 1,
+      "lines": 19,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "get_node_status",
+      "line": 181,
+      "endLine": 199,
+      "complexity": 1,
+      "lines": 19,
+      "nesting": 2,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "get_alert_events_by_rule",
+      "line": 240,
+      "endLine": 258,
+      "complexity": 1,
+      "lines": 19,
+      "nesting": 0,
+      "params": 4,
+      "file": "crates/storage/src/alert_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "test_node_status_check",
+      "line": 229,
+      "endLine": 246,
+      "complexity": 1,
+      "lines": 18,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "job.status.as_str",
+      "line": 788,
+      "endLine": 805,
+      "complexity": 1,
+      "lines": 18,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "test_job_to_proto_status_mapping",
+      "line": 868,
+      "endLine": 885,
+      "complexity": 1,
+      "lines": 18,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "get_active_alert_events",
+      "line": 171,
+      "endLine": 188,
+      "complexity": 1,
+      "lines": 18,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/storage/src/alert_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "cmd.spawn",
+      "line": 134,
+      "endLine": 150,
+      "complexity": 1,
+      "lines": 17,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/agent/src/job_executor.rs",
+      "violations": []
+    },
+    {
+      "name": "test_history_tiers_spanning_all_tiers",
+      "line": 360,
+      "endLine": 376,
+      "complexity": 1,
+      "lines": 17,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "count_active_alerts",
+      "line": 222,
+      "endLine": 238,
+      "complexity": 1,
+      "lines": 17,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/storage/src/alert_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "list_queued_jobs",
+      "line": 242,
+      "endLine": 258,
+      "complexity": 1,
+      "lines": 17,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/job_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "get_jobs_for_node",
+      "line": 139,
+      "endLine": 154,
+      "complexity": 1,
+      "lines": 16,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/job_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "node.status.as_str",
+      "line": 634,
+      "endLine": 649,
+      "complexity": 1,
+      "lines": 16,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "test_complete_job_lost_frees_capacity",
+      "line": 322,
+      "endLine": 336,
+      "complexity": 1,
+      "lines": 15,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "test_history_tiers_recent_range_ends_before_raw_cutoff",
+      "line": 343,
+      "endLine": 357,
+      "complexity": 1,
+      "lines": 15,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "get_running_jobs",
+      "line": 314,
+      "endLine": 328,
+      "complexity": 1,
+      "lines": 15,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/job_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "selected_processes",
+      "line": 189,
+      "endLine": 203,
+      "complexity": 1,
+      "lines": 15,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "report_status",
+      "line": 56,
+      "endLine": 69,
+      "complexity": 1,
+      "lines": 14,
+      "nesting": 1,
+      "params": 5,
+      "file": "crates/agent/src/job_executor.rs",
+      "violations": []
+    },
+    {
+      "name": "test_enqueue_and_schedule",
+      "line": 249,
+      "endLine": 262,
+      "complexity": 1,
+      "lines": 14,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "test_enqueue_dedup",
+      "line": 277,
+      "endLine": 290,
+      "complexity": 1,
+      "lines": 14,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "test_schedule_falls_back_when_preferred_full",
+      "line": 306,
+      "endLine": 319,
+      "complexity": 1,
+      "lines": 14,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "test_schedule_picks_node_with_capacity",
+      "line": 389,
+      "endLine": 402,
+      "complexity": 1,
+      "lines": 14,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "get_job",
+      "line": 538,
+      "endLine": 551,
+      "complexity": 1,
+      "lines": 14,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "delete_alert_rule",
+      "line": 711,
+      "endLine": 724,
+      "complexity": 1,
+      "lines": 14,
+      "nesting": 0,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "job.node_id.is_empty",
+      "line": 12,
+      "endLine": 25,
+      "complexity": 1,
+      "lines": 14,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/storage/src/job_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "requeue_stale_job",
+      "line": 202,
+      "endLine": 215,
+      "complexity": 1,
+      "lines": 14,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/job_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "list_active_jobs",
+      "line": 262,
+      "endLine": 275,
+      "complexity": 1,
+      "lines": 14,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/storage/src/job_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "get_latest_metrics",
+      "line": 124,
+      "endLine": 137,
+      "complexity": 1,
+      "lines": 14,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/queries.rs",
+      "violations": []
+    },
+    {
+      "name": "local_ip",
+      "line": 9,
+      "endLine": 21,
+      "complexity": 1,
+      "lines": 13,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/agent/src/grpc_client.rs",
+      "violations": []
+    },
+    {
+      "name": "test_operator_evaluate",
+      "line": 332,
+      "endLine": 344,
+      "complexity": 1,
+      "lines": 13,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "from_u8",
+      "line": 26,
+      "endLine": 38,
+      "complexity": 1,
+      "lines": 13,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "status_from_str",
+      "line": 79,
+      "endLine": 91,
+      "complexity": 1,
+      "lines": 13,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "test_remove_running_frees_capacity",
+      "line": 339,
+      "endLine": 351,
+      "complexity": 1,
+      "lines": 13,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "require_role_middleware",
+      "line": 97,
+      "endLine": 109,
+      "complexity": 1,
+      "lines": 13,
+      "nesting": 0,
+      "params": 4,
+      "file": "crates/server/src/auth_middleware.rs",
+      "violations": []
+    },
+    {
+      "name": "get_node_metrics",
+      "line": 201,
+      "endLine": 213,
+      "complexity": 1,
+      "lines": 13,
+      "nesting": 2,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "acknowledge_alert",
+      "line": 749,
+      "endLine": 761,
+      "complexity": 1,
+      "lines": 13,
+      "nesting": 0,
+      "params": 4,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "validate_refresh_token",
+      "line": 170,
+      "endLine": 182,
+      "complexity": 1,
+      "lines": 13,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/user_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "test_role_permissions",
+      "line": 172,
+      "endLine": 183,
+      "complexity": 1,
+      "lines": 12,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "get_alert_state",
+      "line": 726,
+      "endLine": 737,
+      "complexity": 1,
+      "lines": 12,
+      "nesting": 0,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "list_users",
+      "line": 817,
+      "endLine": 828,
+      "complexity": 1,
+      "lines": 12,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "get_job",
+      "line": 51,
+      "endLine": 62,
+      "complexity": 1,
+      "lines": 12,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/job_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "watch_jobs",
+      "line": 156,
+      "endLine": 166,
+      "complexity": 1,
+      "lines": 11,
+      "nesting": 3,
+      "params": 1,
+      "file": "crates/agent/src/grpc_client.rs",
+      "violations": []
+    },
+    {
+      "name": "Nvml::init",
+      "line": 15,
+      "endLine": 25,
+      "complexity": 1,
+      "lines": 11,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "status_to_str",
+      "line": 94,
+      "endLine": 104,
+      "complexity": 1,
+      "lines": 11,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "test_list_online",
+      "line": 216,
+      "endLine": 226,
+      "complexity": 1,
+      "lines": 11,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "test_update_last_seen",
+      "line": 249,
+      "endLine": 259,
+      "complexity": 1,
+      "lines": 11,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "get_available_gpu_count",
+      "line": 159,
+      "endLine": 169,
+      "complexity": 1,
+      "lines": 11,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "test_schedule_prefers_requested_node",
+      "line": 293,
+      "endLine": 303,
+      "complexity": 1,
+      "lines": 11,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "uuid.clone",
+      "line": 389,
+      "endLine": 398,
+      "complexity": 1,
+      "lines": 10,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "evaluate",
+      "line": 43,
+      "endLine": 52,
+      "complexity": 1,
+      "lines": 10,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "test_valid_transitions",
+      "line": 242,
+      "endLine": 251,
+      "complexity": 1,
+      "lines": 10,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "test_complete_job",
+      "line": 265,
+      "endLine": 274,
+      "complexity": 1,
+      "lines": 10,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "delete_user",
+      "line": 872,
+      "endLine": 881,
+      "complexity": 1,
+      "lines": 10,
+      "nesting": 0,
+      "params": 3,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "register",
+      "line": 51,
+      "endLine": 60,
+      "complexity": 1,
+      "lines": 10,
+      "nesting": 1,
+      "params": 3,
+      "file": "crates/server/src/ws_handler.rs",
+      "violations": []
+    },
+    {
+      "name": "prune_old_job_logs",
+      "line": 251,
+      "endLine": 260,
+      "complexity": 1,
+      "lines": 10,
+      "nesting": 0,
+      "params": 3,
+      "file": "crates/storage/src/queries.rs",
+      "violations": []
+    },
+    {
+      "name": "from_u8",
+      "line": 21,
+      "endLine": 29,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "hash_password",
+      "line": 80,
+      "endLine": 88,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "verify_jwt",
+      "line": 128,
+      "endLine": 136,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "test_jwt_roundtrip",
+      "line": 155,
+      "endLine": 163,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "test_lost_transitions",
+      "line": 261,
+      "endLine": 269,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "test_register_and_get",
+      "line": 205,
+      "endLine": 213,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "test_parse_gpu_requirement",
+      "line": 238,
+      "endLine": 246,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "test_restore_running",
+      "line": 354,
+      "endLine": 362,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "validate_token",
+      "line": 125,
+      "endLine": 133,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/server/src/auth_middleware.rs",
+      "violations": []
+    },
+    {
+      "name": "row.operator.as_str",
+      "line": 38,
+      "endLine": 46,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "await.map_err",
+      "line": 467,
+      "endLine": 475,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "test_history_tiers_older_than_hourly",
+      "line": 379,
+      "endLine": 387,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "list_alert_rules",
+      "line": 701,
+      "endLine": 709,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "list_alert_events",
+      "line": 739,
+      "endLine": 747,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "push_job_update",
+      "line": 102,
+      "endLine": 110,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 1,
+      "params": 2,
+      "file": "crates/server/src/ws_handler.rs",
+      "violations": []
+    },
+    {
+      "name": "node_exists",
+      "line": 240,
+      "endLine": 248,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/queries.rs",
+      "violations": []
+    },
+    {
+      "name": "refresh",
+      "line": 132,
+      "endLine": 140,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 2,
+      "params": 2,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "node_processes",
+      "line": 207,
+      "endLine": 215,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "draw_divider",
+      "line": 549,
+      "endLine": 557,
+      "complexity": 1,
+      "lines": 9,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "from_str",
+      "line": 32,
+      "endLine": 39,
+      "complexity": 1,
+      "lines": 8,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "test_job_status_is_terminal",
+      "line": 278,
+      "endLine": 285,
+      "complexity": 1,
+      "lines": 8,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "from_u8",
+      "line": 20,
+      "endLine": 27,
+      "complexity": 1,
+      "lines": 8,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "list_online",
+      "line": 132,
+      "endLine": 139,
+      "complexity": 1,
+      "lines": 8,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "test_remove",
+      "line": 262,
+      "endLine": 269,
+      "complexity": 1,
+      "lines": 8,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "gpus_in_use",
+      "line": 150,
+      "endLine": 157,
+      "complexity": 1,
+      "lines": 8,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "cleanup_hourly_data",
+      "line": 95,
+      "endLine": 102,
+      "complexity": 1,
+      "lines": 8,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/aggregation.rs",
+      "violations": []
+    },
+    {
+      "name": "cleanup_daily_data",
+      "line": 104,
+      "endLine": 111,
+      "complexity": 1,
+      "lines": 8,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/aggregation.rs",
+      "violations": []
+    },
+    {
+      "name": "list_users",
+      "line": 50,
+      "endLine": 57,
+      "complexity": 1,
+      "lines": 8,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/storage/src/user_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "index",
+      "line": 44,
+      "endLine": 51,
+      "complexity": 1,
+      "lines": 8,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "sock.connect",
+      "line": 12,
+      "endLine": 18,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/agent/src/grpc_client.rs",
+      "violations": []
+    },
+    {
+      "name": "collector.collect",
+      "line": 136,
+      "endLine": 142,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/agent/src/main.rs",
+      "violations": []
+    },
+    {
+      "name": "iface.clone",
+      "line": 207,
+      "endLine": 213,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "nvml.device_by_index",
+      "line": 238,
+      "endLine": 244,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "device.utilization_rates",
+      "line": 247,
+      "endLine": 253,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "default",
+      "line": 56,
+      "endLine": 62,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "default",
+      "line": 23,
+      "endLine": 29,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "alert_state_str",
+      "line": 71,
+      "endLine": 77,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "test_history_tiers_within_raw_window",
+      "line": 334,
+      "endLine": 340,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "refresh_alert_rules",
+      "line": 518,
+      "endLine": 524,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/server/src/main.rs",
+      "violations": []
+    },
+    {
+      "name": "get_alert_rule",
+      "line": 50,
+      "endLine": 56,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/alert_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "get_user_by_username",
+      "line": 34,
+      "endLine": 40,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/user_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "get_user_by_id",
+      "line": 42,
+      "endLine": 48,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/storage/src/user_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "title",
+      "line": 36,
+      "endLine": 42,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "to_string",
+      "line": 535,
+      "endLine": 541,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "core_bar_marks_hot_cores",
+      "line": 1559,
+      "endLine": 1565,
+      "complexity": 1,
+      "lines": 7,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "runtime.is_cancelled",
+      "line": 227,
+      "endLine": 232,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/agent/src/job_executor.rs",
+      "violations": []
+    },
+    {
+      "name": "to_str",
+      "line": 43,
+      "endLine": 48,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "test_password_hash_and_verify",
+      "line": 147,
+      "endLine": 152,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "is_terminal",
+      "line": 40,
+      "endLine": 45,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "default",
+      "line": 73,
+      "endLine": 78,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 1,
+      "params": 0,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "with_thresholds",
+      "line": 86,
+      "endLine": 91,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "set_node_gpu_capacity",
+      "line": 142,
+      "endLine": 147,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 3,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "require_admin_middleware",
+      "line": 82,
+      "endLine": 87,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 3,
+      "file": "crates/server/src/auth_middleware.rs",
+      "violations": []
+    },
+    {
+      "name": "require_operator_middleware",
+      "line": 90,
+      "endLine": 95,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 3,
+      "file": "crates/server/src/auth_middleware.rs",
+      "violations": []
+    },
+    {
+      "name": "status_int_to_str",
+      "line": 457,
+      "endLine": 462,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "status_from_str",
+      "line": 477,
+      "endLine": 482,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "await.map_err",
+      "line": 566,
+      "endLine": 571,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "ts_from_datetime",
+      "line": 779,
+      "endLine": 784,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "test_status_int_to_str",
+      "line": 888,
+      "endLine": 893,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "metric.as_str",
+      "line": 401,
+      "endLine": 406,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/server/src/handlers.rs",
+      "violations": []
+    },
+    {
+      "name": "exists",
+      "line": 188,
+      "endLine": 193,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/server/src/main.rs",
+      "violations": []
+    },
+    {
+      "name": "list_alert_rules",
+      "line": 58,
+      "endLine": 63,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/storage/src/alert_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "fmt_time",
+      "line": 318,
+      "endLine": 323,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/tui/src/api.rs",
+      "violations": []
+    },
+    {
+      "name": "node.ip_address.is_empty",
+      "line": 751,
+      "endLine": 756,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "j.status.as_str",
+      "line": 1381,
+      "endLine": 1386,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "r.severity.as_str",
+      "line": 1442,
+      "endLine": 1447,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "e.state.as_str",
+      "line": 1493,
+      "endLine": 1498,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "core",
+      "line": 1537,
+      "endLine": 1542,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 1,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "core_bar_groups_by_eight_and_truncates",
+      "line": 1551,
+      "endLine": 1556,
+      "complexity": 1,
+      "lines": 6,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "remove_rule",
+      "line": 296,
+      "endLine": 300,
+      "complexity": 1,
+      "lines": 5,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "test_invalid_transitions",
+      "line": 254,
+      "endLine": 258,
+      "complexity": 1,
+      "lines": 5,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "make_test_job_with_quota",
+      "line": 231,
+      "endLine": 235,
+      "complexity": 1,
+      "lines": 5,
+      "nesting": 0,
+      "params": 3,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "row.severity.as_str",
+      "line": 47,
+      "endLine": 51,
+      "complexity": 1,
+      "lines": 5,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "unwrap_or",
+      "line": 1158,
+      "endLine": 1162,
+      "complexity": 1,
+      "lines": 5,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "test_jwt_invalid_secret",
+      "line": 166,
+      "endLine": 169,
+      "complexity": 1,
+      "lines": 4,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "test_transition_validation",
+      "line": 272,
+      "endLine": 275,
+      "complexity": 1,
+      "lines": 4,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "register",
+      "line": 93,
+      "endLine": 96,
+      "complexity": 1,
+      "lines": 4,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "unregister",
+      "line": 62,
+      "endLine": 65,
+      "complexity": 1,
+      "lines": 4,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/server/src/ws_handler.rs",
+      "violations": []
+    },
+    {
+      "name": "jobs",
+      "line": 263,
+      "endLine": 266,
+      "complexity": 1,
+      "lines": 4,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/api.rs",
+      "violations": []
+    },
+    {
+      "name": "fmt_total",
+      "line": 265,
+      "endLine": 268,
+      "complexity": 1,
+      "lines": 4,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "core_bar_empty_renders_label_only",
+      "line": 1545,
+      "endLine": 1548,
+      "complexity": 1,
+      "lines": 4,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "config.agent_token.is_empty",
+      "line": 54,
+      "endLine": 56,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/agent/src/grpc_client.rs",
+      "violations": []
+    },
+    {
+      "name": "os_version.is_empty",
+      "line": 98,
+      "endLine": 100,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/agent/src/grpc_client.rs",
+      "violations": []
+    },
+    {
+      "name": "is_cancelled",
+      "line": 50,
+      "endLine": 52,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/agent/src/job_executor.rs",
+      "violations": []
+    },
+    {
+      "name": "self.sys.as_mut",
+      "line": 504,
+      "endLine": 506,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/agent/src/metrics.rs",
+      "violations": []
+    },
+    {
+      "name": "to_u8",
+      "line": 17,
+      "endLine": 19,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "default",
+      "line": 128,
+      "endLine": 130,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "get_state",
+      "line": 276,
+      "endLine": 278,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "get_all_states",
+      "line": 280,
+      "endLine": 282,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "clear",
+      "line": 302,
+      "endLine": 304,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/alert.rs",
+      "violations": []
+    },
+    {
+      "name": "can_manage_jobs",
+      "line": 51,
+      "endLine": 53,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "can_stop_jobs",
+      "line": 55,
+      "endLine": 57,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "can_manage_nodes",
+      "line": 59,
+      "endLine": 61,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "can_manage_users",
+      "line": 63,
+      "endLine": 65,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "can_manage_rules",
+      "line": 67,
+      "endLine": 69,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "can_read_metrics",
+      "line": 71,
+      "endLine": 73,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "can_read_history",
+      "line": 75,
+      "endLine": 77,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "generate_refresh_token",
+      "line": 138,
+      "endLine": 140,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/common/src/auth.rs",
+      "violations": []
+    },
+    {
+      "name": "not_found",
+      "line": 49,
+      "endLine": 51,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/error.rs",
+      "violations": []
+    },
+    {
+      "name": "bad_request",
+      "line": 53,
+      "endLine": 55,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/error.rs",
+      "violations": []
+    },
+    {
+      "name": "internal",
+      "line": 57,
+      "endLine": 59,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/error.rs",
+      "violations": []
+    },
+    {
+      "name": "unauthorized",
+      "line": 61,
+      "endLine": 63,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/error.rs",
+      "violations": []
+    },
+    {
+      "name": "auth",
+      "line": 65,
+      "endLine": 67,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/error.rs",
+      "violations": []
+    },
+    {
+      "name": "to_u8",
+      "line": 22,
+      "endLine": 24,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "is_running",
+      "line": 47,
+      "endLine": 49,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "can_transition",
+      "line": 74,
+      "endLine": 76,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/common/src/job.rs",
+      "violations": []
+    },
+    {
+      "name": "to_u8",
+      "line": 16,
+      "endLine": 18,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "get",
+      "line": 124,
+      "endLine": 126,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "list",
+      "line": 128,
+      "endLine": 130,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "exists",
+      "line": 141,
+      "endLine": 143,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "remove",
+      "line": 145,
+      "endLine": 147,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "count",
+      "line": 149,
+      "endLine": 151,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "set_thresholds",
+      "line": 153,
+      "endLine": 155,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "get_thresholds",
+      "line": 157,
+      "endLine": 159,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/common/src/node_registry.rs",
+      "violations": []
+    },
+    {
+      "name": "job.node_id.is_empty",
+      "line": 82,
+      "endLine": 84,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "get_running_jobs",
+      "line": 113,
+      "endLine": 115,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "remove_running",
+      "line": 127,
+      "endLine": 129,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/scheduler/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "extract_token",
+      "line": 22,
+      "endLine": 24,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/server/src/auth_middleware.rs",
+      "violations": []
+    },
+    {
+      "name": "extract_token",
+      "line": 67,
+      "endLine": 69,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/server/src/auth_middleware.rs",
+      "violations": []
+    },
+    {
+      "name": "report.gpus.is_empty",
+      "line": 210,
+      "endLine": 212,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "status_from_str",
+      "line": 463,
+      "endLine": 465,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "update.message.is_empty",
+      "line": 492,
+      "endLine": 494,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/server/src/grpc.rs",
+      "violations": []
+    },
+    {
+      "name": "storage::alert_queries::list_alert_rules",
+      "line": 519,
+      "endLine": 521,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/server/src/main.rs",
+      "violations": []
+    },
+    {
+      "name": "push_metrics",
+      "line": 98,
+      "endLine": 100,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 3,
+      "file": "crates/server/src/ws_handler.rs",
+      "violations": []
+    },
+    {
+      "name": "push_alert",
+      "line": 112,
+      "endLine": 114,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 2,
+      "file": "crates/server/src/ws_handler.rs",
+      "violations": []
+    },
+    {
+      "name": "conditions.is_empty",
+      "line": 93,
+      "endLine": 95,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/storage/src/job_queries.rs",
+      "violations": []
+    },
+    {
+      "name": "pool",
+      "line": 286,
+      "endLine": 288,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/storage/src/lib.rs",
+      "violations": []
+    },
+    {
+      "name": "nodes",
+      "line": 251,
+      "endLine": 253,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/api.rs",
+      "violations": []
+    },
+    {
+      "name": "alert_rules",
+      "line": 268,
+      "endLine": 270,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/api.rs",
+      "violations": []
+    },
+    {
+      "name": "alert_events",
+      "line": 272,
+      "endLine": 274,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/api.rs",
+      "violations": []
+    },
+    {
+      "name": "serde_json",
+      "line": 282,
+      "endLine": 284,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/api.rs",
+      "violations": []
+    },
+    {
+      "name": "from_index",
+      "line": 52,
+      "endLine": 54,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "self.nodes.get",
+      "line": 190,
+      "endLine": 192,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "self.metrics.get",
+      "line": 193,
+      "endLine": 195,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "m.gpus.get",
+      "line": 196,
+      "endLine": 198,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "self.nodes.get",
+      "line": 208,
+      "endLine": 210,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "self.metrics.get",
+      "line": 211,
+      "endLine": 213,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "taken.is_multiple_of",
+      "line": 406,
+      "endLine": 408,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 1,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "node.hostname.is_empty",
+      "line": 603,
+      "endLine": 605,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "gpus.is_empty",
+      "line": 661,
+      "endLine": 663,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "cores.is_empty",
+      "line": 838,
+      "endLine": 840,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    },
+    {
+      "name": "n.hostname.is_empty",
+      "line": 1028,
+      "endLine": 1030,
+      "complexity": 1,
+      "lines": 3,
+      "nesting": 0,
+      "params": 0,
+      "file": "crates/tui/src/ui.rs",
+      "violations": []
+    }
+  ],
+  "warnings": []
+}

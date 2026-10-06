@@ -1,0 +1,2 @@
+SIGKILL_hits=0
+force_hits=0

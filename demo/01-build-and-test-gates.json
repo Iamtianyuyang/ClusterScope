@@ -1,0 +1,14 @@
+{
+  "title": "Gate 1 — 离线构建与 44 个测试（GitHub 已发布线 f9c080b）",
+  "cwd": "..",
+  "steps": [
+    { "say": "审查对象是 GitHub master f9c080b（TUI-only），先证明这棵树是可构建的" },
+    { "run": "sh -c \"export PATH=$HOME/.cargo/bin:$PATH; cargo build --workspace --all-targets --offline\"", "timeoutSec": 300 },
+    { "say": "44 个测试全绿、0 失败、0 忽略（无 features/ 场景，故 kit test 的退出码 1 只来自 ACCEPTANCE，本审查不写占位场景）" },
+    { "run": "sh -c \"export PATH=$HOME/.cargo/bin:$PATH; cargo test --workspace --offline 2>&1 | tail -12\"", "timeoutSec": 180 },
+    { "say": "clippy 与 rustfmt 都是 0 发现" },
+    { "run": "sh -c \"export PATH=$HOME/.cargo/bin:$PATH; cargo clippy --workspace --all-targets --offline --message-format=short; echo clippy=$?; cargo fmt --all --check; echo fmt=$?\"", "timeoutSec": 180 },
+    { "say": "但仓库没有任何 CI：.github/ 不存在，上面三条只能人工手跑" },
+    { "run": "test -d .github && echo CI-PRESENT || echo CI-ABSENT; git log --oneline master | wc -l; git rev-parse --short master" }
+  ]
+}

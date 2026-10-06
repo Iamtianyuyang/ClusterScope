@@ -1,0 +1,13 @@
+5 crates/storage/src/migrations.rs
+CREATE_TABLE_IF_NOT_EXISTS=11
+39:            CREATE TABLE IF NOT EXISTS node_info (
+56:            CREATE TABLE IF NOT EXISTS node_metrics (
+88:            CREATE TABLE IF NOT EXISTS metrics_hourly (
+104:            CREATE TABLE IF NOT EXISTS metrics_daily (
+120:            CREATE TABLE IF NOT EXISTS jobs (
+145:            CREATE TABLE IF NOT EXISTS job_logs (
+158:            CREATE TABLE IF NOT EXISTS alert_rules (
+176:            CREATE TABLE IF NOT EXISTS alert_events (
+193:            CREATE TABLE IF NOT EXISTS users (
+206:            CREATE TABLE IF NOT EXISTS refresh_tokens (
+216:            CREATE TABLE IF NOT EXISTS audit_logs (

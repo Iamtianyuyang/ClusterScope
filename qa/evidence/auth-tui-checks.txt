@@ -1,0 +1,18 @@
+CHECK AUTHREQ-HEALTH-OPEN: PASS expected=200 actual=200
+CHECK AUTHREQ-NODES-NOTOKEN-401: PASS expected=401 actual=401
+CHECK AUTHREQ-LOGIN-OK: PASS expected=200 actual=200
+CHECK AUTHREQ-NODES-WITH-TOKEN: PASS expected=200 actual=200
+CHECK AUTHREQ-WS-NOTOKEN-401: PASS expected=401 actual=401
+NOTE tui without creds: Error: server requires authentication (GET /api/nodes: HTTP 401 Unauthorized);
+  pass --username/--password, or set auth_required: false in server.yaml
+CHECK TUI-NEEDS-LOGIN-README-322: PASS expected=0 actual=0
+CHECK AGENTTOKEN-WRONG-REJECTED: PASS expected=0 actual=0
+NOTE agent log (wrong token): 6 error lines
+CHECK AGENTTOKEN-RIGHT-ACCEPTED: PASS expected=1 actual=1
+NOTE tui bytes: 5111
+CHECK TUI-RENDERS-HEADER: PASS expected=0 actual=0
+CHECK TUI-NO-PANIC: PASS expected=0 actual=0
+CHECK TUI-SHOWS-NODE: PASS expected=0 actual=0
+CHECK TUI-SHOWS-KEYHINTS: PASS expected=0 actual=0
+----
+AUTH/TUI-CHECKS: ALL PASS

@@ -1,0 +1,10 @@
+crates/agent/src/job_executor.rs:118:    let mut cmd = Command::new(&executable);
+crates/agent/src/metrics.rs:294:        let output = Command::new("nvidia-smi")
+crates/agent/src/metrics.rs:417:        let output = Command::new("nvidia-smi")
+crates/agent/src/metrics.rs:440:            let output = Command::new("nvidia-smi")
+--- sh -c in agent ---
+0
+--- spawn/kill in job_executor ---
+29:    /// Send SIGTERM to the process group of a running job (if any).
+39:                    libc::kill(-pid, libc::SIGTERM);
+163:            libc::kill(-(pid as i32), libc::SIGTERM);

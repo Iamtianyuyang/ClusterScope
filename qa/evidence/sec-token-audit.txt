@@ -1,0 +1,7 @@
+--- jti outside auth.rs ---
+hits=0
+--- blacklist/revoked in server ---
+0
+--- insert_audit_log ---
+crates/server/src/handlers.rs:470:    storage::audit_queries::insert_audit_log(
+crates/server/src/handlers.rs:585:    storage::audit_queries::insert_audit_log(

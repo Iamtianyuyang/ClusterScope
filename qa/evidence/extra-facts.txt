@@ -1,0 +1,32 @@
+### DOC-18 PostgreSQL version
+PostgreSQL 16.4 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-11), 64-bit
+pg_ctl: server is running (PID: 4176115)
+/public/tianyuyang/code/ClusterScope-review/pg16/bin/postgres "-D" "/public/tianyuyang/code/ClusterScope-review/pgdata" "-p" "5432" "-k" "/tmp" "-c" "listen_addresses=127.0.0.1"
+
+### docker-compose / Dockerfile static consistency
+5:    image: postgres:16-alpine
+9:EXPOSE 8080 8081 50051 9090
+17:SRC_BIN="$(cd "$(dirname "$0")/.." && pwd)/target/debug/clusterscope-tui"
+
+### CON-16 dedup cache bound
+        scheduler,
+        jwt_secret: config.jwt_secret.clone(),
+        seen_reports: std::sync::Arc::new(parking_lot::RwLock::new(lru::LruCache::new(
+            std::num::NonZeroUsize::new(100000).unwrap(),
+        ))),
+    });
+
+
+### SEC-10 duplicate username -> 409
+first create: 200
+second create: 409
+
+### constraint histogram
+total=81
+finding=29
+long=2
+must-hold=46
+na=4
+tr: extra operand ‘"’
+Try 'tr --help' for more information.
+severity=

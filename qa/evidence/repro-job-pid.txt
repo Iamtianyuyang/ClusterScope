@@ -1,0 +1,47 @@
+### CON-07 independent reproduction: jobs.pid is never persisted
+host=lyy-node03 commit=5ee70a3 at 2026-10-06T20:51:25Z
+
+--- 1) the agent logs the real pid of the process it spawned ---
+2026-10-06T20:51:00.306162Z  INFO Process spawned job_id=89f18f4e-66d3-4120-bdd1-88089178d795 pid=257459
+2026-10-06T20:51:06.310589Z  INFO Job finished job_id=89f18f4e-66d3-4120-bdd1-88089178d795 pid=257459 exit_code=0
+
+--- 2) the same job row in PostgreSQL: pid is NULL although it succeeded ---
+89f18f4e-66d3-4120-bdd1-88089178d795|qa-pid-probe|succeeded|pid=NULL
+
+--- 3) whole-table view: 0 rows carry a pid ---
+total_jobs=17  jobs_with_pid=0
+status histogram: cancelled=6,queued=2,succeeded=9
+
+--- 4) source: the pid argument of update_job_status is the literal None (crates/server/src/grpc.rs:497-506) ---
+451:    async fn update_job_status(
+452-        &self,
+453-        request: Request<JobStatusUpdate>,
+        if let Err(e) = storage::job_queries::update_job_status(
+            self.state.database.pool(),
+            &update.job_id,
+            to_str,
+            None,
+            None,
+            error_message,
+            None,
+            finished.then(chrono::Utc::now),
+        )
+        .await
+        {
+
+--- 5) the storage signature for reference (job_queries.rs:278) ---
+pub async fn update_job_status(
+    pool: &PgPool,
+    job_id: &str,
+    status: &str,
+    pid: Option<i32>,
+    exit_code: Option<i32>,
+    error_message: Option<&str>,
+    started_at: Option<DateTime<Utc>>,
+    finished_at: Option<DateTime<Utc>>,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE jobs SET
+            status = $2,
+            pid = $3,

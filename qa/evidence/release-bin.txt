@@ -1,0 +1,3 @@
+-rwxr-xr-x 2 tianyuyang tianyuyang  5919376 Oct  7 03:09 target/release/clusterscope-agent
+-rwxr-xr-x 2 tianyuyang tianyuyang 12396704 Oct  7 03:09 target/release/clusterscope-server
+-rwxr-xr-x 2 tianyuyang tianyuyang  8126136 Oct  7 03:09 target/release/clusterscope-tui
