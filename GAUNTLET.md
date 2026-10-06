@@ -391,3 +391,42 @@ Rust workspace（Cargo，resolver 2，edition 2024），7 个成员 crate，`[wo
 **第 5 阶段注意**：`qa/harness/*.sh` 只按 PID 文件停进程（这台机器共享，禁止 `pkill -f clusterscope`）；
 证据落在 `gauntlet-out/qa/evidence/`；每条检查写进 `qa/qa-report.json` 时用 `"constraint": "<约束 id>"` 与约束配对。
 
+
+
+---
+
+## 第 6 阶段补充（Reporter，2026-10-07）
+
+> 只加结论与入口，不改上面任何既有结论。
+
+**全量复验（本阶段实跑，数字与第 5 阶段逐项一致）**
+
+| 命令 | 结果 | 证据 |
+|---|---|---|
+| `node .gauntlet/gauntlet.mjs gate --profile full --title "…"` | **`❌ spec {"scenarios":0}` → `GATE full: FAIL`，exit 1**。kit 在 spec 失败时立即 `break`（`.gauntlet/gauntlet.mjs:212`），所以 full 档只跑到 spec 就结束——这是"审查模式不写 features/"的必然结果，不是新缺陷 | `qa/evidence/gate-full.log` |
+| `node .gauntlet/gauntlet.mjs gate --profile quality` | build ✅ / tests ✅ 44/44 / scope ✅ 33/33 / warnings ✅ 0 / tidy ✅ 0 / duplication ✅ 0.0% / **complexity ❌ 21/316 maxCC 23** / **crap ❌ 45/316 maxCRAP 552** / **coverage ❌ 20.7%** / arch ➖ skipped → `GATE quality: FAIL`，exit 1 | `qa/evidence/gate-quality-full-profile.log`、`qa/evidence/gate-quality.json` |
+| 8 个演示重录 | `demo/01`–`08` 全部 exit 0，退出码与各脚本的 `expectCode` 全部吻合 | `qa/evidence/demos-rerun.log`、`gauntlet-out/evidence/demos/` |
+| 架构图 | `diagram: PASS`（Archify v3.0.1，`browser-check: skipped (no browser)`） | `docs/architecture/clusterscope-runtime.architecture.json`、`gauntlet-out/evidence/diagrams/` |
+
+**本阶段产物**
+
+| 路径 | 内容 |
+|---|---|
+| `report/review.html` | **单文件证据包**（kit 自动面板 + 中文「审查者简报」：16 条 findings 按 severity、闸门面板、1+6 条无法验证项、环境与复现、N1–N9、5 分钟审阅路线、合流速览） |
+| `report/merge-plan.md` | 三线合流方案，逐题回答 `qa/merge-plan-requirements.md` 的 M1–M9 |
+| `report/build-evidence.mjs`、`report/_brief.html` | 证据包的构建脚本与简报源（`node report/build-evidence.mjs <kit-index.html> report/_brief.html report/review.html`） |
+| `docs/review-howto.md` | 使用教程（三步上手、输入/输出规则表、五个坑） |
+| `qa/evidence/gate-full.log`、`gate-quality-full-profile.log`、`gate-quality.json`、`demos-rerun.log` | 本阶段新增的原始证据 |
+
+**合流方案的关键事实**（完整版见 `report/merge-plan.md`）
+
+- **B 的 HEAD `19d8fbc` 是 C 的祖先**（`git merge-base --is-ancestor` → YES），共同祖先 `f8ac726`；B 独有 15 个提交、C 独有 33 个提交。
+  "B 领先裸仓库 12 且从未推送"指的是 **B 的本地裸仓库**（停在 `d1586b6`），**不是 GitHub**。
+- **B 的 12 个未提交文件 = 1784 insertions / 740 deletions**，不在任何提交里、也不在 bundle 里（只有工作树）。
+  已实测打包：`sha256sum b-wip.tar.gz` = `8ef25e55af7cb612162cfc9887fd88dd52dba55260aa1c7508f984756fd9b4df`。
+- **不要整体 `git merge 19d8fbc`**：实测 35 个文件冲突（含 `web/*`、`tests/`、`deploy/nginx.conf` 的 `modify/delete`）。
+  推荐 `git cherry-pick -n eac070e`（修 F-01 + F-16）：实测只有 **4 个文件、6 个冲突块、约 140 行**。
+- **M5（TUI-only / TUI+Web / 先 TUI-only 后 web）是产品决策**，方案里只给代价与依据，不替人拍板。
+
+**收尾状态**：远端 server/agent 已停（只按 PID 文件停；同机常驻 agent PID 266643 未干预）。
+本分支**未推送、未开 PR**——由 Leader 在用户审阅通过后处理。

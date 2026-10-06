@@ -1,0 +1,75 @@
+$ sh -c "export PATH=$HOME/.cargo/bin:$PATH; cargo build --workspace --all-targets --offline"
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.32s
+$ sh -c "export PATH=$HOME/.cargo/bin:$PATH; node gauntlet-tools/rust-gate.mjs --out gauntlet-out"
+$ cargo test --workspace --offline --no-run   (CARGO_TARGET_DIR=/public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/cov-target)
+  build+link of test targets: 0.3s, 7 test binaries
+$ /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/cov-target/debug/deps/clusterscope_agent-9954b24536f7516d
+$ /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/cov-target/debug/deps/clusterscope_server-38095c0d17b01acc
+$ /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/cov-target/debug/deps/clusterscope_tui-4d25be27e9617823
+$ /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/cov-target/debug/deps/common-f590d5465b21e6ba
+$ /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/cov-target/debug/deps/protocol-efef23328e23c403
+$ /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/cov-target/debug/deps/scheduler-46d5b0853d6a9ce3
+$ /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/cov-target/debug/deps/storage-253875246e48ce46
+tests: 44 total, 0 failed, 0 ignored -> /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/junit.xml
+  clusterscope-agent (bin): 2/2, clusterscope-server (bin): 6/6, clusterscope-tui (bin): 3/3, common (lib): 21/21, protocol (lib): 0/0, scheduler (lib): 12/12, storage (lib): 0/0, Doc-tests common: 0/0, Doc-tests protocol: 0/0, Doc-tests scheduler: 0/0, Doc-tests storage: 0/0
+coverage: 29 instrumented file(s) in lcov.info
+
+STATIC  files=33 TUs=33 failed=0 functions=316  scope=100.0%
+        maxCC=23 maxLines=196 maxNesting=7 maxParams=9 offenders=21 warnings=0
+  ✗ crates/tui/src/ui.rs:599 node_panel  圈复杂度 23 > 10; 长度 170 行 > 60
+  ✗ crates/tui/src/ui.rs:1024 draw_process  圈复杂度 18 > 10; 长度 196 行 > 60
+  ✗ crates/server/src/main.rs:383 run_scheduler_cycle  圈复杂度 15 > 10; 长度 110 行 > 60
+  ✗ crates/common/src/alert.rs:140 evaluate  圈复杂度 12 > 10; 长度 135 行 > 60; 嵌套 5 层 > 4
+  ✗ crates/server/src/main.rs:314 run_background_tasks  圈复杂度 12 > 10; 长度 66 行 > 60
+  ✗ crates/tui/src/ui.rs:1223 draw_cpu_processes  长度 109 行 > 60
+  ✗ crates/server/src/grpc.rs:602 evaluate_alerts  长度 63 行 > 60; 嵌套 7 层 > 4
+  ✗ crates/tui/src/ui.rs:781 draw_trend_full  长度 114 行 > 60
+  ✗ crates/server/src/grpc.rs:141 report_metrics  长度 110 行 > 60
+  ✗ crates/server/src/handlers.rs:217 get_metrics_history  长度 75 行 > 60
+  ✗ crates/tui/src/ui.rs:463 draw_topbar  长度 62 行 > 60
+  ✗ crates/server/src/handlers.rs:631 create_alert_rule  长度 69 行 > 60
+  ✗ crates/server/src/handlers.rs:31 login  长度 65 行 > 60
+  ✗ crates/server/src/grpc.rs:451 update_job_status  长度 69 行 > 60
+  ✗ crates/tui/src/ui.rs:1432 draw_alerts  长度 96 行 > 60
+SCOPE gate: PASS
+COMPLEXITY gate: FAIL
+WARNINGS gate: PASS
+
+TIDY  findings=0 accepted=0
+TIDY gate: PASS
+
+DUPLICATION  0.0% of 7030 code lines in 0 clone(s) (0 across top-level directories), min 100 tokens
+DUPLICATION gate: PASS
+
+CRAP  functions=316  maxCRAP=552  maxCC=23  lineCoverage=20.7%  offenders=45
+      552  cc=23  cov=  0%  crates/tui/src/ui.rs:599  node_panel  <-- CRAP 552.0 > 8; complexity 23 > 10
+      342  cc=18  cov=  0%  crates/tui/src/ui.rs:1024  draw_process  <-- CRAP 342.0 > 8; complexity 18 > 10
+      240  cc=15  cov=  0%  crates/server/src/main.rs:383  run_scheduler_cycle  <-- CRAP 240.0 > 8; complexity 15 > 10
+      156  cc=12  cov=  0%  crates/server/src/main.rs:314  run_background_tasks  <-- CRAP 156.0 > 8; complexity 12 > 10
+       90  cc= 9  cov=  0%  crates/tui/src/ui.rs:1223  draw_cpu_processes  <-- CRAP 90.0 > 8
+       90  cc= 9  cov=  0%  crates/server/src/grpc.rs:602  evaluate_alerts  <-- CRAP 90.0 > 8
+       90  cc= 9  cov=  0%  crates/agent/src/config_loader.rs:5  load_config  <-- CRAP 90.0 > 8
+       72  cc= 8  cov=  0%  crates/server/src/main.rs:181  load_config  <-- CRAP 72.0 > 8
+       72  cc= 8  cov=  0%  crates/server/src/auth_middleware.rs:37  readonly_middleware  <-- CRAP 72.0 > 8
+       56  cc= 7  cov=  0%  crates/tui/src/ui.rs:781  draw_trend_full  <-- CRAP 56.0 > 8
+       56  cc= 7  cov=  0%  crates/server/src/grpc.rs:141  report_metrics  <-- CRAP 56.0 > 8
+       56  cc= 7  cov=  0%  crates/server/src/handlers.rs:217  get_metrics_history  <-- CRAP 56.0 > 8
+       56  cc= 7  cov=  0%  crates/tui/src/ui.rs:463  draw_topbar  <-- CRAP 56.0 > 8
+       42  cc= 6  cov=  0%  crates/server/src/handlers.rs:631  create_alert_rule  <-- CRAP 42.0 > 8
+       42  cc= 6  cov=  0%  crates/server/src/ws_handler.rs:69  broadcast  <-- CRAP 42.0 > 8
+CRAP gate: FAIL
+ARCH: skipped (没有配置 commands.arch（架构依赖检查）)
+
+══ GATE (quality) ══
+  ✅ build        {}
+  ✅ tests        {"total":44,"failed":0}
+  ✅ scope        {"scope":1,"failedUnits":0,"files":33}
+  ❌ complexity   {"functions":316,"offenders":21,"maxComplexity":23}
+  ✅ warnings     {"warnings":0}
+  ✅ tidy         {"ran":true,"findings":0}
+  ✅ duplication  {"ratio":0,"clones":0}
+  ❌ crap         {"maxCrap":552,"offenders":45,"instrumentedFunctions":316}
+  ✅ arch         {"violations":0,"edges":0,"skipped":"没有配置 commands.arch（架构依赖检查）"}
+  ❌ coverage     {"lineCoverage":0.207}
+
+GATE quality: FAIL

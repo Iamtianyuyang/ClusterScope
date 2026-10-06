@@ -1,0 +1,6 @@
+spec: 0 feature(s), 0 scenario(s)（commands 适配器：场景与测试按名称对应）
+
+══ GATE (full) ══
+  ❌ spec         {"scenarios":0,"undefinedSteps":0,"ambiguous":0}
+
+GATE full: FAIL

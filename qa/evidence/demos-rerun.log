@@ -1,0 +1,55 @@
+########## demo/01-build-and-test-gates.json ##########
+$ sh -c "export PATH=$HOME/.cargo/bin:$PATH; cargo build --workspace --all-targets --offline"  -> exit 0
+$ sh -c "export PATH=$HOME/.cargo/bin:$PATH; cargo test --workspace --offline 2>&1 | tail -12"  -> exit 0
+$ sh -c "export PATH=$HOME/.cargo/bin:$PATH; cargo clippy --workspace --all-targets --offline --message-format=short; echo clippy=$?; cargo fmt --all --check; echo fmt=$?"  -> exit 0
+$ test -d .github && echo CI-PRESENT || echo CI-ABSENT; git log --oneline master | wc -l; git rev-parse --short master  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/evidence/demos/01-build-and-test-gates.html
+########## demo/02-quality-gates-fail.json ##########
+$ node .gauntlet/gauntlet.mjs gate --profile quality 2>&1 | grep -E '^(  (✅|❌|➖)|GATE)'  -> exit 0
+$ node .gauntlet/gauntlet.mjs gate --profile quality > /dev/null 2>&1; echo "GATE quality exit=$?"  -> exit 0
+$ jq -r '.functions | sort_by(-.crap) | .[0:6][] | "CRAP \(.crap)  cc=\(.complexity)  cov=\(((.coverage*100)|floor))%  \(.file):\(.line)  \(.name)"' gauntlet-out/crap.json  -> exit 0
+$ head -3 qa/evidence/next.md; jq -r '.summary | "functions=\(.functions) offenders=\(.offenders) maxCRAP=\(.maxCrap) lineCoverage=\(.lineCoverage) lines=\(.linesCovered)/\(.linesTotal)"' gauntlet-out/crap.json  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/evidence/demos/02-quality-gates-fail.html
+########## demo/03-doc-claims.json ##########
+$ sh qa/harness/doc-claims-checks.sh 2>&1 | grep -E 'FAIL|DOC-CHECKS'  -> exit 0
+$ test -f LICENSE && echo LICENSE-OK || echo LICENSE-MISSING; grep -n 'license = ' Cargo.toml; grep -c 'blob/master/LICENSE' README.md  -> exit 0
+$ grep -n '1min' docs/architecture.md; grep -n 'RAW_RETENTION_MS\|HOURLY_RETENTION_MS' crates/server/src/handlers.rs  -> exit 0
+$ echo "SIGKILL hits: $(grep -rn SIGKILL crates/ | wc -l)"; grep -n 'SIGTERM' crates/agent/src/job_executor.rs  -> exit 0
+$ ./target/release/clusterscope-server --help; echo "exit=$?"; echo '--- tui 的 --help 正常 ---'; ./target/release/clusterscope-tui --help | head -3  -> exit 0
+$ grep -n default_admin_password crates/common/src/config.rs README.md deploy/server.yaml.example  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/evidence/demos/03-doc-claims.html
+########## demo/04-rest-security-audit-logs.json ##########
+$ sh qa/harness/server-up.sh false  -> exit 0
+$ sh qa/harness/api-checks.sh  -> exit 1
+$ curl -s -i 'http://127.0.0.1:8080/api/audit-logs' | head -5  -> exit 0
+$ grep -n 'SELECT \*' crates/storage/src/audit_queries.rs; grep -n 'pub user' crates/storage/src/models.rs; /public/tianyuyang/code/ClusterScope-review/pg16/bin/psql 'postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope' -c '\d audit_logs' | head -8  -> exit 0
+$ /public/tianyuyang/code/ClusterScope-review/pg16/bin/psql 'postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope' -tAc "select 'rows=' || count(*) from audit_logs;"  -> exit 0
+$ sh qa/harness/server-down.sh  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/evidence/demos/04-rest-security-audit-logs.html
+########## demo/05-job-lifecycle-e2e.json ##########
+$ sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01  -> exit 0
+$ sh qa/harness/job-e2e.sh  -> exit 0
+$ tail -14 gauntlet-out/qa/evidence/ws-check.txt  -> exit 0
+$ sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/evidence/demos/05-job-lifecycle-e2e.html
+########## demo/06-job-pid-not-persisted.json ##########
+$ sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01  -> exit 0
+$ T=$(curl -s -X POST -H 'Content-Type: application/json' -d '{"username":"admin","password":"admin123"}' http://127.0.0.1:8080/api/login | jq -r .access_token); J=$(curl -s -X POST -H "Authorization: Bearer $T" -H 'Content-Type: application/json' -d '{"node_id":"qa-node-01","name":"qa-pid-demo","executable":"/bin/sh","arguments":["-c","echo qa-pid-demo; sleep 3"],"working_directory":"/tmp"}' http://127.0.0.1:8080/api/jobs | jq -r .job_id); echo "job_id=$J"; PSQL=/public/tianyuyang/code/ClusterScope-review/pg16/bin/psql; PG='postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope'; for i in $(seq 1 60); do s=$($PSQL "$PG" -tAc "select status from jobs where job_id='$J'"); [ "$s" = "succeeded" ] && break; sleep 1; done; echo '--- agent 日志（它知道真实 pid）---'; grep -h 'Process spawned' gauntlet-out/qa/agent.log | sed 's/\x1b\[[0-9;]*m//g' | tail -1; echo '--- 数据库行（任务已经 succeeded，pid 仍是 NULL）---'; $PSQL "$PG" -tAc "select job_id || ' | ' || status || ' | pid=' || coalesce(pid::text,'NULL') from jobs where job_id='$J'"  -> exit 0
+$ sed -n '497,508p' crates/server/src/grpc.rs; /public/tianyuyang/code/ClusterScope-review/pg16/bin/psql 'postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope' -tAc "select 'jobs=' || count(*) || ' with_pid=' || count(pid) from jobs;"  -> exit 0
+$ sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/evidence/demos/06-job-pid-not-persisted.html
+########## demo/07-history-daily-tier-missing.json ##########
+$ sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01  -> exit 0
+$ NOW_MS=$(python3 -c 'import time;print(int(time.time()*1000))'); D29=$((NOW_MS - 29*86400000)); /public/tianyuyang/code/ClusterScope-review/pg16/bin/psql 'postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope' -tAc "insert into metrics_daily (node_id, metric_name, day_bucket, avg_value, max_value, min_value, p95_value, sample_count) values ('qa-node-01','cpu_usage_percent', (to_timestamp($D29/1000.0))::date, 21.0, 22.0, 20.0, 21.5, 7) on conflict (node_id, metric_name, day_bucket) do update set avg_value = excluded.avg_value; select 'daily rows matching the server filter: ' || count(*) from metrics_daily where node_id='qa-node-01' and day_bucket >= to_timestamp($((NOW_MS - 30*86400000))/1000.0) and day_bucket <= to_timestamp($NOW_MS/1000.0);"  -> exit 0
+$ NOW_MS=$(python3 -c 'import time;print(int(time.time()*1000))'); D30=$((NOW_MS - 30*86400000)); curl -s "http://127.0.0.1:8080/api/metrics/history?node_id=qa-node-01&start_time_ms=$D30&end_time_ms=$NOW_MS" > /tmp/hist.json; echo "rows=$(jq length /tmp/hist.json)"; jq -c '[.[] | (.source // "raw")] | group_by(.) | map({source: .[0], rows: length})' /tmp/hist.json  -> exit 0
+$ grep -n 'day_bucket DATE' crates/storage/src/lib.rs; sed -n '167,194p' crates/storage/src/queries.rs; sed -n '273,285p' crates/server/src/handlers.rs  -> exit 0
+$ /public/tianyuyang/code/ClusterScope-review/pg16/bin/psql 'postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope' -tAc "select count(*) from metrics_daily where day_bucket >= now() - interval '30 days';"  -> exit 0
+$ sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/evidence/demos/07-history-daily-tier-missing.html
+########## demo/08-concurrency-and-ops.json ##########
+$ sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01  -> exit 0
+$ sh qa/harness/concurrency-checks.sh  -> exit 1
+$ sh qa/harness/ops-checks.sh  -> exit 1
+$ grep -E 'FAIL|NOTE listening|DEADKEY (prometheus_addr|tls_enabled|log_level)' gauntlet-out/qa/evidence/ops-checks.txt  -> exit 0
+$ sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/gh-line/gauntlet-out/evidence/demos/08-concurrency-and-ops.html
