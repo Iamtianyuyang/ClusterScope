@@ -1,6 +1,6 @@
 # GAUNTLET.md — 项目档案
 
-commit: `669f995`　base: `master`　更新：2026-10-07　适配器：commands　棘轮：**关**（硬阈值判定；基线 77 项保留但惰性）
+commit: `669f995`（第 1 阶段补充见文末「审查清单（第 1 阶段产出）」）　base: `master`　更新：2026-10-07　适配器：commands　棘轮：**关**（硬阈值判定；基线 77 项保留但惰性）
 
 > 本档案记录的是**实际跑通过**的命令和真实测量值。未验证的内容一律标注「未验证」。
 > 闸门命令的运行位置：远端 node（Linux，`tianyuyang@172.19.133.164`），仓库
@@ -350,4 +350,44 @@ Rust workspace（Cargo，resolver 2，edition 2024），7 个成员 crate，`[wo
   判收尾，它永远不会返回 DONE（会一直 CONTINUE）；各阶段请用自己 profile 的闸门，并把这三项失败
   预先判定为"本审查不修、记录在案"，否则会误触发返工。
 - 第 5 阶段（QA）现在**有 PostgreSQL 16.4 可用**（见「构建、测试、运行」），server 端到端可以做。
+
+## 审查清单（第 1 阶段产出，2026-10-07）
+
+> 审查模式：**只跑 0 → 1 → 5 → 6**，不派编码/清理/加固阶段，**不改产品代码、不改测试、不改文档**。
+> 因此 `ACCEPTANCE`（场景 ↔ 验收测试）与 `quality`（complexity/crap/coverage）两个闸门在本审查里都是 **N/A**：
+> 前者不写 `features/*.feature`（用户裁决，见下），后者三项 FAIL 是审查结论而非待办。
+
+**入口**（第 5 阶段从这里开始读，`qa/README.md` 有「一键复跑」）：
+
+| 文件 | 内容 | 规模 |
+|---|---|---|
+| `qa/README.md` | 审查清单总览、环境、一键复跑命令、三条硬规矩 | — |
+| `qa/constraints.json` | 可机器检查的约束（id / 断言 / 依据行号 / 检查命令 / 期望 / 判定） | **80 条**：46 `must-hold`、29 `finding`、3 `na`、2 `long` |
+| `qa/build-gates.qa.md` | G1–G12 真实闸门复现 | 12 条 |
+| `qa/docs-consistency.qa.md` | D1–D22 文档 ↔ 实现 | 22 条 |
+| `qa/security.qa.md` | S1–S17 认证/鉴权/注入面/审计 | 17 条 |
+| `qa/concurrency.qa.md` | C1–C16 任务生命周期/调度/去重/保留/WS/迁移 | 16 条 |
+| `qa/deploy-ops.qa.md` | O1–O21 `deploy/` ↔ 代码、端口、TUI 冒烟、N/A 说明 | 21 条 |
+| `qa/merge-plan-requirements.md` | M1–M9 三棵树合流**必答问题**（第 6 阶段的输入） | 9 题 |
+| `qa/harness/*.sh` `*.mjs` `*.py` `*.sql` | **已实测跑通**的执行脚本与夹具 | 9 个脚本 + 1 SQL |
+
+**第 1 阶段已实测确认的缺陷**（第 5 阶段只需复跑取证，不要重新发现）：
+
+1. `GET /api/audit-logs` **恒 500**：`audit_queries.rs:70-79` 用 `SELECT *`，模型字段 `user`（`models.rs:142`）与表列 `username` 不匹配。
+2. **天级（90 天）历史永不返回**：同一 SQL 过滤条件在 psql 里能取到 4 行（`qa/harness/diag-daily.sql`），REST 返回 0 行——`handlers.rs:274-285` 的 `if let Ok(...)` 把 `DATE` 列解码失败吞掉了。
+3. `clusterscope-server --help` → `Config file not found: --help`（exit 1），clap 依赖未用（`main.rs:182-194`）。
+4. `jobs.pid` **从不落库**（`grpc.rs:497-506` 恒传 `None`），agent 日志里有真实 pid；`retry_count/max_retries` 是死列（无重试）。
+5. 11 个**死配置键**（写了不生效）：`log_level` / `disk_mounts` / `collect_process_details`（agent）+ `redis_url` / `prometheus_enabled` / `prometheus_addr` / `ws_*`×4 / `tls_enabled`（server）。
+6. 登录**无 IP 限速**（20 次错误登录对不存在的用户全 401，无 429）；access token **不可吊销**；审计只覆盖 create_job / stop_job 两个动作。
+7. `README:233` 的「read-only 时 GET 全开放」不完全成立（`/api/users` 这类 admin 级 GET 仍 401）；`README:358` 说 `active_alerts` 无数据为 null，实际恒为 0。
+8. 无 LICENSE 文件（README:19/363 链接 404）；`docs/architecture.md:62` 保留策略过时；`README:355` 的「force → SIGKILL」不存在。
+
+**规格闸门的裁决（需人工确认）**：`node .gauntlet/gauntlet.mjs gate --profile specifier` → **FAIL**，唯一原因是
+`spec: 0 feature(s), 0 scenario(s)`（kit 的判据是 `scenarios > 0`，`.gauntlet/lib/adapter-commands.mjs:73-78`）。
+用户已裁决「本阶段不写 `features/*.feature`」（不改产品代码 ⇒ 无法落地 Rust 验收测试 ⇒ ACCEPTANCE 不适用），
+所以这条闸门在本审查里记 **N/A**，全部可验证内容落在 `qa/` 下。**没有**为了让闸门变绿而写占位场景（那属于「改弱断言让闸门通过」）。
+若需要 spec 闸门变绿，唯一办法是写 ≥1 个 feature/scenario —— 需用户改口，不能由 agent 自行决定。
+
+**第 5 阶段注意**：`qa/harness/*.sh` 只按 PID 文件停进程（这台机器共享，禁止 `pkill -f clusterscope`）；
+证据落在 `gauntlet-out/qa/evidence/`；每条检查写进 `qa/qa-report.json` 时用 `"constraint": "<约束 id>"` 与约束配对。
 

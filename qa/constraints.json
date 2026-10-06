@@ -1,0 +1,802 @@
+[
+  {
+    "id": "GATE-01",
+    "text": "真实构建闸门成立：`cargo build --workspace --all-targets --offline` 退出码 0（三棵树里本线是可构建的）。",
+    "basis": "GAUNTLET.md「构建、测试、运行」；README:75-77",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && node .gauntlet/gauntlet.mjs gate --profile quality 2>&1 | grep -E '^(build|GATE)'",
+    "expect": "build ✅；`GATE quality` 行必须是 FAIL（本审查不修）",
+    "verdict": "must-hold",
+    "qa": "build-gates.qa.md#G1",
+    "severity": "info"
+  },
+  {
+    "id": "GATE-02",
+    "text": "真实测试闸门成立：44 个测试全部通过、0 失败、0 忽略。",
+    "basis": "GAUNTLET.md「硬阈值下的现状」tests ✅ 44/44",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && node .gauntlet/gauntlet.mjs test 2>&1 | tail -5",
+    "expect": "`tests: 44/44 passed`；退出码 1 只允许来自 ACCEPTANCE（features/ 为空，本审查不写场景）",
+    "verdict": "must-hold",
+    "qa": "build-gates.qa.md#G2",
+    "severity": "info"
+  },
+  {
+    "id": "GATE-03",
+    "text": "clippy 与 rustfmt 闸门成立：`cargo clippy --workspace --all-targets --offline` 与 `cargo fmt --all --check` 都是 0 发现。",
+    "basis": "GAUNTLET.md「质量现状」warnings ✅ 0 / tidy ✅ 0；README:344-348",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh -c 'export PATH=$HOME/.cargo/bin:$PATH; cargo clippy --workspace --all-targets --offline --message-format=short; echo clippy=$?; cargo fmt --all --check; echo fmt=$?'",
+    "expect": "clippy=0 且 fmt=0，输出无 warning 行",
+    "verdict": "must-hold",
+    "qa": "build-gates.qa.md#G3",
+    "severity": "info"
+  },
+  {
+    "id": "GATE-04",
+    "text": "重复代码与静态测量范围闸门成立：duplication 0.0%、scope 33/33 文件被解析。",
+    "basis": "GAUNTLET.md「其它闸门读数」；gauntlet.config.json sources=crates/**/*.rs",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && node .gauntlet/gauntlet.mjs gate --profile quality 2>&1 | grep -E 'duplication|scope'",
+    "expect": "duplication ✅ 0.0%；scope ✅ 33/33（engine=builtin）",
+    "verdict": "must-hold",
+    "qa": "build-gates.qa.md#G4",
+    "severity": "info"
+  },
+  {
+    "id": "GATE-05",
+    "text": "复杂度闸门在硬阈值下失败：316 个函数中 21 个超标，最大圈复杂度 23（阈值 10）。",
+    "basis": "GAUNTLET.md「硬阈值下的现状」§1；阈值 gauntlet.config.json:37",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && node .gauntlet/gauntlet.mjs gate --profile quality 2>&1 | grep -E '^complexity'",
+    "expect": "❌ FAIL，函数数 21，maxCC=23（`crates/tui/src/ui.rs:599 node_panel`）",
+    "verdict": "finding",
+    "qa": "build-gates.qa.md#G5",
+    "severity": "major"
+  },
+  {
+    "id": "GATE-06",
+    "text": "CRAP 闸门在硬阈值下失败：45 个函数超标，最大 CRAP 552（阈值 8），其中 44 项覆盖率 0%。",
+    "basis": "GAUNTLET.md「硬阈值下的现状」§2",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && node .gauntlet/gauntlet.mjs gate --profile quality 2>&1 | grep -E '^crap'",
+    "expect": "❌ FAIL，45 个函数超标，maxCRAP=552",
+    "verdict": "finding",
+    "qa": "build-gates.qa.md#G6",
+    "severity": "major"
+  },
+  {
+    "id": "GATE-07",
+    "text": "行覆盖率闸门在硬阈值下失败：总体 20.7%（1381/6686，阈值 90%），storage crate 0.0%。",
+    "basis": "GAUNTLET.md「硬阈值下的现状」§3",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && node .gauntlet/gauntlet.mjs gate --profile quality 2>&1 | grep -E '^coverage'",
+    "expect": "❌ FAIL，20.7%",
+    "verdict": "finding",
+    "qa": "build-gates.qa.md#G7",
+    "severity": "major"
+  },
+  {
+    "id": "GATE-08",
+    "text": "架构闸门处于「跳过」状态：gauntlet.config.json 没有 commands.arch，模块依赖方向没有任何自动检查。",
+    "basis": "gauntlet.config.json:15-34（无 arch）；GAUNTLET.md「质量现状」arch ➖ 跳过",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && node .gauntlet/gauntlet.mjs gate --profile quality 2>&1 | grep -E '^arch'",
+    "expect": "➖ skipped（证据包会列为「需人工确认」）",
+    "verdict": "finding",
+    "qa": "build-gates.qa.md#G8",
+    "severity": "minor"
+  },
+  {
+    "id": "GATE-09",
+    "text": "仓库没有任何 CI：`.github/` 不存在，README:344-348 的三条闸门只能人工手跑。",
+    "basis": "GAUNTLET.md「现有规矩」；README:342-348",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && test -d .github && echo CI-PRESENT || echo CI-ABSENT; git log --oneline | wc -l",
+    "expect": "CI-ABSENT（40 个提交、3 个作者、无自动化闸门）",
+    "verdict": "finding",
+    "qa": "build-gates.qa.md#G9",
+    "severity": "major"
+  },
+  {
+    "id": "GATE-10",
+    "text": "`node .gauntlet/gauntlet.mjs test` 的退出码 1 只来自 ACCEPTANCE（features/ 为空），不是构建/测试坏了。",
+    "basis": "GAUNTLET.md 坑 #6；用户裁决「本阶段不写 features/*.feature」",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && node .gauntlet/gauntlet.mjs test 2>&1 | grep -E 'tests:|ACCEPTANCE'",
+    "expect": "tests ✅ 44/44；`ACCEPTANCE scenarios=0` → FAIL（本审查按设计不修）",
+    "verdict": "must-hold",
+    "qa": "build-gates.qa.md#G10",
+    "severity": "info"
+  },
+  {
+    "id": "GATE-11",
+    "text": "三个交付物二进制存在且是 release 构建（README:76 承诺 target/release/clusterscope-{agent,server,tui}）。",
+    "basis": "README:76；GAUNTLET.md「构建、测试、运行」",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && ls -l target/release/clusterscope-agent target/release/clusterscope-server target/release/clusterscope-tui",
+    "expect": "三个文件都在（约 5.9M / 12.4M / 8.1M）",
+    "verdict": "must-hold",
+    "qa": "build-gates.qa.md#G11",
+    "severity": "info"
+  },
+  {
+    "id": "GATE-12",
+    "text": "覆盖率机制本身可用：rust-gate.mjs 能产出 junit.xml 与 lcov.info（无 cargo-llvm-cov 的替代实现）。",
+    "basis": "GAUNTLET.md 坑 #4；gauntlet.config.json:17-21",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && node .gauntlet/gauntlet.mjs test >/dev/null 2>&1; ls -l gauntlet-out/junit.xml gauntlet-out/lcov.info; head -3 gauntlet-out/lcov.info",
+    "expect": "两个报告都在，lcov.info 首行是 SF: 记录",
+    "verdict": "must-hold",
+    "qa": "build-gates.qa.md#G12",
+    "severity": "info"
+  },
+  {
+    "id": "DOC-01",
+    "text": "仓库缺少 LICENSE 文件：README:19 徽章与 README:363 链接指向 blob/master/LICENSE（404），Cargo.toml:14 却声明 Apache-2.0。",
+    "basis": "README:19, README:363, Cargo.toml:14",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && test -f LICENSE && echo LICENSE-OK || echo LICENSE-MISSING; grep -c 'blob/master/LICENSE' README.md",
+    "expect": "LICENSE-MISSING（审计预期：声明与文件不一致）",
+    "verdict": "finding",
+    "qa": "docs-consistency.qa.md#D1",
+    "severity": "major"
+  },
+  {
+    "id": "DOC-02",
+    "text": "docs/architecture.md:62 的保留策略「2s → 1min → 10min」与实现不符；实现是原始 24h + 小时 7d + 天 90d。",
+    "basis": "docs/architecture.md:62 vs crates/server/src/handlers.rs:303-306、crates/server/src/main.rs:358-376",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -n '2s → 1min → 10min' docs/architecture.md; grep -n 'RAW_RETENTION_MS\\|HOURLY_RETENTION_MS' crates/server/src/handlers.rs",
+    "expect": "architecture.md 命中 1 行（过时描述）→ 审计预期 FAIL",
+    "verdict": "finding",
+    "qa": "docs-consistency.qa.md#D2",
+    "severity": "major"
+  },
+  {
+    "id": "DOC-03",
+    "text": "`clusterscope-server --help` 必须打印帮助并退出 0（agent/tui 都能）；实际是 `Error: Config file not found: --help` 退出 1，尽管依赖了 clap 却手读 argv。",
+    "basis": "crates/server/src/main.rs:182-194；对比 crates/agent/src/main.rs:12-29、crates/tui/src/main.rs:16-37",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && ./target/release/clusterscope-server --help; echo exit=$?",
+    "expect": "实际 exit=1、stderr `Config file not found: --help` → 审计预期 FAIL",
+    "verdict": "finding",
+    "qa": "docs-consistency.qa.md#D3",
+    "severity": "major"
+  },
+  {
+    "id": "DOC-04",
+    "text": "docs/api.md:5 声称除 health/login/refresh-token 外全部端点都要 Bearer JWT；README:233 声称 auth_required:false 时 GET 免密。两者互斥，实际以后者为准。",
+    "basis": "docs/api.md:5 vs README:233 vs crates/server/src/auth_middleware.rs:37-78、main.rs:295-306",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/api-checks.sh 2>&1 | grep -E 'SEC-NODES-READONLY-OPEN|DOC-GET-USERS-READONLY'; sh qa/harness/server-down.sh",
+    "expect": "GET /api/nodes 无 token → 200（api.md:5 不成立）；GET /api/users 无 token → 401（README:233 的「GET 开放」也不完全成立）",
+    "verdict": "finding",
+    "qa": "security.qa.md#S2",
+    "severity": "major"
+  },
+  {
+    "id": "DOC-05",
+    "text": "docs/api.md 的端点表不完整：实际路由 /api/users/{id}(GET/PATCH/DELETE)、/api/alerts/rules/{rule_id}/state、/api/prometheus/metrics、/api/health 都没写进文档。",
+    "basis": "crates/server/src/main.rs:236-291 vs docs/api.md:13-84",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/doc-claims-checks.sh 2>&1 | grep 'DOC-API-EP-IN-DOC'",
+    "expect": "4 条里 3 条 FAIL（缺 users/{id}、rules/{id}/state、prometheus/metrics）",
+    "verdict": "finding",
+    "qa": "docs-consistency.qa.md#D5",
+    "severity": "minor"
+  },
+  {
+    "id": "DOC-06",
+    "text": "`GET /api/audit-logs`（docs/api.md:84 记录为可用）实际返回 500：查询用 `SELECT *`，而模型字段是 `user`、表列是 `username`。",
+    "basis": "docs/api.md:84 vs crates/storage/src/audit_queries.rs:70-102 + crates/storage/src/models.rs:141-151",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/api-checks.sh 2>&1 | grep 'DOC-GET-AUDIT-LOGS'; sh qa/harness/server-down.sh",
+    "expect": "实际 500 → 审计预期 FAIL（端点不可用）",
+    "verdict": "finding",
+    "qa": "docs-consistency.qa.md#D6",
+    "severity": "major"
+  },
+  {
+    "id": "DOC-07",
+    "text": "README:307/357 与 docs/api.md:36-40 承诺历史查询合并三档粒度（含天级 90 天）；实际天级永不返回（DATE 列解码失败，错误被 `if let Ok` 吞掉）。",
+    "basis": "README:307, README:357, docs/api.md:36-40 vs crates/server/src/handlers.rs:273-285 + crates/storage/src/queries.rs:167-194",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/ops-checks.sh 2>&1 | grep -E 'HISTORY-'; sh qa/harness/agent-down.sh; sh qa/harness/server-down.sh",
+    "expect": "HISTORY-HOURLY-SOURCE PASS、HISTORY-DAILY-SOURCE FAIL（天级 0 行，DB 里确有 4 行）",
+    "verdict": "finding",
+    "qa": "concurrency.qa.md#C12",
+    "severity": "major"
+  },
+  {
+    "id": "DOC-08",
+    "text": "README:358 声称 cluster/info 的 idle_gpus / avg_gpu_utilization / active_alerts 无数据时为 null；实际 active_alerts 恒为 0（`unwrap_or(0)`），另两个才是 null。",
+    "basis": "README:358 vs crates/server/src/handlers.rs:924-926、907-914",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/ops-checks.sh 2>&1 | grep -E 'CLUSTER-INFO'; sh qa/harness/agent-down.sh; sh qa/harness/server-down.sh",
+    "expect": "CLUSTER-INFO-NULL-IDLE-AND-AVG PASS；CLUSTER-INFO-NULL-ACTIVE-ALERTS FAIL（实际 0）",
+    "verdict": "finding",
+    "qa": "docs-consistency.qa.md#D8",
+    "severity": "minor"
+  },
+  {
+    "id": "DOC-09",
+    "text": "README:355 声称任务取消「可配 force 后升级为 SIGKILL」；代码里没有任何 SIGKILL 或 force 选项（只有 SIGTERM 打进程组）。",
+    "basis": "README:355 vs crates/agent/src/job_executor.rs:33-48,161-166",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -rn 'SIGKILL' crates/ | wc -l; grep -rn '\"force\"' crates/ | wc -l",
+    "expect": "两个计数都是 0 → 审计预期 FAIL（文档承诺的功能不存在）",
+    "verdict": "finding",
+    "qa": "docs-consistency.qa.md#D9",
+    "severity": "minor"
+  },
+  {
+    "id": "DOC-10",
+    "text": "deploy/agent.yaml.example:20,23,28 与 README:246 文档化的 log_level / disk_mounts / collect_process_details 三个键在代码里从未被读取（写了也不生效）。",
+    "basis": "deploy/agent.yaml.example:20,23,28；README:246；crates/common/src/config.rs:15,17,21",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && for k in log_level disk_mounts collect_process_details; do echo -n \"$k: \"; grep -rn \"\\\\b$k\\\\b\" crates --include='*.rs' | grep -v 'crates/common/src/config.rs' | wc -l; done",
+    "expect": "三个都是 0 次使用 → 审计预期 FAIL（死配置键）",
+    "verdict": "finding",
+    "qa": "deploy-ops.qa.md#O8",
+    "severity": "major"
+  },
+  {
+    "id": "DOC-11",
+    "text": "server 侧同样有一批死配置键：redis_url、prometheus_enabled、prometheus_addr、ws_heartbeat_interval_secs、ws_slow_threshold_ms、ws_max_backlog、max_concurrent_ws_clients、tls_enabled 全部只在 config.rs 里出现。",
+    "basis": "crates/common/src/config.rs:66,75-83 vs 全仓库使用点",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/ops-checks.sh 2>&1 | grep DEADKEY; sh qa/harness/server-down.sh",
+    "expect": "8 个键 usages_outside_config.rs=0；prometheus_addr 对应的 9090 端口也不监听",
+    "verdict": "finding",
+    "qa": "deploy-ops.qa.md#O7",
+    "severity": "major"
+  },
+  {
+    "id": "DOC-12",
+    "text": "README:232 与 deploy/server.yaml.example:13 用 default_admin_password: admin123，而 serde 默认值是 \"admin\"（crates/common/src/config.rs:120）——省略该键时初始口令与文档不同。",
+    "basis": "README:232, deploy/server.yaml.example:13 vs crates/common/src/config.rs:120",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -n 'default_admin_password' crates/common/src/config.rs README.md deploy/server.yaml.example",
+    "expect": "文档 admin123 / 代码默认 admin（不一致，只在省略键时暴露）",
+    "verdict": "finding",
+    "qa": "deploy-ops.qa.md#O9",
+    "severity": "minor"
+  },
+  {
+    "id": "DOC-13",
+    "text": "README:356 说 Web 前端已移除，但 server 仍注册 /ws，docs/api.md:86-95 也仍文档化 WebSocket。",
+    "basis": "README:356 vs crates/server/src/main.rs:239、docs/api.md:86-95、crates/server/src/ws_handler.rs",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/job-e2e.sh 2>&1 | grep -E 'WS-'; sh qa/harness/agent-down.sh; sh qa/harness/server-down.sh",
+    "expect": "WS-CONNECTED/SUBSCRIBED/METRICS-PUSH/JOB-UPDATE-PUSH 全 PASS：/ws 仍是活的功能，README 的「已移除」只指前端",
+    "verdict": "finding",
+    "qa": "concurrency.qa.md#C14",
+    "severity": "minor"
+  },
+  {
+    "id": "DOC-14",
+    "text": "README:217 承诺指标 2s 一次；实测 20 秒窗口内 node_metrics 新增约 10 行（2s 节拍）。",
+    "basis": "README:217；crates/common/src/config.rs:40 report_interval_secs=2",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/ops-checks.sh 2>&1 | grep -E 'AGENT-REPORT-CADENCE|NOTE node_metrics'",
+    "expect": "PASS，行数落在 7..13",
+    "verdict": "must-hold",
+    "qa": "deploy-ops.qa.md#O5",
+    "severity": "info"
+  },
+  {
+    "id": "DOC-15",
+    "text": "README:296 承诺 Server 重启后 Agent 每 60s 自动重新注册；实测重启后 47s 节点重新出现在 /api/nodes。",
+    "basis": "README:296；crates/agent/src/main.rs:168-174（12 次心跳 × 5s）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/ops-checks.sh 2>&1 | grep -E 'NODE-REAPPEARS|NOTE node re-appeared'",
+    "expect": "PASS，观测值 ≤ 75s",
+    "verdict": "must-hold",
+    "qa": "deploy-ops.qa.md#O6",
+    "severity": "info"
+  },
+  {
+    "id": "DOC-16",
+    "text": "README:154-160 的 TUI 快捷键（j/k/p/h/l/Tab/1-4/r/?/q）与 crates/tui/src/main.rs:85-140 的实现逐键对应。",
+    "basis": "README:152-160 vs crates/tui/src/main.rs:85-140",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/doc-claims-checks.sh 2>&1 | grep 'DOC-TUI-KEY'",
+    "expect": "13 条全部 PASS",
+    "verdict": "must-hold",
+    "qa": "deploy-ops.qa.md#O4",
+    "severity": "info"
+  },
+  {
+    "id": "DOC-17",
+    "text": "README:117-125 的 TUI 参数与默认值（-s http://127.0.0.1:8080、-u/-p、-i 3）与 clap 定义一致，`--help` 可用。",
+    "basis": "README:117-125 vs crates/tui/src/main.rs:21-37",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && ./target/release/clusterscope-tui --help; sh qa/harness/doc-claims-checks.sh 2>&1 | grep 'DOC-TUI-FLAG'",
+    "expect": "exit 0，帮助里出现 --server/--username/--password/--interval 与默认值",
+    "verdict": "must-hold",
+    "qa": "deploy-ops.qa.md#O3",
+    "severity": "info"
+  },
+  {
+    "id": "DOC-18",
+    "text": "README:57 要求 PostgreSQL v16+，deploy/docker-compose.yml:5 用 postgres:16-alpine；本机 PostgreSQL 16.4 可连、server 可跑。",
+    "basis": "README:57, deploy/docker-compose.yml:5",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && /public/tianyuyang/code/ClusterScope-review/pg16/bin/psql \"postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope\" -tAc 'select version();'",
+    "expect": "PostgreSQL 16.4 …",
+    "verdict": "must-hold",
+    "qa": "deploy-ops.qa.md#O1",
+    "severity": "info"
+  },
+  {
+    "id": "DOC-19",
+    "text": "README:353 声明 gRPC 未启用 TLS、tls_enabled 只是预留；代码确实从不读取该键。",
+    "basis": "README:353 vs crates/common/src/config.rs:79,114",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/ops-checks.sh 2>&1 | grep 'DEADKEY tls_enabled'; sh qa/harness/server-down.sh",
+    "expect": "usages_outside_config.rs=0（与文档一致：预留而非实现）",
+    "verdict": "must-hold",
+    "qa": "deploy-ops.qa.md#O7",
+    "severity": "info"
+  },
+  {
+    "id": "DOC-20",
+    "text": "README:166 承诺 Top CPU 进程取 15 个、首个周期不产生数据、采不到不伪造 0；代码常量 TOP_CPU_PROCESSES=15 且首扫只建基线。",
+    "basis": "README:166, README:219 vs crates/agent/src/metrics.rs:495,518-523",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -n 'TOP_CPU_PROCESSES\\|have_process_baseline' crates/agent/src/metrics.rs",
+    "expect": "TOP_CPU_PROCESSES: usize = 15；首扫 return 不产出数据",
+    "verdict": "must-hold",
+    "qa": "deploy-ops.qa.md#O2",
+    "severity": "info"
+  },
+  {
+    "id": "DOC-21",
+    "text": "README:288-291 用 `systemctl --user` 管理服务，但 deploy/server.service、deploy/agent.service 是系统级 unit（User=clusterscope、路径 /usr/local/bin、/etc/clusterscope）——两套部署方式并存且未说明差异。",
+    "basis": "README:285-294 vs deploy/server.service:7,10-13、deploy/agent.service:7,10-13、deploy/install-agent.sh:60-84",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -n 'systemctl --user' README.md | head -3; grep -n 'User=\\|ExecStart=' deploy/*.service",
+    "expect": "README 文档化 user unit；unit 文件是 system unit（文档/部署不一致）",
+    "verdict": "finding",
+    "qa": "deploy-ops.qa.md#O10",
+    "severity": "minor"
+  },
+  {
+    "id": "DOC-22",
+    "text": "deploy/Dockerfile.server:9 EXPOSE 8081 9090，但 server 只监听 8080/50051（prometheus_addr 未被读取）——容器端口声明与实际不符。",
+    "basis": "deploy/Dockerfile.server:9 vs crates/server/src/main.rs:88,134 + crates/common/src/config.rs:83,118",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/ops-checks.sh 2>&1 | grep -E 'PORT-9090|NOTE listening'; sh qa/harness/server-down.sh",
+    "expect": "9090 未监听（PORT-9090-NOT-LISTENING PASS，作为文档不一致的证据）",
+    "verdict": "finding",
+    "qa": "deploy-ops.qa.md#O11",
+    "severity": "minor"
+  },
+  {
+    "id": "SEC-01",
+    "text": "伪造 JWT（错误密钥签名）必须被拒：GET /api/jobs → 401。",
+    "basis": "crates/server/src/auth_middleware.rs:125-132；crates/common/src/auth.rs:128-136",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/api-checks.sh 2>&1 | grep 'SEC-JWT-FORGED'; sh qa/harness/server-down.sh",
+    "expect": "401",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S3",
+    "severity": "blocker"
+  },
+  {
+    "id": "SEC-02",
+    "text": "过期 JWT 必须被拒：exp 已过的同密钥 token → 401。",
+    "basis": "jsonwebtoken Validation::default()（auth_middleware.rs:129）校验 exp",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/api-checks.sh 2>&1 | grep 'SEC-JWT-EXPIRED'; sh qa/harness/server-down.sh",
+    "expect": "401",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S3",
+    "severity": "blocker"
+  },
+  {
+    "id": "SEC-03",
+    "text": "合法 viewer token 只能读：GET /api/jobs → 200，POST /api/jobs → 403。",
+    "basis": "crates/server/src/auth_middleware.rs:82-109；crates/server/src/handlers.rs:1007-1014",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/api-checks.sh 2>&1 | grep -E 'SEC-JWT-VALID|SEC-JWT-VIEWER-CANNOT-POST-JOB'; sh qa/harness/server-down.sh",
+    "expect": "200 与 403",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S4",
+    "severity": "blocker"
+  },
+  {
+    "id": "SEC-04",
+    "text": "垃圾 token / 空 Bearer 处理正确：非 JWT 字符串 → 401。",
+    "basis": "crates/server/src/auth_middleware.rs:111-123",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/api-checks.sh 2>&1 | grep 'SEC-GARBAGE-TOKEN'; sh qa/harness/server-down.sh",
+    "expect": "401",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S3",
+    "severity": "major"
+  },
+  {
+    "id": "SEC-05",
+    "text": "refresh token 轮换生效：用过的 refresh token 再换 → 401，新 refresh token 可用 → 200。",
+    "basis": "crates/server/src/handlers.rs:112-145；crates/storage/src/user_queries.rs:160-181",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/api-checks.sh 2>&1 | grep -E 'SEC-REFRESH'; sh qa/harness/server-down.sh",
+    "expect": "旧 401、新 200",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S5",
+    "severity": "blocker"
+  },
+  {
+    "id": "SEC-06",
+    "text": "登录失败 5 次后账号锁定：第 6 次（即使口令正确）返回 429。",
+    "basis": "crates/common/src/config.rs:105-106；crates/storage/src/user_queries.rs:111-136；crates/server/src/handlers.rs:45-49",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/api-checks.sh 2>&1 | grep 'SEC-LOGIN-LOCKOUT'; sh qa/harness/server-down.sh",
+    "expect": "429",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S6",
+    "severity": "major"
+  },
+  {
+    "id": "SEC-07",
+    "text": "read-only 模式下写操作仍需 token：POST /api/jobs、/api/users、/api/alerts/rules 无 token → 401。",
+    "basis": "README:233；crates/server/src/auth_middleware.rs:66-77",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/api-checks.sh 2>&1 | grep -E 'SEC-JOB-POST-NOTOKEN|SEC-USER-POST-NOTOKEN|SEC-RULE-POST-NOTOKEN'; sh qa/harness/server-down.sh",
+    "expect": "三条都是 401",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S2",
+    "severity": "blocker"
+  },
+  {
+    "id": "SEC-08",
+    "text": "auth_required: true 时 GET 也必须带 token：/api/nodes 无 token → 401，带 token → 200；/ws 无 token → 401。",
+    "basis": "README:359；crates/server/src/ws_handler.rs:126-141",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/auth-tui-checks.sh 2>&1 | grep -E 'AUTHREQ-'; ",
+    "expect": "HEALTH-OPEN 200、NODES-NOTOKEN 401、NODES-WITH-TOKEN 200、WS-NOTOKEN 401",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S7",
+    "severity": "blocker"
+  },
+  {
+    "id": "SEC-09",
+    "text": "agent_token 生效：server 配了 token 后，token 不符的 agent 无法注册，token 相符的可以。",
+    "basis": "README:249-253；crates/server/src/main.rs:94-111；crates/agent/src/grpc_client.rs:54-80",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/auth-tui-checks.sh 2>&1 | grep -E 'AGENTTOKEN-'",
+    "expect": "WRONG-REJECTED PASS、RIGHT-ACCEPTED PASS",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S8",
+    "severity": "blocker"
+  },
+  {
+    "id": "SEC-10",
+    "text": "用户创建有最低校验：口令 <6 字符 → 400，role 不在 viewer/operator/admin → 400；重复用户名 → 409。",
+    "basis": "crates/server/src/handlers.rs:780-808",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/api-checks.sh 2>&1 | grep -E 'SEC-CREATE-USER'; sh qa/harness/server-down.sh",
+    "expect": "两条 400",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S9",
+    "severity": "major"
+  },
+  {
+    "id": "SEC-11",
+    "text": "SQL 注入面收敛：所有用户输入都走绑定参数，`format!` 只用于拼接参数占位符与固定白名单表名。",
+    "basis": "crates/storage/src/queries.rs:175-186（白名单表名）、crates/storage/src/job_queries.rs:74-108、crates/storage/src/audit_queries.rs:52-79",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -rn 'format!' crates/storage/src/*.rs | grep -i 'select\\|insert\\|update\\|delete'; grep -rn 'query(&format!\\|query_as.*&format!' crates --include='*.rs' | grep -v 'crates/storage/src/queries.rs' | wc -l",
+    "expect": "只有占位符/白名单拼接；没有把用户输入插进 SQL 字符串",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S10",
+    "severity": "blocker"
+  },
+  {
+    "id": "SEC-12",
+    "text": "命令注入面收敛：agent 用 `Command::new(executable).args(...)` 直接 exec，不经 shell；任务自身可以显式跑 /bin/sh（那是任务内容，不是注入）。",
+    "basis": "crates/agent/src/job_executor.rs:118-132",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -rn 'Command::new\\|sh -c\\|\\.arg(\"sh\"' crates/agent/src/*.rs",
+    "expect": "只出现 Command::new(&executable) 与 nvidia-smi 调用，无 shell 拼接",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S11",
+    "severity": "blocker"
+  },
+  {
+    "id": "SEC-13",
+    "text": "登录接口没有 IP/全局限速：对不存在的用户名连续 20 次错误登录不会触发 429（只有按账号的锁定）。",
+    "basis": "crates/server/src/handlers.rs:31-62（仅按 user 记录失败次数）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && for i in $(seq 1 20); do curl -s -o /dev/null -w '%{http_code}\\n' -X POST -H 'Content-Type: application/json' -d '{\"username\":\"no-such-user\",\"password\":\"x\"}' http://127.0.0.1:8080/api/login; done | sort | uniq -c; sh qa/harness/server-down.sh",
+    "expect": "20 次全是 401，无 429 → 审计结论：可被暴力/用户名枚举无限尝试",
+    "verdict": "finding",
+    "qa": "security.qa.md#S12",
+    "severity": "major"
+  },
+  {
+    "id": "SEC-14",
+    "text": "访问令牌不可吊销：JWT 无黑名单/jti 校验，用户被删除或禁用后其已签发的 access token 在有效期内仍可用（默认 3600s）。",
+    "basis": "crates/common/src/config.rs:103；crates/server/src/auth_middleware.rs:125-132（只验签+exp）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -rn 'jti' crates --include='*.rs' | grep -v 'common/src/auth.rs'; echo '--- 无黑名单查询 ---'; grep -rn 'blacklist\\|revoked' crates/server/src/*.rs | wc -l",
+    "expect": "0（除签发处外无任何 jti 使用）→ 审计结论：令牌不可吊销，只能等过期",
+    "verdict": "finding",
+    "qa": "security.qa.md#S13",
+    "severity": "major"
+  },
+  {
+    "id": "SEC-15",
+    "text": "认证事件没有审计：insert_audit_log 只在 create_job / stop_job 调用，登录成功/失败、用户增删改都不写审计表。",
+    "basis": "crates/server/src/handlers.rs:470,585（仅两处）；docs/api.md:84 声称有审计日志",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -rn 'insert_audit_log' crates/server/src/*.rs",
+    "expect": "只有 2 个调用点（create_job、stop_job）→ 审计结论：审计覆盖不足",
+    "verdict": "finding",
+    "qa": "security.qa.md#S14",
+    "severity": "major"
+  },
+  {
+    "id": "SEC-16",
+    "text": "密码存储用 argon2 默认参数加盐哈希，接口不返回哈希（GET /api/users 返回的 password_hash 为空串）。",
+    "basis": "crates/common/src/auth.rs:80-100；crates/storage/src/models.rs:130-132；crates/server/src/handlers.rs:839-850",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && T=$(curl -s -X POST -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin123\"}' http://127.0.0.1:8080/api/login | jq -r .access_token) && curl -s -H \"Authorization: Bearer $T\" http://127.0.0.1:8080/api/users | jq -c '.[0] | {username, password_hash}'; sh qa/harness/server-down.sh",
+    "expect": "password_hash 为 \"\"（不含真实哈希）",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S15",
+    "severity": "major"
+  },
+  {
+    "id": "SEC-17",
+    "text": "任务提交的输入上限存在：`/api/jobs/{id}/logs` 的 limit 被 clamp 到 1..10000，list 接口 page_size clamp 1..200。",
+    "basis": "crates/server/src/handlers.rs:609-620,520-524,964-968",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && T=$(curl -s -X POST -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin123\"}' http://127.0.0.1:8080/api/login | jq -r .access_token) && echo \"logs limit=0 -> $(curl -s -H \\\"Authorization: Bearer $T\\\" 'http://127.0.0.1:8080/api/jobs/x/logs?limit=0' | jq length)\" && curl -s -o /dev/null -w 'jobs page_size=99999 -> %{http_code}\\n' -H \"Authorization: Bearer $T\" 'http://127.0.0.1:8080/api/jobs?page_size=99999'; sh qa/harness/server-down.sh",
+    "expect": "limit=0 被抬到 1（0 或 1 行）；page_size=99999 与 page_size=0 都是 200（被 clamp 而非报错）",
+    "verdict": "must-hold",
+    "qa": "security.qa.md#S16",
+    "severity": "minor"
+  },
+  {
+    "id": "SEC-18",
+    "text": "job 提交的 executable/arguments 无长度与内容校验，只有「非空」检查；超长/绝对路径/环境变量注入都由 agent 原样执行。",
+    "basis": "crates/server/src/handlers.rs:425-434（仅 executable 非空 + 节点存在）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sed -n '420,440p' crates/server/src/handlers.rs",
+    "expect": "无长度/字符集/白名单校验 → 审计结论：operator 角色可执行任意命令（设计如此，需文档明示）",
+    "verdict": "finding",
+    "qa": "security.qa.md#S17",
+    "severity": "major"
+  },
+  {
+    "id": "CON-01",
+    "text": "任务生命周期端到端成立：POST /api/jobs → queued → starting → running → succeeded，日志按 offset 入库并可查。",
+    "basis": "README:265-273；crates/server/src/main.rs:383-492；crates/agent/src/grpc_client.rs:168-262",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/job-e2e.sh 2>&1 | grep -E 'JOB-SUCCEEDED|JOB-LOGS-CAPTURED'",
+    "expect": "两条 PASS",
+    "verdict": "must-hold",
+    "qa": "concurrency.qa.md#C1",
+    "severity": "blocker"
+  },
+  {
+    "id": "CON-02",
+    "text": "取消任务真的杀掉进程组：DELETE /api/jobs/{id} → stopping → cancelled，且 sleep 300 子进程不残留。",
+    "basis": "README:272-273,355；crates/agent/src/job_executor.rs:33-48,161-166",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/job-e2e.sh 2>&1 | grep -E 'JOB-CANCELLED|JOB-PROC-GONE'",
+    "expect": "两条 PASS（进程组被 SIGTERM，无孤儿）",
+    "verdict": "must-hold",
+    "qa": "concurrency.qa.md#C2",
+    "severity": "blocker"
+  },
+  {
+    "id": "CON-03",
+    "text": "停止终态任务被拒：对 succeeded 任务 DELETE → 409；未知 job_id → 404。",
+    "basis": "crates/server/src/handlers.rs:558-570",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/job-e2e.sh 2>&1 | grep -E 'JOB-STOP-'",
+    "expect": "409 与 404",
+    "verdict": "must-hold",
+    "qa": "concurrency.qa.md#C3",
+    "severity": "major"
+  },
+  {
+    "id": "CON-04",
+    "text": "卡在 starting 且节点不在线的任务会被 requeue 回 queued，并清空 started_at（避免双跑/容量泄漏）。",
+    "basis": "crates/server/src/main.rs:399-435；crates/storage/src/job_queries.rs:179-215",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/concurrency-checks.sh 2>&1 | grep -E 'CON-REQUEUE'",
+    "expect": "两条 PASS（≤30s 内变 queued 且 started_at 为空）",
+    "verdict": "must-hold",
+    "qa": "concurrency.qa.md#C4",
+    "severity": "blocker"
+  },
+  {
+    "id": "CON-05",
+    "text": "GPU 容量感知调度成立：6 卡节点上两个 gpu:6 任务只有一个 running，另一个排队；取消第一个后第二个被派发。",
+    "basis": "README:354；crates/scheduler/src/lib.rs:36-51,75-111,175-201",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/concurrency-checks.sh 2>&1 | grep -E 'CON-CAPACITY'",
+    "expect": "三条 PASS",
+    "verdict": "must-hold",
+    "qa": "concurrency.qa.md#C5",
+    "severity": "blocker"
+  },
+  {
+    "id": "CON-06",
+    "text": "告警去重成立：同一 (rule,node,gpu) 在持续越限期间不再产生新事件（10s 内 5 次上报，事件数不变）。",
+    "basis": "docs/architecture.md:64-67；crates/common/src/alert.rs:94-104,140-275",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/concurrency-checks.sh 2>&1 | grep -E 'CON-ALERT'",
+    "expect": "三条 PASS（firing 事件存在、10s 后计数不变）",
+    "verdict": "must-hold",
+    "qa": "concurrency.qa.md#C6",
+    "severity": "major"
+  },
+  {
+    "id": "CON-07",
+    "text": "任务 pid 从未落库：jobs.pid 在所有任务行上都是 NULL，尽管 agent 日志记录了真实 pid。",
+    "basis": "crates/server/src/grpc.rs:497-506（update_job_status 恒传 None）；crates/agent/src/job_executor.rs:152-169",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/concurrency-checks.sh 2>&1 | grep -E 'CON-JOB-PID|NOTE jobs rows'",
+    "expect": "CON-JOB-PID-PERSISTED FAIL（0 行有 pid，agent 却 spawn 了多次）→ 审计预期",
+    "verdict": "finding",
+    "qa": "concurrency.qa.md#C7",
+    "severity": "minor"
+  },
+  {
+    "id": "CON-08",
+    "text": "重试机制不存在：retry_count/max_retries 只是列，任何代码路径都不会写非 0 值（失败任务不会被重试）。",
+    "basis": "crates/storage/src/lib.rs:137-138；crates/server/src/handlers.rs:461-462；crates/server/src/grpc.rs:282-283",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/concurrency-checks.sh 2>&1 | grep 'CON-RETRY'; grep -rn 'retry_count' crates/server/src/*.rs | grep -v 'retry_count: 0'",
+    "expect": "CON-RETRY-NEVER-USED PASS（0 行非零），代码中只有字面 0",
+    "verdict": "finding",
+    "qa": "concurrency.qa.md#C8",
+    "severity": "minor"
+  },
+  {
+    "id": "CON-09",
+    "text": "原始指标保留 24h 生效：写入 25h 前的行会在 ≤20s 内被后台循环删除，1h 前的行保留。",
+    "basis": "README:305；crates/storage/src/queries.rs:217-226；crates/server/src/main.rs:325-327",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/ops-checks.sh 2>&1 | grep -E 'RETENTION-RAW'",
+    "expect": "两条 PASS",
+    "verdict": "must-hold",
+    "qa": "concurrency.qa.md#C9",
+    "severity": "major"
+  },
+  {
+    "id": "CON-10",
+    "text": "小时级/天级清理与任务日志保留按文档节拍执行（7 天 / 90 天 / 30 天），但都挂在 10 分钟倍数 tick 上：清理最坏延迟 10 分钟。",
+    "basis": "README:305-309；crates/server/src/main.rs:345-376",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sleep 620 && /public/tianyuyang/code/ClusterScope-review/pg16/bin/psql \"postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope\" -tAc \"select count(*) from metrics_hourly where hour_bucket < now() - interval '7 days';\" && sh qa/harness/server-down.sh",
+    "expect": "长时间检查（≥10 分钟）：插入 8 天前的小时桶与 31 天前的日志行，tick 后应被删除",
+    "verdict": "long",
+    "qa": "concurrency.qa.md#C10",
+    "severity": "minor"
+  },
+  {
+    "id": "CON-11",
+    "text": "聚合是幂等的（ON CONFLICT upsert），但只在每 10 分钟 tick 跑：新建节点的小时桶最坏 10 分钟后才出现。",
+    "basis": "crates/storage/src/aggregation.rs:11-63,66-93；crates/server/src/main.rs:357-367",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sleep 620 && /public/tianyuyang/code/ClusterScope-review/pg16/bin/psql \"postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope\" -tAc \"select count(*) from metrics_hourly where node_id='qa-node-01';\"",
+    "expect": "长时间检查（≥10 分钟）：tick 后出现当小时桶；重复 tick 不产生重复行（唯一键）",
+    "verdict": "long",
+    "qa": "concurrency.qa.md#C11",
+    "severity": "minor"
+  },
+  {
+    "id": "CON-12",
+    "text": "历史查询的三档合并：原始 24h + 小时 7d 都返回并带 source 标记、按时间升序；天级（90 天）永不返回（缺陷，见 DOC-07）。",
+    "basis": "crates/server/src/handlers.rs:217-324；crates/storage/src/queries.rs:167-194",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/ops-checks.sh 2>&1 | grep -E 'HISTORY-'",
+    "expect": "HOURLY/SORTED/MISSING-PARAMS PASS；DAILY-SOURCE FAIL",
+    "verdict": "finding",
+    "qa": "concurrency.qa.md#C12",
+    "severity": "major"
+  },
+  {
+    "id": "CON-13",
+    "text": "迁移可重复执行：连续两次启动 server 都健康，admin 用户不会重复创建。",
+    "basis": "crates/storage/src/lib.rs:35-284；GAUNTLET.md 坑 #8",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/ops-checks.sh 2>&1 | grep -E 'MIGRATION-'",
+    "expect": "两条 PASS（健康 200、admin 计数 1）",
+    "verdict": "must-hold",
+    "qa": "concurrency.qa.md#C13",
+    "severity": "blocker"
+  },
+  {
+    "id": "CON-14",
+    "text": "WebSocket 广播仍然工作：连接后收到 connected/subscribed，并持续收到 metrics_update，任务状态变化有 job_update。",
+    "basis": "crates/server/src/ws_handler.rs:120-236；crates/server/src/grpc.rs:217-232,515",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sh qa/harness/job-e2e.sh 2>&1 | grep -E 'WS-'",
+    "expect": "四条 PASS（实测 metrics=13、jobs=3、alerts=2）",
+    "verdict": "must-hold",
+    "qa": "concurrency.qa.md#C14",
+    "severity": "major"
+  },
+  {
+    "id": "CON-15",
+    "text": "gRPC 流不会泄漏：agent 断开后 get_pending_jobs 的 5s 轮询循环因 send 失败退出；report_metrics 每条上报一个独立流。",
+    "basis": "crates/server/src/grpc.rs:329-355（`tx.send(...).is_err() => return`）、crates/agent/src/grpc_client.rs:128-140",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01 && sleep 5 && grep -c 'get_pending_jobs' gauntlet-out/qa/server.log; sh qa/harness/agent-down.sh && sleep 12 && grep -c 'get_jobs_for_node failed\\|Failed to send' gauntlet-out/qa/server.log; sh qa/harness/server-down.sh",
+    "expect": "agent 断开后循环退出，日志不再增长（静态+运行时观察）",
+    "verdict": "must-hold",
+    "qa": "concurrency.qa.md#C15",
+    "severity": "minor"
+  },
+  {
+    "id": "CON-16",
+    "text": "去重缓存有界但无过期：seen_reports 是 100000 条 LRU（(node,seq)），长时间运行不会无界增长。",
+    "basis": "crates/server/src/main.rs:78-80；crates/server/src/grpc.rs:181-201",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -n 'LruCache::new' crates/server/src/main.rs",
+    "expect": "NonZeroUsize::new(100000)；无 TTL（重启即清空，配合 sequence 用挂钟毫秒播种，见 grpc_client.rs:53,129-134）",
+    "verdict": "must-hold",
+    "qa": "concurrency.qa.md#C16",
+    "severity": "info"
+  },
+  {
+    "id": "OPS-01",
+    "text": "server 只监听配置里的 8080/50051；配置键 prometheus_addr（默认 0.0.0.0:9090）没有任何监听者。",
+    "basis": "crates/server/src/main.rs:88,134；crates/common/src/config.rs:83,118",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/ops-checks.sh 2>&1 | grep -E 'PORT-|NOTE listening'; sh qa/harness/server-down.sh",
+    "expect": "8080/50051 在监听、9090 不在",
+    "verdict": "must-hold",
+    "qa": "deploy-ops.qa.md#O11",
+    "severity": "minor"
+  },
+  {
+    "id": "OPS-02",
+    "text": "/api/prometheus/metrics 从 REST 端口暴露两个指标（nodes_total、nodes_online），没有独立 exporter。",
+    "basis": "crates/server/src/handlers.rs:981-1002",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/server-up.sh false && sh qa/harness/ops-checks.sh 2>&1 | grep -E 'PROM-METRIC'; sh qa/harness/server-down.sh",
+    "expect": "两条 PASS；内容只有两个指标",
+    "verdict": "must-hold",
+    "qa": "deploy-ops.qa.md#O12",
+    "severity": "info"
+  },
+  {
+    "id": "OPS-03",
+    "text": "systemd unit 里的路径与参数有效：agent 用 `--config`（clap 定义存在）、server 用位置参数（argv[1] 解析存在）。",
+    "basis": "deploy/agent.service:7；deploy/server.service:7；crates/agent/src/main.rs:15；crates/server/src/main.rs:183-186",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && ./target/release/clusterscope-agent --help | grep -- '--config'; sh qa/harness/doc-claims-checks.sh 2>&1 | grep -E 'DOC-AGENT-UNIT|DOC-SERVER-UNIT|DOC-INSTALL-AGENT'",
+    "expect": "全部 PASS（参数形式与二进制一致）",
+    "verdict": "must-hold",
+    "qa": "deploy-ops.qa.md#O13",
+    "severity": "major"
+  },
+  {
+    "id": "OPS-04",
+    "text": "deploy/install-agent.sh 语法与用法成立：`bash -n` 通过、参数顺序与 README:92-93 一致、node_id 为空时走 hostname 分支。",
+    "basis": "deploy/install-agent.sh:17-19,35-54；README:92-98；crates/agent/src/main.rs:78-87",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && bash -n deploy/install-agent.sh && echo SYNTAX-OK; bash -n deploy/tui.sh && echo TUI-SYNTAX-OK; grep -n 'target/debug' deploy/tui.sh",
+    "expect": "两个脚本语法 OK；tui.sh 的 --install 只找 target/debug 二进制（release-only 环境会失败）→ 记为小缺陷",
+    "verdict": "finding",
+    "qa": "deploy-ops.qa.md#O14",
+    "severity": "minor"
+  },
+  {
+    "id": "OPS-05",
+    "text": "docker-compose 那条路在本机不可验证（无 docker/podman 镜像、无外网），只能做静态一致性检查：镜像版本、env 键、构建上下文。",
+    "basis": "deploy/docker-compose.yml:5,21-34；GAUNTLET.md 坑 #8",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && command -v docker || echo no-docker; command -v podman && podman images | wc -l; sh qa/harness/doc-claims-checks.sh 2>&1 | grep -E 'DOC-COMPOSE-PG16|DOC-DOCKERFILE'",
+    "expect": "no-docker；podman 镜像 0 → 该维度标记 N/A（不可验证），静态项 PASS",
+    "verdict": "na",
+    "qa": "deploy-ops.qa.md#O15",
+    "severity": "info"
+  },
+  {
+    "id": "OPS-06",
+    "text": "server.yaml.example / agent.yaml.example 的每个键都能被 serde 反序列化（不会因未知键报错或静默忽略）。",
+    "basis": "deploy/server.yaml.example:4-22；deploy/agent.yaml.example:5-31；crates/common/src/config.rs:4-30,60-92",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/doc-claims-checks.sh 2>&1 | grep -E 'DOC-AGENT-YAML-KEY|DOC-SERVER-YAML-KEY'",
+    "expect": "17 条全 PASS（键名都存在；但其中 3 个 agent 键是死键，见 DOC-10）",
+    "verdict": "must-hold",
+    "qa": "deploy-ops.qa.md#O16",
+    "severity": "major"
+  },
+  {
+    "id": "OPS-07",
+    "text": "没有数据库迁移工具链：建表脚本内联在 DatabasePool::run_migrations，migrations.rs 是只有注释的占位模块，无法回滚/审计 schema 版本。",
+    "basis": "crates/storage/src/lib.rs:35-284；crates/storage/src/migrations.rs（5 行注释）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && wc -l crates/storage/src/migrations.rs; grep -c 'CREATE TABLE IF NOT EXISTS' crates/storage/src/lib.rs",
+    "expect": "migrations.rs 5 行、建表 9 张全在 lib.rs 内联 → 审计结论：无 schema 版本管理",
+    "verdict": "finding",
+    "qa": "deploy-ops.qa.md#O17",
+    "severity": "minor"
+  },
+  {
+    "id": "OPS-08",
+    "text": "本机部署可用性成立：无 root 也能跑 server + agent + TUI（PG 16.4 手装实例、TUI 在 pty 里正常渲染）。",
+    "basis": "README:15,56；GAUNTLET.md「PostgreSQL 16.4」",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/auth-tui-checks.sh 2>&1 | grep -E 'TUI-'",
+    "expect": "TUI-RENDERS-HEADER / SHOWS-NODE / SHOWS-KEYHINTS / NO-PANIC 全 PASS",
+    "verdict": "must-hold",
+    "qa": "deploy-ops.qa.md#O18",
+    "severity": "major"
+  },
+  {
+    "id": "OPS-09",
+    "text": "agent 在无 GPU 的机器上也能正常上报（纯 CPU 节点）——README:323 承诺的降级路径；本机有 6 张 L20，属于更强条件，未覆盖纯 CPU 场景。",
+    "basis": "README:323；crates/agent/src/metrics.rs:15-27,86-92",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && nvidia-smi --query-gpu=index --format=csv,noheader | wc -l; grep -n 'NVML init failed' gauntlet-out/qa/agent.log | wc -l",
+    "expect": "本机 6 张 GPU，NVML 可用 → 纯 CPU 降级路径**不可验证**（标记 N/A，需在无 GPU 节点复测）",
+    "verdict": "na",
+    "qa": "deploy-ops.qa.md#O19",
+    "severity": "info"
+  },
+  {
+    "id": "OPS-10",
+    "text": "README:297 要求防火墙放行 50051/8080——本机无 root，防火墙规则不可验证；只能确认两个端口确实在监听。",
+    "basis": "README:297",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && ss -ltn | grep -E ':8080|:50051'; command -v firewall-cmd || echo no-firewall-cli",
+    "expect": "端口在监听；防火墙策略 N/A（无权限）",
+    "verdict": "na",
+    "qa": "deploy-ops.qa.md#O20",
+    "severity": "info"
+  },
+  {
+    "id": "OPS-11",
+    "text": "TUI 依赖 REST 且不链接内部 crate（README:15、架构图 TUI→REST）：`cargo tree -p tui` 只应出现 common/protocol 之外的外部依赖。",
+    "basis": "README:15,29-31；crates/tui/Cargo.toml",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh -c 'export PATH=$HOME/.cargo/bin:$PATH; cargo tree -p tui --offline -e normal --depth 1' | grep -E 'clusterscope|common|protocol|storage|server|scheduler' || echo NO-INTERNAL-CRATES",
+    "expect": "NO-INTERNAL-CRATES（TUI 不依赖任何内部 crate）",
+    "verdict": "must-hold",
+    "qa": "deploy-ops.qa.md#O21",
+    "severity": "major"
+  },
+  {
+    "id": "MRG-01",
+    "text": "合流方案必须逐条回答 qa/merge-plan-requirements.md 里的必答问题（三棵树的差异、重复实现、被丢弃的工作、冲突点、推荐路线、风险）。",
+    "basis": "用户需求「交付 = 全维度审查报告 + 三棵树的合流方案」；GAUNTLET.md「三线合流素材」",
+    "verify": "cat /public/tianyuyang/code/ClusterScope-review/gh-line/qa/merge-plan-requirements.md; ls /public/tianyuyang/code/ClusterScope-review/node-line.bundle /public/tianyuyang/code/ClusterScope-review/local-wip/",
+    "expect": "第 6 阶段产出的合流方案对 M1..M9 每题给出答案与证据；素材指针有效",
+    "verdict": "must-hold",
+    "qa": "merge-plan-requirements.md",
+    "severity": "blocker"
+  }
+]
