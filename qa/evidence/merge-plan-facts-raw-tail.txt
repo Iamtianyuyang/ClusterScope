@@ -1,0 +1,91 @@
+### B 线（node-line.bundle）事实核验
+--- bline 最近 6 个提交 ---
+19d8fbc fix: web — refresh-token rotation on 401, read-only-mode probe, job args quoting
+eac070e fix: unbreak audit-log listing, unblock scheduler head-of-line, guard duration narrowing
+0c26dcd fix: replay completed-run markers in proto numbering, refuse corrupt markers, reap orphan process groups
+a65f82b fix: reject placeholder secrets, reap stuck jobs, close double-run window
+9d8cb98 fix: TLS everywhere, scheduler fairness, alert sync, audit IPs, input caps
+94c1410 fix: harden auth against forged JWTs, token replay, and orphaned job runs
+--- bline 提交数 ---
+22
+
+--- eac070e 的改动范围 ---
+eac070e fix: unbreak audit-log listing, unblock scheduler head-of-line, guard duration narrowing
+ crates/server/src/handlers.rs       | 12 ++++++++----
+ crates/server/src/main.rs           |  6 ++++--
+ crates/storage/src/audit_queries.rs | 30 ++++++++++++++++++++++++------
+ crates/storage/src/job_queries.rs   | 10 +++++++---
+ crates/storage/src/models.rs        |  3 ++-
+ 5 files changed, 45 insertions(+), 16 deletions(-)
+
+--- eac070e 是否修掉了 audit-log 的 user/username 不匹配 ---
+commit eac070e228dbad4b071234d9a4ba7ef57d03bbf3
+Author: ClusterScope Dev <dev@clusterscope.local>
+Date:   Wed Aug 12 06:45:25 2026 +0800
+
+    fix: unbreak audit-log listing, unblock scheduler head-of-line, guard duration narrowing
+    
+    - audit_logs always returned 500: AuditLogRow mapped the 'username'
+      column to a 'user' field (sqlx ColumnNotFound at runtime), and the
+      COUNT query never bound the filter parameters. Rename the field and
+      bind the same values in both count and page queries.
+    - Scheduler loaded only the 100 oldest queued jobs per cycle; when those
+      could not run (e.g. all pinned to a busy node) newer jobs never
+      entered the in-memory queue even with idle capacity elsewhere. Load
+      all queued jobs (the queue dedups on job_id).
+    - create_alert_rule narrowed duration_seconds i64 -> i32 with ,
+      truncating oversized values to 0 (instant-firing rules); range-check
+      with try_from instead.
+
+diff --git a/crates/storage/src/audit_queries.rs b/crates/storage/src/audit_queries.rs
+index 8ed0148..4a279dc 100644
+--- a/crates/storage/src/audit_queries.rs
++++ b/crates/storage/src/audit_queries.rs
+@@ -53,16 +53,21 @@ pub async fn list_audit_logs(
+     
+     let mut conditions = vec!["1=1".to_string()];
+ 
+-    if let Some(_user) = user {
++    // Bind placeholder index = position in `conditions` (index 0 is the
++    // constant "1=1", so the first filter gets $1). The same bound values
++    // are used for BOTH the count and the page query — forgetting the count
++    // query (as before) makes every filtered request fail with a missing
++    // bind parameter.
++    if user.is_some() {
+         conditions.push(format!("username = ${}", conditions.len()));
+     }
+-    if let Some(_action) = action {
++    if action.is_some() {
+         conditions.push(format!("action = ${}", conditions.len()));
+     }
+-    if let Some(_start) = start_time {
++    if start_time.is_some() {
+         conditions.push(format!("timestamp >= ${}", conditions.len()));
+     }
+-    if let Some(_end) = end_time {
++    if end_time.is_some() {
+         conditions.push(format!("timestamp <= ${}", conditions.len()));
+     }
+ 
+@@ -79,8 +84,21 @@ pub async fn list_audit_logs(
+         conditions.len(),
+         conditions.len() + 1,
+     );
+-    
+-    let total: Option<(i64,)> = sqlx::query_as(&total_query).fetch_optional(pool).await?;
++
++    let mut total_q = sqlx::query_as::<_, (i64,)>(&total_query);
++    if user.is_some() {
++        total_q = total_q.bind(user);
++    }
++    if action.is_some() {
++        total_q = total_q.bind(action);
++    }
++    if start_time.is_some() {
++        total_q = total_q.bind(start_time);
++    }
++    if end_time.is_some() {
++        total_q = total_q.bind(end_time);
++    }
++    let total: Option<(i64,)> = total_q.fetch_optional(pool).await?;
+     let total = total.map(|(t,)| t).unwrap_or(0);

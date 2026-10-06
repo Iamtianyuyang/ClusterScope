@@ -143,7 +143,8 @@
     { "id": "F-12", "constraint": ["DOC-01", "DOC-02", "DOC-03", "DOC-05", "DOC-08", "DOC-12", "DOC-21", "DOC-22"], "severity": "minor", "title": "文档一致性共 8 条硬性不符 + 1 条危险默认", "impact": "没有 LICENSE 文件但声明 Apache-2.0；architecture.md 保留策略过时；server 不支持 --help；api.md 漏 3 个真实路由；active_alerts 语义与 README 相反；默认管理员口令与文档不同（省略该键时是 'admin'）；README 讲 systemctl --user 而 unit 文件是系统级；Dockerfile EXPOSE 里 9090/8081 是死端口。", "repro": ["sh qa/harness/doc-claims-checks.sh   # → 7 条 FAIL（本项含 3 条 api.md 路由）"], "evidence": ["doc-claims.txt", "help-server.txt", "doc-admin-pw.txt", "doc-systemd.txt", "extra-facts.txt"] },
     { "id": "F-13", "constraint": "GATE-09", "severity": "major", "title": "没有任何 CI：.github/ 不存在", "impact": "README 写的三条本地闸门（fmt / clippy -D warnings / test）只能靠人记得手跑；本仓库历史上已经出现过多次 clippy 1.97 lint 修复提交，说明没有闸门兜底。", "repro": ["test -d .github && echo CI-PRESENT || echo CI-ABSENT"], "evidence": ["no-ci.txt"] },
     { "id": "F-14", "constraint": "GATE-08", "severity": "minor", "title": "没有任何自动架构检查（arch 闸门被跳过）", "impact": "crate 之间的依赖方向（common/protocol 叶子 → storage/scheduler/agent → server，tui 独立）目前只靠约定，回归时不会有任何闸门报警。", "repro": ["node .gauntlet/gauntlet.mjs gate --profile quality | grep '^arch'"], "evidence": ["gate.txt"] },
-    { "id": "F-15", "constraint": "CON-08", "severity": "minor", "title": "重试机制不存在：retry_count / max_retries 是死列", "impact": "失败任务永远不会重试；两列在 schema 与 proto 里存在，容易让人误以为有重试能力。", "repro": ["psql -tAc 'select count(*) from jobs where retry_count>0 or max_retries>0'   # → 0"], "evidence": ["concurrency-checks.txt"] }
+    { "id": "F-15", "constraint": "CON-08", "severity": "minor", "title": "重试机制不存在：retry_count / max_retries 是死列", "impact": "失败任务永远不会重试；两列在 schema 与 proto 里存在，容易让人误以为有重试能力。", "repro": ["psql -tAc 'select count(*) from jobs where retry_count>0 or max_retries>0'   # → 0"], "evidence": ["concurrency-checks.txt"] },
+    { "id": "F-16", "constraint": "DOC-06", "severity": "major", "title": "审计查询的 COUNT 语句一个参数都没绑（被 SELECT * 的 500 掩盖的第二个缺陷）", "impact": "crates/storage/src/audit_queries.rs:69 生成的 total_query 里会出现 $1..$n 占位符（只要带 user/action/start_time/end_time 任一过滤），但 :81 执行它时一个 bind 都没有。也就是说即使只把 SELECT * 的字段名改对，任何带过滤条件的审计查询仍然会失败（sqlx 参数个数不匹配）。当前表现为「永远 500」，两个原因叠加，改一个不够。", "rootCause": "同一函数里 count 查询与 page 查询共用 where_clause，但只有 page 查询（:84-96）绑了参数。", "repro": ["sed -n '52,82p' crates/storage/src/audit_queries.rs   # → conditions 里加 $n 占位符，:81 裸 fetch_optional", "对照 B 线（未推送）的 eac070e：它的提交信息逐字写着 'audit_logs always returned 500: AuditLogRow mapped the username column to a user field (sqlx ColumnNotFound at runtime), and the COUNT query never bound the filter parameters' —— 两个缺陷在那棵树里一起修掉了"], "evidence": ["merge-plan-facts.txt", "repro-audit-logs-500.txt"], "crossTree": "B 线 eac070e 已修复（见 mergePlanFacts.M8）" }
   ],
   "checklistDiscoveries": [
     { "id": "N1", "severity": "minor", "title": "死配置键总数是 15，不是 11", "detail": "qa/constraints.json 的 DOC-10 + DOC-11 只登记了 11 个；qa/harness/ops-checks.sh 自己在扫的 15 个键里，node_labels、max_cached_reports、reconnect_initial_delay_secs、reconnect_max_delay_secs 四个没有任何约束覆盖。", "evidence": "extra-checks.txt / ops-checks.txt（DEADKEY 行）" },
@@ -164,6 +165,30 @@
     { "constraint": "CON-15", "item": "gRPC send 失败分支的运行时触发", "blockedBy": "需要在「断开瞬间正好有 starting 任务要发给该节点」的条件下观测，构造它等于把真任务派给一个正在死掉的节点；本阶段只做了静态验证 + 断开后日志无异常增长" },
     { "constraint": ["CON-10", "CON-11"], "item": "天级（90 天）清理那一支 tick", "blockedBy": "它挂在 cycle%360（3600s）上；long-checks.sh 已按计划等到该 tick（约 21:49:36Z）。C10 的小时级/日志级清理与 C11 的幂等已经拿到实测结论，此处只影响 C10 的天级一支。" }
   ],
+  "mergePlanFacts": {
+    "note": "第 6 阶段回答 M1–M9 时可以直接引用本节——这里只放本阶段亲自核验过的事实（命令与输出见 qa/evidence/merge-plan-facts.txt），不含任何取舍建议（M5 是产品决策）。",
+    "M1_commitGraph": {
+      "A_localWindows": "基线 f8ac726 + 未提交的 Web 前端工作（快照在 ClusterScope-review/local-wip/，57 个受版本控制的目录文件）",
+      "B_nodeWorktree": "/public/tianyuyang/code/ClusterScope 的 HEAD = 19d8fbc（22 个提交），相对 origin/master ahead 12，12 个修改文件从未提交；bundle = ClusterScope-review/node-line.bundle（8929224 字节），bundle 里只有提交、没有那 12 个改动",
+      "C_github": "gh-line master = f9c080b（40 个提交），version 0.1.1；A 是 0.1.0",
+      "B_uncommitted_12": ["Cargo.lock", "Cargo.toml", "crates/agent/src/job_executor.rs", "crates/agent/src/metrics.rs", "crates/common/src/alert.rs", "crates/server/Cargo.toml", "crates/server/src/auth_middleware.rs", "crates/server/src/grpc.rs", "crates/server/src/handlers.rs", "crates/server/src/main.rs", "crates/server/src/ws_handler.rs", "crates/storage/src/user_queries.rs"],
+      "B_uncommitted_verified": "git status --short 的实际输出与清单逐字一致（12 个 M 行）"
+    },
+    "M3_replacedOrLost": {
+      "A_only_modules": "crates/common/src/dedup.rs 95 行、metrics.rs 190 行、sequence.rs 65 行（共 350 行）",
+      "dedup_verdict": "被替代而不是丢失：C 用 crates/server/src/main.rs:33,78-80 的 seen_reports LruCache<String,()>（100000 条有界）实现了同一目的",
+      "A_only_other": "crates/storage/src/conversions.rs、deploy/nginx.conf、tests/integration_test.rs（6564 字节，A 独有的集成测试）",
+      "A_web": "local-wip/web 27 个文件（index.html / package.json / package-lock.json / vite.config.ts / tsconfig.json / public/ 等）；C 已删除 web/"
+    },
+    "M4_fileLevelDiff": {
+      "counts": "A 57 个文件、C 51 个文件、两边同名同路径 49 个",
+      "onlyInA": ["crates/common/src/dedup.rs", "crates/common/src/metrics.rs", "crates/common/src/sequence.rs", "crates/storage/src/conversions.rs", "crates/tui/api.rs", "crates/tui/main.rs", "crates/tui/ui.rs", "deploy/nginx.conf"],
+      "onlyInA_caveat": "local-wip/crates/tui/ 根目录下还散着 api.rs / main.rs / ui.rs 三个旧副本（Aug 10，与同目录 src/*.rs 的 md5 不同）——cargo 默认布局不编译它们，阶段 6 需要判断这是快照残留还是真文件",
+      "onlyInC": ["deploy/Dockerfile.server", "deploy/docker-compose.yml"],
+      "tui_size_delta": "A 的 crates/tui/src/ui.rs 28314 字节 vs C 的 49185 字节（C 的 TUI 多了 per-core CPU 条带 / Top CPU 进程等绘制代码）"
+    },
+    "M8_fixesAlreadyInB": "B 线（未推送）的 eac070e 提交信息逐字写着修了三件事：(1) 'audit_logs always returned 500: AuditLogRow mapped the username column to a user field (sqlx ColumnNotFound at runtime), and the COUNT query never bound the filter parameters' → 正好是本报告的 F-01 与 F-16；(2) 调度器每轮只取 100 个最老的 queued 任务导致队头阻塞；(3) create_alert_rule 把 duration_seconds 从 i64 窄化成 i32 会截断成 0。合流时这三处应当直接搬 B 的修法，而不是在 C 上重新修一遍。"
+  },
   "demos": [
     { "file": "demo/01-build-and-test-gates.json", "主题": "离线构建 + 44 测试 + clippy/fmt + 无 CI", "verified": true },
     { "file": "demo/02-quality-gates-fail.json", "主题": "硬阈值三闸门 FAIL + 最严重函数 + 距离 409.505", "verified": true },
