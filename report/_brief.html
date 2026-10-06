@@ -382,10 +382,12 @@ for f in demo/0*.json; do node .gauntlet/gauntlet.mjs demo "$f"; done</code></pr
 <div class="g-note">
 <b>两条最重要的事实（都有命令证据）：</b>
 <ol>
-<li><b>B 的 HEAD <code>19d8fbc</code> 是 C 的祖先</b>（<code>git merge-base --is-ancestor b/master c/master</code> → YES），
-两者共同祖先是 <code>f8ac726</code>；B 独有 15 个提交、C 独有 33 个提交。
-所谓"B 领先 12 且从未推送"指的是 <b>B 的本地裸仓库</b>（停在 <code>d1586b6</code>），<b>不是 GitHub</b>。
-<b>所以合流不是"合并两棵分叉的树"，而是"把 B 工作树里那 12 个未提交文件选择性搬进 C"。</b></li>
+<li><b>B 与 C 自 <code>f8ac726</code> 起是兄弟分叉、互不为祖先</b>（<code>git merge-base --is-ancestor b/master c/master</code> → <b>exit 1</b>，反向也是 <b>exit 1</b>）：
+共同前缀是 7 个提交（<code>f46b6a9</code> … <code>f8ac726</code>），之后 B 独有 <b>15</b> 个提交、C 独有 <b>33</b> 个提交。
+B 的前 3 个提交与 C 的前 3 个提交内容相同（同 parent、同 tree，只有提交者/时间戳不同），此后 B 又做了 12 个、C 又做了 30 个，<b>两边互不包含</b>。
+所谓"B 领先 12 且从未推送"指的是 <b>B 的本地裸仓库</b>（停在 <code>d1586b6</code>），<b>不是 GitHub</b>：相对 GitHub，B 不是"落后"而是<b>分叉</b>。
+<b>所以合流要处理三件事：B 工作树里那 12 个未提交文件 ＋ B 那 12 个独有提交的修法取舍 ＋ A 的独有资产（按 M5 的裁决）。</b>
+<span class="g-muted">（初版曾误判"B 是 C 的祖先"；2026-10-07 已更正并保留勘误：见 <code>report/merge-plan.md</code> 的「勘误记录」与 <code>qa/evidence/line-fork-verify.txt</code>。）</span></li>
 <li><b>推荐路线：以 C 为基线</b> → 先把 B 的 <code>eac070e</code>（修 F-01 + F-16）cherry-pick 进来（实测只有 6 个冲突块、约 140 行）→
 再按文件 graft B 的 12 个未提交改动（每文件单独构建+测试）→ A 的独有资产按 M5 的裁决处理。
 <b>不要整体 <code>git merge 19d8fbc</code></b>：实测 35 个文件冲突且包含 <code>modify/delete</code>。</li>
@@ -404,6 +406,11 @@ for f in demo/0*.json; do node .gauntlet/gauntlet.mjs demo "$f"; done</code></pr
 <code>browser-check: skipped (no browser)</code> —— 本机无 Chrome/Chromium，属可接受跳过）。</li>
 <li><b>教程</b>：<code>docs/review-howto.md</code>（三步上手 + 输入/输出规则表 + 五个坑）。</li>
 <li><b>证据包</b>：就是本文件（kit 自动生成 + 本节中文导读）。</li>
+<li><b>返工（2026-10-07，审阅前定点更正）</b>：更正 M1 的结构判断——初版误判"B 的 HEAD <code>19d8fbc</code> 是 C 的祖先"，
+实测 <code>git merge-base --is-ancestor b/master c/master</code> → <b>exit 1</b>（反向同样 1）：B 与 C 自 <code>f8ac726</code> <b>兄弟分叉</b>，B 独有 15 个提交、C 独有 33 个提交；
+同时把 M6 步骤 0（冻结 B 的 12 个未提交文件）改记为"<b>已执行</b>、产物留档 <code>ClusterScope-review/backup-b-wip/</code>（12 个成员，sha256 <code>8ef25e55…</code>，同输入重建一致）"。
+勘误记录与复现命令见 <code>report/merge-plan.md</code> 顶端；原始探测输出 <code>qa/evidence/line-fork-verify.txt</code>。
+<b>本次返工未改动任何闸门数字、16 条 findings、无法验证项与 N1–N9。</b></li>
 </ul>
 <p class="g-muted">本阶段<b>没有</b>修改任何产品代码 / 测试 / README / docs 正文 / deploy；
 只新增 <code>report/</code>、<code>docs/architecture/</code>、<code>docs/review-howto.md</code>、<code>qa/evidence/</code> 与 <code>GAUNTLET.md</code> 的补充章节。

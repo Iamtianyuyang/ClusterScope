@@ -16,6 +16,38 @@
 
 ---
 
+## 勘误记录（2026-10-07，第 6 阶段返工）
+
+> 审查报告的价值来自可追溯：这里**保留初版是怎么写错的**、以及更正后的实测事实，不静默改掉。
+> 本次返工只动"M1 的结构判断"与"M6 步骤 0 的状态"，**不动** 16 条 findings、闸门面板、无法验证项与 N1–N9 的任何实测数字，也不改变产品状态。
+
+| # | 初版写法 | 实测（复现命令见下） | 对方案的影响 |
+|---|---|---|---|
+| **E-1** | 「**B 的 HEAD `19d8fbc` 是 C 的祖先**（`git merge-base --is-ancestor b/master c/master` → YES）」，并据此推论「C = B 的全部提交历史 **+ 33 个新提交**」「B 相对 GitHub 没有"分叉"，是**落后**」「三线 = 一条主干 + 一棵离线工作树」 | `git merge-base --is-ancestor b/master c/master` → **exit 1**；反向 `git merge-base --is-ancestor c/master b/master` → **exit 1**。**B 与 C 自 `f8ac726` 兄弟分叉、互不为祖先**：B 独有 **15** 个提交、C 独有 **33** 个提交（`git rev-list --count`） | **改变了合流的结构判断**：合流不是"把落后的 B 拉进 C"，而是**三件事**——(1) B 工作树的 12 个未提交文件；(2) B 那 12 个独有提交里修法的取舍（与 C 同主题提交修法不同）；(3) A 的独有资产（按 M5 裁决）。M6 的「不要整体 `git merge 19d8fbc`（35 个冲突文件）」**这条建议不变、仍然成立** |
+| **E-2** | M6 步骤 0 写成「**先做，不可跳**」（只给命令，未说明产物是否留存） | 该步骤**已实际执行**、产物已留档在 `ClusterScope-review/backup-b-wip/`：`b-wip.tar.gz`（**12 个成员**，sha256 `8ef25e55af7cb612162cfc9887fd88dd52dba55260aa1c7508f984756fd9b4df`）+ `list.txt` + `sha256-manifest.txt` + `PROVENANCE.txt`。**同输入重建得到同一哈希**——本次返工又独立重建一次，`cmp` 逐字节相同 | 步骤 0 的性质从"待做的前置动作"改为"**已完成、只需引用**"（见 M6 步骤 0） |
+
+**E-1 的复现命令**（在测试机 `tianyuyang@172.19.133.164` 上，`/tmp` 里的**全新**探测仓库；完整脚本与原始输出见 `qa/evidence/line-fork-verify.sh` 与 `qa/evidence/line-fork-verify.txt`）：
+
+```sh
+cd /public/tianyuyang/code/ClusterScope-review
+rm -rf /tmp/probe-verify && mkdir -p /tmp/probe-verify && cd /tmp/probe-verify && git init -q .
+git fetch -q /public/tianyuyang/code/ClusterScope-review/node-line.bundle "refs/heads/master:refs/remotes/b/master"
+git fetch -q /public/tianyuyang/code/ClusterScope-review/gh-line.bundle "refs/remotes/github/master:refs/remotes/c/master"
+git rev-parse --short b/master; git rev-parse --short c/master     # → 19d8fbc / f9c080b
+git merge-base b/master c/master                                   # → f8ac7267f834a2b65da1aaf9c065f2de3c524250
+git merge-base --is-ancestor b/master c/master; echo $?            # → 1  ← 不是祖先（初版误记为 YES）
+git merge-base --is-ancestor c/master b/master; echo $?            # → 1  ← 反向也不是
+git rev-list --count c/master..b/master                            # → 15（B 独有）
+git rev-list --count b/master..c/master                            # → 33（C 独有）
+```
+
+> **错因**：附录里那条 `git merge-base --is-ancestor b/master c/master && echo YES` 在"不是祖先"时**什么都不打印**（`&&` 短路），
+> 空输出被误读成了 YES。附录与 `qa/evidence/line-fork-verify.txt` 已改成显式 `echo $?` 的写法。
+> **环境**：测试机 `git 2.47.3`；该版本下 `git rev-parse --short b/master c/master`（两个 rev + `--short`）会报 `fatal: Needed a single revision`，
+> 所以上面拆成两条写（哈希与结论不受影响）。
+
+---
+
 ## M1 提交图与分叉点
 
 **事实**（命令与输出）
@@ -33,14 +65,22 @@ git bundle list-heads gh-line.bundle     # → f9c080b  refs/remotes/github/mast
 | 共同祖先 | `f8ac726` —— **`git merge-base b/master c/master` 的输出就是这个哈希**，也就是 A 的基线提交 |
 | B 独有的提交 | **15 个**（`git log --oneline c/master..b/master`） |
 | C 独有的提交 | **33 个**（`git log --oneline b/master..c/master`） |
-| 关键结构事实 | **B 的 HEAD `19d8fbc` 是 C 的祖先**（`git merge-base --is-ancestor b/master c/master` → YES）。即 C = B 的全部提交历史 **+ 33 个新提交**；B 相对 GitHub 没有"分叉"，是**落后**。 |
+| 关键结构事实 | **B 与 C 在 `f8ac726` 之后兄弟分叉**：`git merge-base --is-ancestor b/master c/master` → **exit 1**，反向 `git merge-base --is-ancestor c/master b/master` → **exit 1**。两线**互不为祖先**，各有独有提交（B 15 / C 33）——不存在"C 包含 B"或"B 只是落后"这回事（初版在这里判错，见上面的勘误记录 E-1）。 |
 | B 的 12 个未提交改动 | 不在任何提交里、也不在 bundle 里；只存在于 `/public/tianyuyang/code/ClusterScope` 的工作树（`git status --short` 12 个 `M` 行，与清单逐字一致） |
 
-B 独有的 15 个提交里，**前 3 个（`f266f2f` / `15b47a7` / `d1586b6`）在 C 里有同内容的等价提交**（C 侧哈希 `75c3f98` / `963ed9c` / `d43af1f`，提交信息逐字相同）——说明 C 是把这些改动**重放**（rebase/cherry-pick）上去的，不是分叉。剩下 12 个提交（`09f7460` … `19d8fbc`）是 B 的**独有修复**，其中相当一部分在 C 里被独立地重新实现过（例如 C 的 `f4a8a31`、`57938b4`、`0b87b0d`、`5f210c2`），但**修法与覆盖范围不同**（见 M8）。
+分叉点之后两条线各自推进，但**前 3 个提交是同一份改动的两次提交**：B 的 `f266f2f` / `15b47a7` / `d1586b6` 与 C 的 `75c3f98` / `963ed9c` / `d43af1f` 逐位对应，
+**父提交相同（第 1 对都是 `f8ac726`，后两对各自指向前一对"孪生"提交）、tree 相同**（`git diff --stat f266f2f 75c3f98` 为空；三对的稳定 patch-id 逐对相同），只有 author/committer 与时间戳不同，因此哈希不同。
+从第 4 个提交起分道扬镳：B 继续做 **12 个**提交（`09f7460` … `19d8fbc`）、C 继续做 **30 个**（`5f210c2` … `f9c080b`，`git rev-parse 09f7460^`= `d1586b6`、`git rev-parse 5f210c2^`= `d43af1f`），**两边的这 12 / 30 个提交互不包含**。
+B 那 12 个提交是 B 的**独有修复**，其中相当一部分在 C 里被独立地重新实现过（例如 C 的 `f4a8a31`、`57938b4`、`0b87b0d`、`5f210c2`），但**修法与覆盖范围不同**（见 M8）——这正是"两条线各修一遍、谁也没进谁"的直接原因。
 
-**结论**：三条线不是"三棵平行的树"，而是**一条主干（`f8ac726` → B → C）加一棵离线的工作树（A）**。
-"B 领先裸仓库 12 且从未推送"指的是 **B 的本地裸仓库 `/public/tianyuyang/git/ClusterScope.git`**（它停在 `d1586b6`），
-**不是** GitHub —— 相对 GitHub，B 落后 33 个提交。
+**结论**：三条线 = **一棵离线的工作树（A）＋ 两条真正的兄弟分支（B、C）**。共同前缀是 7 个提交（`f46b6a9` … `f8ac726`，也就是 A 的本地 `master`）；
+`f8ac726` 之后 B 与 C **互不为祖先**：B 独有 15 个提交 = 3 个与 C 内容相同的重复提交 **+ 12 个 B 独有修复**，
+C 独有 33 个提交 = 同样的 3 个 **+ 30 个 C 独有提交**。
+所以**合流要处理的是三件事**，不是一件事：(1) B 工作树里那 12 个未提交文件；(2) B 那 12 个独有提交里的修法如何与 C 的同主题提交取舍（见 M8）；
+(3) A 的独有资产（`web/`、`dedup.rs`/`sequence.rs`/`metrics.rs`、`conversions.rs`、`integration_test.rs`、`nginx.conf`，按 M5 裁决）。
+
+"B 领先裸仓库 12 且从未推送"指的是 **B 的本地裸仓库 `/public/tianyuyang/git/ClusterScope.git`**（HEAD 停在 `d1586b6`，即 B 的 HEAD 往回数 12 个提交：`git rev-list --count d1586b6..b/master` → 12），
+**不是** GitHub —— 相对 GitHub，B 既不是"领先"也不是"落后"，而是**分叉**：GitHub 有 33 个 B 没有的提交，B 有 15 个 GitHub 没有的提交。
 
 ---
 
@@ -145,17 +185,29 @@ crates/storage/src/models.rs          0 个冲突块（自动合并成功）
 
 **基线取 C**（已发布、可构建、44 测试通过），分 6 步，每步都有验证命令：
 
-### 步骤 0 — 冻结 B 的 12 个未提交文件（**先做，不可跳**）
+### 步骤 0 — 冻结 B 的 12 个未提交文件（**已执行，产物已留档**）
+
+**状态：2026-10-07 已实际执行。**（本步骤初版写作"先做、不可跳"；产物现在已经在盘上，合流时**只需引用**，不要去动这个目录。）
+
+| 产物 | 路径 | 内容 |
+|---|---|---|
+| 归档 | `ClusterScope-review/backup-b-wip/b-wip.tar.gz` | **12 个成员**；`sha256sum` = `8ef25e55af7cb612162cfc9887fd88dd52dba55260aa1c7508f984756fd9b4df` |
+| 清单 | `ClusterScope-review/backup-b-wip/list.txt` | 12 个仓库相对路径（逐行） |
+| 逐文件哈希 | `ClusterScope-review/backup-b-wip/sha256-manifest.txt` | 12 个文件的 sha256 |
+| 来源 | `ClusterScope-review/backup-b-wip/PROVENANCE.txt` | 源工作树 `/public/tianyuyang/code/ClusterScope`、HEAD `19d8fbcf5a26b8b8247ccea8b7b3205a58b12c7a`、branch `master`、采集时间 `2026-10-07T06:35:11+08:00`、files: 12 |
+
+**同输入重建可得同一哈希（已复现）**——验证方式（只读 B 的工作树，产物写 `/tmp`）：
 
 ```sh
-cd /public/tianyuyang/code/ClusterScope-review
-mkdir -p backup-b-wip
-git -C /public/tianyuyang/code/ClusterScope status --short | awk '{print $2}' > backup-b-wip/list.txt
-tar czf backup-b-wip/b-wip.tar.gz -C /public/tianyuyang/code/ClusterScope -T backup-b-wip/list.txt
-sha256sum backup-b-wip/b-wip.tar.gz     # 本次实测：8ef25e55af7cb612162cfc9887fd88dd52dba55260aa1c7508f984756fd9b4df
+rm -rf /tmp/rebuild-b-wip && mkdir -p /tmp/rebuild-b-wip && cd /tmp/rebuild-b-wip
+git -C /public/tianyuyang/code/ClusterScope status --short | awk '{print $2}' > list.txt
+tar czf b-wip.tar.gz -C /public/tianyuyang/code/ClusterScope -T list.txt
+sha256sum b-wip.tar.gz                  # → 8ef25e55af7cb612162cfc9887fd88dd52dba55260aa1c7508f984756fd9b4df
+tar tzf b-wip.tar.gz | wc -l            # → 12
+cmp b-wip.tar.gz /public/tianyuyang/code/ClusterScope-review/backup-b-wip/b-wip.tar.gz && echo identical
 ```
 
-校验：`tar tzf b-wip.tar.gz | wc -l` 必须是 **12**；12 个文件的 sha256 见本报告附录（`qa/evidence/merge-plan-facts.txt` 同源）。
+校验：成员数 **12**；12 个文件的 sha256 见 `backup-b-wip/sha256-manifest.txt`（与本报告附录 `qa/evidence/merge-plan-facts.txt` 同源）。
 
 ### 步骤 1 — 把 F-01 + F-16 的修法搬到 C（cherry-pick + 手工解 6 个冲突块）
 
@@ -297,7 +349,7 @@ sh qa/harness/extra-checks.sh
 
 | 风险 | 触发条件 | 缓解 | 回滚 |
 |---|---|---|---|
-| B 的 12 个未提交文件丢失 | 有人 `git checkout -- .` / `git clean` / 重装工作树 | **步骤 0 先打包 + sha256** | 从 `backup-b-wip/b-wip.tar.gz` 解开 |
+| B 的 12 个未提交文件丢失 | 有人 `git checkout -- .` / `git clean` / 重装工作树 | **步骤 0 已完成**：`backup-b-wip/b-wip.tar.gz`（12 个成员，sha256 `8ef25e55…`）＋ 逐文件 sha256 清单 | 从 `backup-b-wip/b-wip.tar.gz` 解开（同输入重建哈希一致） |
 | cherry-pick `eac070e` 时把 B 的其他改动带进来 | 误用 `git merge 19d8fbc`（实测 35 个冲突文件） | 只用 `cherry-pick -n` + 按文件 `git add` | `git cherry-pick --abort` |
 | 合流后 REST 契约漂移（web 依赖的 10 个端点） | 接回 web 但 server 路由改了 | 合流后先跑 `api-checks.sh` 再开浏览器 | 分支回退 |
 | 质量指标继续变差掩盖新缺陷 | 合流引入新代码 | 每次 graft 后单独提交，`git bisect` 可用 | 单提交 revert |
@@ -313,12 +365,18 @@ sh qa/harness/extra-checks.sh
 git bundle list-heads /public/tianyuyang/code/ClusterScope-review/node-line.bundle
 git bundle list-heads /public/tianyuyang/code/ClusterScope-review/gh-line.bundle
 
-# 2) 提交图（在探测仓库 /tmp/probe 里，已把两个 bundle 取进 refs/b/* 与 refs/c/*）
-git merge-base b/master c/master                       # → f8ac726
-git rev-list --count b/master / c/master               # → 22 / 40
+# 2) 提交图（在探测仓库 /tmp/probe-verify 里，已把两个 bundle 取进 refs/remotes/b/master 与 refs/remotes/c/master）
+#    完整脚本：qa/evidence/line-fork-verify.sh；原始输出：qa/evidence/line-fork-verify.txt
+git merge-base b/master c/master                       # → f8ac7267f834a2b65da1aaf9c065f2de3c524250（唯一共同祖先）
+git rev-parse --short b/master; git rev-parse --short c/master   # → 19d8fbc / f9c080b
+git rev-list --count b/master; git rev-list --count c/master     # → 22 / 40
 git log --oneline c/master..b/master                   # → 15 个 B 独有
 git log --oneline b/master..c/master                   # → 33 个 C 独有
-git merge-base --is-ancestor b/master c/master && echo YES   # → YES
+git merge-base --is-ancestor b/master c/master; echo $?      # → 1  ← 不是祖先；初版把空输出误读成 YES（见勘误 E-1）
+git merge-base --is-ancestor c/master b/master; echo $?      # → 1  ← 反向也不是
+git rev-list --count f8ac726                           # → 7（共同前缀：f46b6a9 … f8ac726）
+git rev-list --count d1586b6..b/master                 # → 12（本地裸仓库 `ClusterScope.git` 停在 d1586b6）
+git diff --stat f266f2f 75c3f98                        # → 空：B/C 前 3 个提交 tree 相同（同 parent，仅提交者/时间戳不同）
 
 # 3) 文件级差异
 diff -rq local-wip/crates gh-line/crates               # → 39 同名不同 + 4 A 独有

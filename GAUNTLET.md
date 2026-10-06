@@ -416,14 +416,17 @@ Rust workspace（Cargo，resolver 2，edition 2024），7 个成员 crate，`[wo
 | `report/merge-plan.md` | 三线合流方案，逐题回答 `qa/merge-plan-requirements.md` 的 M1–M9 |
 | `report/build-evidence.mjs`、`report/_brief.html` | 证据包的构建脚本与简报源（`node report/build-evidence.mjs <kit-index.html> report/_brief.html report/review.html`） |
 | `docs/review-howto.md` | 使用教程（三步上手、输入/输出规则表、五个坑） |
-| `qa/evidence/gate-full.log`、`gate-quality-full-profile.log`、`gate-quality.json`、`demos-rerun.log` | 本阶段新增的原始证据 |
+| `qa/evidence/gate-full.log`、`gate-quality-full-profile.log`、`gate-quality.json`、`demos-rerun.log`、`line-fork-verify.{sh,txt}` | 本阶段新增的原始证据（最后那一对是 2026-10-07 返工时补的分叉探测脚本与输出，「勘误记录」E-1 的复现命令） |
 
 **合流方案的关键事实**（完整版见 `report/merge-plan.md`）
 
-- **B 的 HEAD `19d8fbc` 是 C 的祖先**（`git merge-base --is-ancestor` → YES），共同祖先 `f8ac726`；B 独有 15 个提交、C 独有 33 个提交。
-  "B 领先裸仓库 12 且从未推送"指的是 **B 的本地裸仓库**（停在 `d1586b6`），**不是 GitHub**。
+- **B 与 C 自 `f8ac726` 兄弟分叉、互不为祖先**（`git merge-base --is-ancestor b/master c/master` → **exit 1**，反向同样 **exit 1**）；共同前缀 7 个提交，B 独有 15 个提交、C 独有 33 个提交。
+  两线前 3 个提交内容相同（同 parent、同 tree，仅提交者/时间戳不同），此后 B 又做了 12 个、C 又做了 30 个，**两边互不包含**。
+  "B 领先裸仓库 12 且从未推送"指的是 **B 的本地裸仓库**（停在 `d1586b6`），**不是 GitHub**；相对 GitHub，B 不是"落后"而是**分叉**。
+  （初版这里误判为"B 的 HEAD 是 C 的祖先"；2026-10-07 返工已更正并保留勘误：`report/merge-plan.md` 顶端「勘误记录」E-1、原始输出 `qa/evidence/line-fork-verify.txt`。）
 - **B 的 12 个未提交文件 = 1784 insertions / 740 deletions**，不在任何提交里、也不在 bundle 里（只有工作树）。
-  已实测打包：`sha256sum b-wip.tar.gz` = `8ef25e55af7cb612162cfc9887fd88dd52dba55260aa1c7508f984756fd9b4df`。
+  已实测打包并**留档**：`ClusterScope-review/backup-b-wip/b-wip.tar.gz`（**12 个成员**，`sha256sum` = `8ef25e55af7cb612162cfc9887fd88dd52dba55260aa1c7508f984756fd9b4df`），
+  同目录另有 `list.txt`、`sha256-manifest.txt`、`PROVENANCE.txt`；**同输入重建可得同一哈希**（已复现，`cmp` 逐字节一致）——合流时只需引用，不要动这个目录。
 - **不要整体 `git merge 19d8fbc`**：实测 35 个文件冲突（含 `web/*`、`tests/`、`deploy/nginx.conf` 的 `modify/delete`）。
   推荐 `git cherry-pick -n eac070e`（修 F-01 + F-16）：实测只有 **4 个文件、6 个冲突块、约 140 行**。
 - **M5（TUI-only / TUI+Web / 先 TUI-only 后 web）是产品决策**，方案里只给代价与依据，不替人拍板。
