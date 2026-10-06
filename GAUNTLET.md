@@ -1,6 +1,6 @@
 # GAUNTLET.md — 项目档案
 
-commit: `113a365`　base: `master`　更新：2026-10-07　适配器：commands　棘轮：**关**（硬阈值判定；基线 77 项保留但惰性）
+commit: `669f995`　base: `master`　更新：2026-10-07　适配器：commands　棘轮：**关**（硬阈值判定；基线 77 项保留但惰性）
 
 > 本档案记录的是**实际跑通过**的命令和真实测量值。未验证的内容一律标注「未验证」。
 > 闸门命令的运行位置：远端 node（Linux，`tianyuyang@172.19.133.164`），仓库
@@ -110,6 +110,9 @@ Rust workspace（Cargo，resolver 2，edition 2024），7 个成员 crate，`[wo
 5. **lizard 未装**（pip 无网），`static` 用内置启发式分析器（Rust 按大括号切函数）。`scope` 闸门当前 33/33 通过；若发现函数边界明显错乱，说明内置分析器把 Rust 切错了——应记入结论并请人确认，不要为迁就分析器改代码。
 6. **`node .gauntlet/gauntlet.mjs test` 当前退出码 1，原因只有一个**：`features/` 还是空的（`ACCEPTANCE  scenarios=0 … FAIL`），测试本身是 `tests: 44/44 passed` ✅。第 1 阶段写完场景后才会变绿，不要误判成构建/测试坏了。
 7. **不要并发跑两条 kit 命令**：`testsGeneric` 每次开始会先删掉 `{out}/junit.xml`、`{out}/lcov.info`，并发跑会互相删报告（我踩过一次）。
+   另外**不要用 `| head` 截断 kit 命令的输出**：`head` 提前关掉管道会让 node 收到 SIGPIPE 直接死掉，
+   而所有报告（`gate.json` / `loop-*.json` / `next.md`）都是**最后才写**的——你会拿到一份陈旧报告还以为它跑完了（我踩过一次）。
+   要截断就 `> /tmp/x.log 2>&1` 再 `tail`/`grep` 那个文件。
 8. **server 端到端需要 PostgreSQL 16+——2026-10-07 已就绪**：`/public/tianyuyang/code/ClusterScope-review/pg16`（源码编译，无 root，自包含）跑在 `127.0.0.1:5432`，连接串 `postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope`；探测/启动命令见「构建、测试、运行」。仍然**没有** `docker`，`podman` 零镜像且无外网，所以 `deploy/docker-compose.yml` 那条路走不通；`psql`/`initdb`/`pg_ctl` 也不在 PATH。
 9. **PowerShell 单引号**：本地 shell 是 PowerShell，`ssh host '…'` 远程命令必须用单引号包住（否则 `$HOME` 被本地展开）；远程命令里不要用反引号（bash 会当命令替换，我踩过一次）。
 10. 远端 128 核 / 502G 内存，构建很快，但**测试本身也很小**（3 秒）——耗时瓶颈只会出现在变异测试和插桩构建上。
@@ -160,6 +163,8 @@ Rust workspace（Cargo，resolver 2，edition 2024），7 个成员 crate，`[wo
 **测量口径**：远端 `gh-line`，分支 `gauntlet/audit-gh-line`，revision `113a365` + 上面那 1 行配置改动；
 命令 `node .gauntlet/gauntlet.mjs gate --profile quality`（热构建 6.9s）。下列每个数字都取自 `gauntlet-out/*.json`
 （`gate.json` / `static.json` / `crap.json` / `coverage.lines.json` / `duplication.json` / `tidy.json` / `next.md` / `loop-quality.json`）。
+**复现性**：提交后在干净树 `669f995` 上原样复跑，闸门结论与距离**逐项一致**（`GATE quality: FAIL` exit 1；
+`next` → CONTINUE exit 1，97 项 / 409.505，`loop-quality.json` 记 `commit: "669f995"`）。
 
 ### 各闸门结论与退出码（硬阈值，不做修饰）
 
