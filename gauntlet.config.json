@@ -39,6 +39,6 @@
     "warningsMax": 0, "tidyMax": 0, "staticScopeMin": 1.0
   },
   "duplication": { "minTokens": 100 },
-  "ratchet": { "enabled": true },
+  "ratchet": { "enabled": false },
   "mutation": { "scope": "all", "base": "auto", "maxMutants": 0, "timeoutFactor": 3, "minTimeoutSec": 10 }
 }

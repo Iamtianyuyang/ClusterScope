@@ -1,6 +1,6 @@
 # GAUNTLET.md — 项目档案
 
-commit: `f9c080b`　base: `master`　更新：2026-10-07　适配器：commands　棘轮：开（基线 77 项）
+commit: `113a365`　base: `master`　更新：2026-10-07　适配器：commands　棘轮：**关**（硬阈值判定；基线 77 项保留但惰性）
 
 > 本档案记录的是**实际跑通过**的命令和真实测量值。未验证的内容一律标注「未验证」。
 > 闸门命令的运行位置：远端 node（Linux，`tianyuyang@172.19.133.164`），仓库
@@ -25,11 +25,23 @@ Rust workspace（Cargo，resolver 2，edition 2024），7 个成员 crate，`[wo
 | 全部测试（闸门用，含覆盖率与 JUnit） | `node .gauntlet/gauntlet.mjs test` → `node gauntlet-tools/rust-gate.mjs --out gauntlet-out` | 41s（含插桩编译 20s），增量复跑约 10s | 44 通过 / 0 失败 / 0 忽略 |
 | 全部测试（不带覆盖率，快路径） | `cargo test --workspace --offline` | 3s（热） | 与上面同一批 44 个测试 |
 | 静态检查 | `cargo clippy --workspace --all-targets --offline` / `cargo fmt --all --check` | 5s / <1s | 两者都 0 发现 |
-| 全量质量闸门 | `node .gauntlet/gauntlet.mjs gate --profile quality` | 19s（热） | 见「质量现状」 |
+| 全量质量闸门 | `node .gauntlet/gauntlet.mjs gate --profile quality` | 7s（热） | **硬阈值下 FAIL**（complexity / crap / coverage），见「硬阈值下的现状」 |
 | 运行交付物（冒烟） | `./target/release/clusterscope-agent --help`、`clusterscope-tui --help` | — | 两者 exit 0 并打印帮助 |
-| 运行 server | `./target/release/clusterscope-server <config.yaml>` | — | 需要 PostgreSQL 16+；**不支持 `--help`**（见「审查线索」） |
+| 运行 server | `./target/release/clusterscope-server <config.yaml>` | — | 需要 PostgreSQL 16+（**已就绪**，见下）；**不支持 `--help`**（见「审查线索」） |
+| PostgreSQL 是否在跑 | `/public/tianyuyang/code/ClusterScope-review/pg16/bin/pg_ctl -D /public/tianyuyang/code/ClusterScope-review/pgdata -l /tmp/pg-server.log status` | <1s | exit 0 = 在跑；启动把 `status` 换成 `start`（**未验证**，当前已在跑） |
+| PostgreSQL 连通性自检 | `/public/tianyuyang/code/ClusterScope-review/pg16/bin/psql "postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope" -tAc "select version();"` | <1s | 返回 `PostgreSQL 16.4 …` |
 
-要让服务器端到端跑起来需要 PostgreSQL 16+（`deploy/docker-compose.yml` 可起 postgres + server），本机/远端都**没有** postgres、docker 镜像（podman 在但无镜像、无外网）——这是第 5 阶段 QA 的前置阻塞项，见「坑」第 7 条。
+### PostgreSQL 16.4（第 5 阶段 QA 的前置，已就绪）
+
+- 位置：`/public/tianyuyang/code/ClusterScope-review/pg16`（从源码编译，**无 root、自包含**），数据目录 `/public/tianyuyang/code/ClusterScope-review/pgdata`
+- 监听 `127.0.0.1:5432`，unix socket 在 `/tmp`；连接串
+  `postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope`
+- 实测（2026-10-07）：`pg_ctl … status` → `pg_ctl: server is running (PID: 4176115)`，进程命令行
+  `postgres "-D" ".../pgdata" "-p" "5432" "-k" "/tmp" "-c" "listen_addresses=127.0.0.1"`；
+  `psql … -tAc "select version();"` → `PostgreSQL 16.4 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 11.5.0 20240719, 64-bit`
+- 日志：`/tmp/pg-server.log`。**`psql` / `initdb` / `pg_ctl` 都不在 PATH**，用完整路径。
+- 这不是 `deploy/docker-compose.yml` 那套：本机/远端仍然**没有 docker 镜像**（podman 在但零镜像、无外网），
+  compose 那条路走不通，QA 一律用这个手装实例。server 的配置模板见 `deploy/server.yaml.example`。
 
 ## 代码地图
 
@@ -59,6 +71,9 @@ Rust workspace（Cargo，resolver 2，edition 2024），7 个成员 crate，`[wo
 - 提交信息用 `feat:` / `fix:` / `docs:` / `chore:` 前缀。仓库历史 40 个 commit、3 个作者、首提交 2026-08-10、HEAD 2026-08-14。
 
 ## 质量现状（基线，commit f9c080b，`gate --profile quality`，棘轮关）
+
+> 本节是**指标原值**（与棘轮开关无关）。判 PASS/FAIL 的口径在 2026-10-07 由用户裁决改为**硬阈值**，
+> 失败清单、距离与函数级明细见下面的「硬阈值下的现状（用户裁决，2026-10-07）」。
 
 | 闸门 | 结果 | 数字 |
 |---|---|---|
@@ -95,7 +110,7 @@ Rust workspace（Cargo，resolver 2，edition 2024），7 个成员 crate，`[wo
 5. **lizard 未装**（pip 无网），`static` 用内置启发式分析器（Rust 按大括号切函数）。`scope` 闸门当前 33/33 通过；若发现函数边界明显错乱，说明内置分析器把 Rust 切错了——应记入结论并请人确认，不要为迁就分析器改代码。
 6. **`node .gauntlet/gauntlet.mjs test` 当前退出码 1，原因只有一个**：`features/` 还是空的（`ACCEPTANCE  scenarios=0 … FAIL`），测试本身是 `tests: 44/44 passed` ✅。第 1 阶段写完场景后才会变绿，不要误判成构建/测试坏了。
 7. **不要并发跑两条 kit 命令**：`testsGeneric` 每次开始会先删掉 `{out}/junit.xml`、`{out}/lcov.info`，并发跑会互相删报告（我踩过一次）。
-8. **server 端到端需要 PostgreSQL 16+，当前环境没有**：`psql`/`postgres`/`initdb` 都不在，`docker` 不在，`podman` 在但**零镜像**且无外网拉镜像。第 5 阶段要验证 server 的 REST/gRPC/DB 行为，需要人提供可达的 PostgreSQL（或批准其它方案）。
+8. **server 端到端需要 PostgreSQL 16+——2026-10-07 已就绪**：`/public/tianyuyang/code/ClusterScope-review/pg16`（源码编译，无 root，自包含）跑在 `127.0.0.1:5432`，连接串 `postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope`；探测/启动命令见「构建、测试、运行」。仍然**没有** `docker`，`podman` 零镜像且无外网，所以 `deploy/docker-compose.yml` 那条路走不通；`psql`/`initdb`/`pg_ctl` 也不在 PATH。
 9. **PowerShell 单引号**：本地 shell 是 PowerShell，`ssh host '…'` 远程命令必须用单引号包住（否则 `$HOME` 被本地展开）；远程命令里不要用反引号（bash 会当命令替换，我踩过一次）。
 10. 远端 128 核 / 502G 内存，构建很快，但**测试本身也很小**（3 秒）——耗时瓶颈只会出现在变异测试和插桩构建上。
 11. `features/` 目录由 kit `init` 建好（当前为空，第 1 阶段用）。`gauntlet-out/`、`gauntlet.local.json` 已在 `.gitignore` 里。
@@ -125,3 +140,209 @@ Rust workspace（Cargo，resolver 2，edition 2024），7 个成员 crate，`[wo
 - **A) 本地 Windows** `D:\code\ClusterScope` —— 基线 `f8ac726` + 未提交的新 Web 前端工作（2026-09-13），只存在一份
 - **B) node** `/public/tianyuyang/code/ClusterScope-review/node-line.bundle` —— `19d8fbc` + 12 个未提交文件（2026-08-12），从未推送；另 `local-wip/` 是本地那棵树的原始素材
 - **C) 本次审查对象** = 本仓库 `gauntlet/audit-gh-line`，HEAD `f9c080b`（= GitHub `master`，已删除 `web/`，TUI-only）
+
+## 硬阈值下的现状（用户裁决，2026-10-07）
+
+> **2026-10-07 用户裁决：关闭棘轮、硬阈值判定——需人工确认。**
+> 本节是审查报告的核心证据：硬阈值下**真实失败清单 + 距离**，具体到函数级。
+
+**规则变更（本次唯一的规则改动，逐条列出）**
+
+| 文件 | 改动 | 说明 |
+|---|---|---|
+| `gauntlet.config.json` | `"ratchet": { "enabled": true }` → `"enabled": false` | 用户明确指令；`git diff` 只有这 1 行 |
+| `gauntlet-baseline.json` | **未删、未改** | 77 项欠账仍是既有事实，现在只是惰性文件；删除等于销毁证据 |
+| `sources` / `exclude` / `thresholds` / 架构规则 / 产品代码 / 测试 | **一律未动** | — |
+
+副作用（别误读）：`gate` 输出里不再有 `RATCHET` 行；`gauntlet-out/ratchet.json` 停在 03:15 的旧值
+（`{"baseline":77,"legacy":66,"worse":0}`），是**惰性残留，不要当本轮证据用**。
+
+**测量口径**：远端 `gh-line`，分支 `gauntlet/audit-gh-line`，revision `113a365` + 上面那 1 行配置改动；
+命令 `node .gauntlet/gauntlet.mjs gate --profile quality`（热构建 6.9s）。下列每个数字都取自 `gauntlet-out/*.json`
+（`gate.json` / `static.json` / `crap.json` / `coverage.lines.json` / `duplication.json` / `tidy.json` / `next.md` / `loop-quality.json`）。
+
+### 各闸门结论与退出码（硬阈值，不做修饰）
+
+| 闸门 | 结论 | 数字 |
+|---|---|---|
+| build | ✅ PASS | `cargo build --workspace --all-targets --offline` exit 0 |
+| tests | ✅ PASS | **44/44 通过**，0 失败，0 忽略 |
+| scope | ✅ PASS | 33/33 文件被内置分析器解析，`scope=100.0%`，`failedUnits=0`，`engine=builtin`（lizard 未装） |
+| complexity | ❌ **FAIL** | 316 个函数中 **21 个超标**（合计 **28 条**阈值违规）；maxCC=23、maxLines=196、maxNesting=7、maxParams=9 |
+| warnings | ✅ PASS | clippy **0** 条（`cargo clippy … -- -D warnings` 也 exit 0） |
+| tidy | ✅ PASS | `cargo fmt --all --check` exit 0，0 发现 |
+| duplication | ✅ PASS | **0.0%**：7030 代码行中 0 处克隆（min 100 tokens，跨目录 0） |
+| crap | ❌ **FAIL** | 316 个函数中 **45 个超标**，maxCRAP=**552** |
+| arch | ➖ 跳过 | 未配置 `commands.arch`（离线装不了 cargo-modules/cargo-deny） |
+| coverage | ❌ **FAIL** | 行覆盖 **20.7%**（1381/6686），阈值 90% |
+| **GATE quality** | ❌ **FAIL** | `GATE quality: FAIL` → **exit code 1** |
+
+另：`node .gauntlet/gauntlet.mjs test` 在硬阈值下**仍然 exit 1**，唯一原因是 `features/` 为空
+（`ACCEPTANCE scenarios=0 passed=0 failed=0 missing=0` → `ACCEPTANCE gate: FAIL`），测试本身 44/44 通过。
+第 1 阶段写完场景后才会变绿——**不要**误判成构建/测试坏了。
+
+### 距离（kit 0.3.0 的机械口径，`next --profile quality --reset` → CONTINUE，exit 1）
+
+```
+结论：CONTINUE　剩余 97 项，离阈值的距离 409.505　失败的闸门：complexity, crap, coverage
+```
+
+距离 = 待修项数 + 每项超出阈值的**相对比例**之和（`kit/lib/next.mjs:120-122`）。按 kit 的公式逐项复算，
+与 kit 记录的 409.505 **完全一致**（`Math.round(…*1000)/1000`）：
+
+| 闸门 | 项数 | 超出部分 | 距离贡献 |
+|---|---|---|---|
+| complexity | 21 | 16.002 | 37.002 |
+| crap | 45 | 271.009 | 316.009 |
+| coverage | 31 | 25.494 | 56.494 |
+| **合计** | **97** | **312.505** | **409.505** |
+
+**读法**：crap 一项占距离的 77%，其中 `ui.rs:599 node_panel`（CRAP 552 / 阈值 8）与 `ui.rs:1024 draw_process`
+（342/8）两个函数贡献最大；coverage 一侧 21 个文件是 0%（每项权重拉满 1.0）。距离要归零 = 97 项全清。
+
+### 1. 超标函数（complexity 闸门）：21 个函数 / 28 条违规
+
+阈值：圈复杂度 >10、函数长度 >60 行、嵌套 >4 层、参数 >7 个。
+
+按**违规类型**拆开（同一函数可跨类）：
+
+**圈复杂度（5 项）**
+
+| 函数 | cc | 超 |
+|---|---|---|
+| `crates/tui/src/ui.rs:599` `node_panel` | 23 | 2.30x（+13） |
+| `crates/tui/src/ui.rs:1024` `draw_process` | 18 | 1.80x（+8） |
+| `crates/server/src/main.rs:383` `run_scheduler_cycle` | 15 | 1.50x（+5） |
+| `crates/common/src/alert.rs:140` `evaluate` | 12 | 1.20x（+2） |
+| `crates/server/src/main.rs:314` `run_background_tasks` | 12 | 1.20x（+2） |
+
+**函数长度（18 项）**
+
+| 函数 | 行数 | 超 |
+|---|---|---|
+| `crates/tui/src/ui.rs:1024` `draw_process` | 196 | 3.27x（+136） |
+| `crates/tui/src/ui.rs:599` `node_panel` | 170 | 2.83x（+110） |
+| `crates/common/src/alert.rs:140` `evaluate` | 135 | 2.25x（+75） |
+| `crates/tui/src/ui.rs:781` `draw_trend_full` | 114 | 1.90x（+54） |
+| `crates/server/src/main.rs:383` `run_scheduler_cycle` | 110 | 1.83x（+50） |
+| `crates/server/src/grpc.rs:141` `report_metrics` | 110 | 1.83x（+50） |
+| `crates/tui/src/ui.rs:1223` `draw_cpu_processes` | 109 | 1.82x（+49） |
+| `crates/tui/src/ui.rs:1432` `draw_alerts` | 96 | 1.60x（+36） |
+| `crates/server/src/main.rs:234` `build_http_router` | 79 | 1.32x（+19） |
+| `crates/server/src/handlers.rs:217` `get_metrics_history` | 75 | 1.25x（+15） |
+| `crates/server/src/handlers.rs:420` `create_job` | 71 | 1.18x（+11） |
+| `crates/server/src/handlers.rs:631` `create_alert_rule` | 69 | 1.15x（+9） |
+| `crates/server/src/grpc.rs:451` `update_job_status` | 69 | 1.15x（+9） |
+| `crates/server/src/main.rs:314` `run_background_tasks` | 66 | 1.10x（+6） |
+| `crates/server/src/handlers.rs:31` `login` | 65 | 1.08x（+5） |
+| `crates/server/src/grpc.rs:252` `submit_job` | 64 | 1.07x（+4） |
+| `crates/server/src/grpc.rs:602` `evaluate_alerts` | 63 | 1.05x（+3） |
+| `crates/tui/src/ui.rs:463` `draw_topbar` | 62 | 1.03x（+2） |
+
+**嵌套深度（4 项）**
+
+| 函数 | 嵌套 | 超 |
+|---|---|---|
+| `crates/server/src/grpc.rs:602` `evaluate_alerts` | 7 | 1.75x（+3） |
+| `crates/server/src/ws_handler.rs:154` `handle` | 6 | 1.50x（+2） |
+| `crates/server/src/grpc.rs:320` `get_pending_jobs` | 6 | 1.50x（+2） |
+| `crates/common/src/alert.rs:140` `evaluate` | 5 | 1.25x（+1） |
+
+**参数个数（1 项）**：`crates/storage/src/audit_queries.rs:8` `insert_audit_log` — 9 个 > 7（+2）。
+
+**按文件分布**：`tui/ui.rs` 6 个、`server/grpc.rs` 5 个、`server/handlers.rs` 4 个、`server/main.rs` 3 个、
+`server/ws_handler.rs` 1 个、`common/alert.rs` 1 个、`storage/audit_queries.rs` 1 个。
+**没有**任何函数超参数以外的 storage 函数；`scheduler`、`protocol` 完全干净。
+
+### 2. CRAP：45 个函数超标，最大值 552（阈值 8）
+
+`maxCRAP=552`；分布：
+
+| 区间 | 函数数 |
+|---|---|
+| > 100 | 4 |
+| 50–100 | 9 |
+| 20–50 | 6 |
+| 8–20 | 26 |
+| ≤ 8（合格） | 271 |
+
+**按 crate**：`server` 21/86 超标（最大 240）、`tui` 19/61（最大 **552**）、`agent` 4/32（最大 90）、
+`common` 1/79（最大 12.07）、`storage` 0/31、`scheduler` 0/27。
+
+**Top 15（`static`+`crap` 交集，全部 `cov=0%` 除最后一行）**
+
+| 函数 | CRAP | cc | 覆盖率 |
+|---|---|---|---|
+| `crates/tui/src/ui.rs:599` `node_panel` | **552** | 23 | 0% |
+| `crates/tui/src/ui.rs:1024` `draw_process` | 342 | 18 | 0% |
+| `crates/server/src/main.rs:383` `run_scheduler_cycle` | 240 | 15 | 0% |
+| `crates/server/src/main.rs:314` `run_background_tasks` | 156 | 12 | 0% |
+| `crates/tui/src/ui.rs:1223` `draw_cpu_processes` | 90 | 9 | 0% |
+| `crates/server/src/grpc.rs:602` `evaluate_alerts` | 90 | 9 | 0% |
+| `crates/agent/src/config_loader.rs:5` `load_config` | 90 | 9 | 0% |
+| `crates/server/src/main.rs:181` `load_config` | 72 | 8 | 0% |
+| `crates/server/src/auth_middleware.rs:37` `readonly_middleware` | 72 | 8 | 0% |
+| `crates/tui/src/ui.rs:781` `draw_trend_full` | 56 | 7 | 0% |
+| `crates/server/src/grpc.rs:141` `report_metrics` | 56 | 7 | 0% |
+| `crates/server/src/handlers.rs:217` `get_metrics_history` | 56 | 7 | 0% |
+| `crates/tui/src/ui.rs:463` `draw_topbar` | 56 | 7 | 0% |
+| `crates/server/src/handlers.rs:631` `create_alert_rule` | 42 | 6 | 0% |
+| `crates/server/src/ws_handler.rs:69` `broadcast` | 42 | 6 | 0% |
+| `crates/common/src/alert.rs:140` `evaluate` | 12.07 | 12 | 92.2% |
+
+**关键读数**：45 项里 **44 项的覆盖率是 0%**，唯一例外是 `alert::evaluate`（92.2% 覆盖、纯粹因复杂度 12 超标）。
+也就是说 CRAP 这次**不是复杂度的锅，是"没测试"的锅**——先把覆盖率拉起来，CRAP 会大面积自然消解
+（CRAP = cc²·(1-cov)³ + cc，cov→1 时退化为 cc）。
+
+### 3. 覆盖率缺口：总体 20.7%（1381/6686），阈值 90%
+
+要到 90% 还需再覆盖 **4636 行**（90% 门槛 = 6017 行）。**31 个文件低于阈值**，其中 **21 个是 0%**。
+
+| crate | 覆盖率 | 行 |
+|---|---|---|
+| `storage` | **0.0%** | 0/1353 |
+| `tui` | 4.0% | 51/1269 |
+| `server` | 7.5% | 133/1773 |
+| `agent` | 26.5% | 271/1021 |
+| `common` | 76.9% | 635/826 |
+| `scheduler` | 99.7% | 291/292 |
+| `protocol` | 0%（仅 build.rs/lib.rs 声明） | — |
+
+**0% 的文件（21 个）**
+
+- `storage`（7 个，1296 行）：`queries.rs` 274、`job_queries.rs` 265、`lib.rs` 248、`alert_queries.rs` 230、
+  `user_queries.rs` 158、`aggregation.rs` 97、`audit_queries.rs` 81 —— **整个 crate 零测试**
+- `server`（4 个，893 行）：`main.rs` 331、`ws_handler.rs` 135、`auth_middleware.rs` 92、另有 `handlers.rs` 7.2%
+- `agent`（5 个，519 行）：`job_executor.rs` 208、`grpc_client.rs` 170、`main.rs` 99、`config_loader.rs` 27、`node_identity.rs` 15
+- `tui`（2 个）：`api.rs` 104、`main.rs` 86
+- 声明类：`common/src/lib.rs` 6、`protocol/build.rs` 14、`protocol/src/lib.rs` 10、`storage/src/models.rs` 122
+
+**非零但远低于阈值的关键文件**：`server/handlers.rs` 7.2%（54/747）、`server/grpc.rs` 16.9%（79/468）、
+`tui/ui.rs` 4.7%（51/1079）、`common/config.rs` 36.2%（17/47）、`agent/metrics.rs` 54.0%（271/502）。
+
+**需人工确认**：`common/src/lib.rs`、`protocol/src/lib.rs`、`protocol/build.rs`、`storage/src/models.rs`
+这 4 个文件按闸门口径各算 1 项 0%（共 152 行）——上一轮档案认为前两个只有 `mod` 声明与 re-export、
+`storage/src/migrations.rs` 只有注释。哪些真属"无可执行语句"、是否该移出测量范围，**只能由人裁决**
+（我不能自己改 `sources` / `exclude`）。`protocol/build.rs` 是构建脚本，覆盖率机制天然覆盖不到。
+
+### 4. 其它闸门读数（都是硬阈值下的实测）
+
+- **重复代码**：0 处克隆 / 7030 代码行 = **0.0%**（阈值 3%，min 100 tokens，跨目录 0）→ PASS
+- **clippy 告警**：**0** 条；`cargo clippy --workspace --all-targets --offline --message-format=short` exit 0，
+  再叠 `-- -D warnings` 仍 exit 0 → warnings 闸门 PASS
+- **rustfmt**：`cargo fmt --all --check` **exit 0，0 发现** → tidy 闸门 PASS
+  （注意：项目没有 `rustfmt.toml` / `clippy.toml`，量的是**工具默认规则**）
+- **静态测量范围**：`scope=100.0%`，33/33 文件、33 个翻译单元、`failedUnits=0`、316 个函数、7030 代码行；
+  分析器是**内置启发式**（`engine=builtin`，lizard 未装），Rust 按大括号切函数
+- **arch**：未配置 `commands.arch`，闸门跳过——**证据包里会列为"需人工确认"**
+
+### 5. 对后续阶段的影响（务必先读）
+
+- 本次审查模式是**只派 0 → 1 → 5 → 6，不改产品代码**，所以 complexity / crap / coverage 这三个 FAIL
+  **不会被修**——它们是**审查结论**，不是待办清单。第 6 阶段的报告必须原样呈现 `GATE quality: FAIL`，
+  不能写成 PASS。
+- 硬阈值下**任何包含 quality 闸门的 profile 都会 FAIL**。第 1/5/6 阶段若用 `next --profile quality`
+  判收尾，它永远不会返回 DONE（会一直 CONTINUE）；各阶段请用自己 profile 的闸门，并把这三项失败
+  预先判定为"本审查不修、记录在案"，否则会误触发返工。
+- 第 5 阶段（QA）现在**有 PostgreSQL 16.4 可用**（见「构建、测试、运行」），server 端到端可以做。
+
