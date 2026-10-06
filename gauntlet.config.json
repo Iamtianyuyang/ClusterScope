@@ -1,0 +1,44 @@
+{
+  "$comment": "Gauntlet 配置（commands 适配器）。项目 = Rust workspace（cargo）。闸门命令只在远端 node（Linux，无外网）上执行：一律 --offline，并且每条命令自己把 $HOME/.cargo/bin 加进 PATH（cargo 不在默认 PATH）。sources 只含 Rust 产品代码：proto/*.proto 和 deploy/**（shell / systemd / nginx）不是任何闸门分析器能读的语言，纳入会让 static 的 scope 闸门永远失败而无法修复；它们由 QA 与报告阶段人工覆盖，见 GAUNTLET.md「未纳入闸门的东西」。",
+  "adapter": "commands",
+  "outDir": "gauntlet-out",
+  "base": "master",
+  "sources": ["crates/**/*.rs"],
+  "exclude": [
+    "**/test/**", "**/tests/**", "**/testing/**", "**/*_test.*", "**/*_tests.*", "**/test_*.*",
+    "**/*.test.*", "**/*.spec.*", "**/__tests__/**", "**/conftest.py", "**/node_modules/**",
+    "acceptance/**", "features/**", "examples/**", "docs/**", "tmp/**", "build*/**", "dist/**", "target/**",
+    "**/third_party/**", "**/vendor/**", "**/external/**", "**/generated/**", ".gauntlet/**", ".venv/**"
+  ],
+  "features": "features",
+  "requireEquivalence": false,
+  "commands": {
+    "build": "sh -c \"export PATH=$HOME/.cargo/bin:$PATH; cargo build --workspace --all-targets --offline\"",
+    "test": {
+      "run": "sh -c \"export PATH=$HOME/.cargo/bin:$PATH; node gauntlet-tools/rust-gate.mjs --out {out}\"",
+      "junit": ["{out}/junit.xml"],
+      "lcov": ["{out}/lcov.info"]
+    },
+    "mutationTest": "sh -c \"export PATH=$HOME/.cargo/bin:$PATH; cargo test --workspace --offline --quiet\"",
+    "lint": [
+      {
+        "name": "clippy",
+        "run": "sh -c \"export PATH=$HOME/.cargo/bin:$PATH; cargo clippy --workspace --all-targets --offline --message-format=short\"",
+        "parse": "diagnostics"
+      },
+      {
+        "name": "fmt",
+        "run": "sh -c \"export PATH=$HOME/.cargo/bin:$PATH; cargo fmt --all --check\""
+      }
+    ]
+  },
+  "complexity": { "engine": "auto" },
+  "thresholds": {
+    "crapMax": 8, "complexityMax": 10, "functionLinesMax": 60, "nestingMax": 4, "paramsMax": 7,
+    "lineCoverageMin": 0.9, "mutationScoreMin": 1.0, "duplicationMax": 0.03,
+    "warningsMax": 0, "tidyMax": 0, "staticScopeMin": 1.0
+  },
+  "duplication": { "minTokens": 100 },
+  "ratchet": { "enabled": true },
+  "mutation": { "scope": "all", "base": "auto", "maxMutants": 0, "timeoutFactor": 3, "minTimeoutSec": 10 }
+}

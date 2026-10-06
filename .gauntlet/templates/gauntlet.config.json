@@ -1,0 +1,81 @@
+{
+  "$comment": "Gauntlet 配置（cmake-clang 深度分析：项目已经用 CMake 构建、clang 能编译）。提交到仓库，由人确认。sources/exclude/thresholds 决定闸门量什么、量多严；任何收窄都会在证据包里标黄。机器相关的覆盖项写在 gauntlet.local.json（不提交）。",
+  "adapter": "cmake-clang",
+  "buildDir": "build-gauntlet",
+  "outDir": "gauntlet-out",
+  "sources": [
+    "**/*.c",
+    "**/*.cc",
+    "**/*.cpp",
+    "**/*.cxx",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.h",
+    "**/*.hh",
+    "**/*.hpp",
+    "**/*.hxx"
+  ],
+  "exclude": [
+    "**/test/**",
+    "**/tests/**",
+    "**/testing/**",
+    "**/*_test.*",
+    "**/*_tests.*",
+    "**/test_*.*",
+    "acceptance/**",
+    "features/**",
+    "examples/**",
+    "docs/**",
+    "tmp/**",
+    "build*/**",
+    "cmake-build*/**",
+    "**/third_party/**",
+    "**/vendor/**",
+    "**/external/**",
+    "**/generated/**",
+    "**/_deps/**",
+    ".gauntlet/**"
+  ],
+  "features": "features",
+  "stepsDir": "acceptance/steps",
+  "generatedDir": "acceptance/generated",
+  "requireEquivalence": false,
+  "cmake": {
+    "generator": "Ninja",
+    "configureArgs": [],
+    "buildArgs": []
+  },
+  "thresholds": {
+    "crapMax": 8,
+    "complexityMax": 10,
+    "functionLinesMax": 60,
+    "nestingMax": 4,
+    "paramsMax": 7,
+    "lineCoverageMin": 0.9,
+    "mutationScoreMin": 1,
+    "duplicationMax": 0.03,
+    "warningsMax": 0,
+    "tidyMax": 0,
+    "staticScopeMin": 1
+  },
+  "static": {
+    "warnings": [
+      "-Wall",
+      "-Wextra"
+    ],
+    "cudaArch": "sm_80",
+    "cudaPath": "",
+    "extraArgs": [],
+    "tidy": "auto"
+  },
+  "duplication": {
+    "minTokens": 100
+  },
+  "mutation": {
+    "scope": "all",
+    "base": "auto",
+    "maxMutants": 0,
+    "timeoutFactor": 3,
+    "minTimeoutSec": 10
+  }
+}
