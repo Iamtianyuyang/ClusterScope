@@ -1,0 +1,4 @@
+history-sample-head.json — GET /api/metrics/history 的前两行 + 计数摘要（完整 2.8MB 响应不入库）
+total_rows=197
+[{"source":"hourly","rows":5},{"source":"raw","rows":192}]
+[{"cpu_usage_percent":11.0,"node_id":"qa-node-01","source":"hourly","timestamp_ms":1791057177106},{"cpu_usage_percent":11.0,"node_id":"qa-node-01","source":"hourly","timestamp_ms":1791057367325}]

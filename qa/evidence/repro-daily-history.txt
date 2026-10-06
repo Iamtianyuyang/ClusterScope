@@ -41,3 +41,7 @@ oldest_row={"cpu_usage_percent":11.0,"node_id":"qa-node-01","source":"hourly","t
  2026-09-17 | 2026-09-17 00:00:00+08 | 2026-09-07 04:50:14.526459+08 | t
 (1 row)
 
+
+### 读法：source=null 的行是原始档（handlers.rs:252-257 直接把 NodeMetricsRow 序列化，没有 source 字段）；带 source 的行来自 aggregate_rows_to_json。所以直方图 [null:192, hourly:5] 等价于 [raw:192, hourly:5, daily:0]。
+### 抽两行样例：
+[{"cpu_usage_percent":11.0,"node_id":"qa-node-01","source":"hourly","timestamp_ms":1791057177106},{"cpu_usage_percent":11.0,"node_id":"qa-node-01","source":"hourly","timestamp_ms":1791057367325}]
