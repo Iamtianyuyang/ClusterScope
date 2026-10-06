@@ -30,3 +30,29 @@ na=4
 tr: extra operand ‘"’
 Try 'tr --help' for more information.
 severity=
+
+### SEC-17 加强测量：page_size 的实际 clamp 效果（服务在运行中，GET 只读）
+page_size=0     -> jobs=1 条（clamp 到下限 1）
+page_size=1     -> jobs=1 条
+page_size=99999 -> jobs=17 条（库里总数 17）
+代码：handlers.rs:520-524 page_size .clamp(1,200)（默认 20）；handlers.rs:616-620 limit .clamp(1,10000)（默认 100）
+
+### OPS-03 server 的位置参数解析（argv[1]）
+///   CLUSTERSCOPE_AUTH_REQUIRED / AUTH_REQUIRED
+///   CLUSTERSCOPE_AGENT_TOKEN / AGENT_TOKEN
+fn load_config() -> anyhow::Result<ServerConfig> {
+    let args: Vec<String> = std::env::args().collect();
+    let config_path = args
+        .get(1)
+        .map(|s| s.as_str())
+        .unwrap_or("/etc/clusterscope/server.yaml");
+
+    let mut config = if std::path::Path::new(config_path).exists() {
+        let content = std::fs::read_to_string(config_path)
+            .map_err(|e| anyhow::anyhow!("Failed to read config {}: {}", config_path, e))?;
+        serde_yaml::from_str::<ServerConfig>(&content)
+            .map_err(|e| anyhow::anyhow!("Failed to parse config {}: {}", config_path, e))?
+    } else if args.len() > 1 {
+        anyhow::bail!("Config file not found: {}", config_path);
+    } else {
+        info!("No config file given — using defaults + environment overrides");
