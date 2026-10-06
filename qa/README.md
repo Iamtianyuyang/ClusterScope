@@ -16,6 +16,11 @@
 | `merge-plan-requirements.md` | M1–M9：三棵树合流方案的**必答问题**（第 6 阶段的输入） |
 | `harness/*.sh` | 已在远端**跑通**的执行脚本（下面「一键复跑」） |
 
+**七个维度里的两个 N/A**（用户边界 + 环境限制，报告里照实写）：
+
+- **前端**：本线是 TUI-only，`f9c080b` 已删除 `web/`（无 `web/`、无 `package.json`、无 html/ts/js）。前端只在 A/B 两棵树里（`ClusterScope-review/local-wip/web/`，27 个文件），因此前端审查 **N/A**，只在合流方案里作为「另一棵树的工作」处理（见 `merge-plan-requirements.md` M2/M3/M5，约束 `FE-01`）。
+- **容器部署**：本机没有 `docker`（podman 零镜像、无外网），`deploy/docker-compose.yml` 与 `Dockerfile.server` 只能做静态一致性检查（约束 `OPS-05`，检查 O15）。
+
 **判定口径**：约束分三类 —— `must-hold`（产品承诺，应当 PASS）、`finding`（**审计预期它不成立**，FAIL 就是审查结论）、`long`/`na`（耗时长或本环境不可验证，文档里写明理由）。
 第 5 阶段的 `qa/qa-report.json` 每条检查请写 `"constraint": "<id>"`，第 6 阶段的约束闸门按这个字段配对。
 

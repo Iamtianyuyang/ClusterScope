@@ -790,6 +790,16 @@
     "severity": "major"
   },
   {
+    "id": "FE-01",
+    "text": "前端维度在本线不适用（N/A）：审查对象 f9c080b 已删除 `web/`，仓库里没有任何前端代码（无 `web/`、无 `package.json`、无 html/ts/js）；前端只存在于另两棵树（A 的 `local-wip/web/` 有 27 个文件：App.tsx / auth.ts / i18n.tsx / pages / services）。",
+    "basis": "用户边界「前端只在另两棵树上，本线无」；README:356「Web 前端已移除」；`ClusterScope-review/local-wip/web/`",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && ls web 2>&1; find . -maxdepth 3 -name 'package.json' -not -path './target/*' | wc -l; find ../local-wip/web -type f | wc -l",
+    "expect": "gh-line：无 web/、0 个 package.json；local-wip/web：27 个文件 → 前端审查记 N/A，只在合流方案里作为「另一棵树的工作」处理（M2/M3/M5）",
+    "verdict": "na",
+    "qa": "merge-plan-requirements.md#M2",
+    "severity": "info"
+  },
+  {
     "id": "MRG-01",
     "text": "合流方案必须逐条回答 qa/merge-plan-requirements.md 里的必答问题（三棵树的差异、重复实现、被丢弃的工作、冲突点、推荐路线、风险）。",
     "basis": "用户需求「交付 = 全维度审查报告 + 三棵树的合流方案」；GAUNTLET.md「三线合流素材」",
