@@ -189,16 +189,20 @@
     },
     "M8_fixesAlreadyInB": "B 线（未推送）的 eac070e 提交信息逐字写着修了三件事：(1) 'audit_logs always returned 500: AuditLogRow mapped the username column to a user field (sqlx ColumnNotFound at runtime), and the COUNT query never bound the filter parameters' → 正好是本报告的 F-01 与 F-16；(2) 调度器每轮只取 100 个最老的 queued 任务导致队头阻塞；(3) create_alert_rule 把 duration_seconds 从 i64 窄化成 i32 会截断成 0。合流时这三处应当直接搬 B 的修法，而不是在 C 上重新修一遍。"
   },
-  "demos": [
-    { "file": "demo/01-build-and-test-gates.json", "主题": "离线构建 + 44 测试 + clippy/fmt + 无 CI", "verified": true },
-    { "file": "demo/02-quality-gates-fail.json", "主题": "硬阈值三闸门 FAIL + 最严重函数 + 距离 409.505", "verified": true },
-    { "file": "demo/03-doc-claims.json", "主题": "文档 ↔ 实现 7 条 FAIL", "verified": true },
-    { "file": "demo/04-rest-security-audit-logs.json", "主题": "REST 安全矩阵 18/2 + audit-logs 500 的原始证据与根因", "verified": true },
-    { "file": "demo/05-job-lifecycle-e2e.json", "主题": "任务生命周期 + 告警去重 + WebSocket 广播", "verified": false, "note": "脚本已写好并留在仓库，需独占 server+agent 才能录；录音见 gauntlet-out/evidence/demos/（第 6 阶段复跑）" },
-    { "file": "demo/06-job-pid-not-persisted.json", "主题": "jobs.pid 恒 NULL：agent 真 pid vs DB NULL", "verified": false, "note": "同上" },
-    { "file": "demo/07-history-daily-tier-missing.json", "主题": "天级历史永不返回：psql 有行、REST 0 行", "verified": false, "note": "同上" },
-    { "file": "demo/08-concurrency-and-ops.json", "主题": "并发正确性 + 运维检查", "verified": false, "note": "同上" }
-  ],
+  "demos": {
+    "howToRun": "node .gauntlet/gauntlet.mjs demo demo/<file>.json —— 每个脚本自带 server/agent 的起停（只按 PID 文件停），录制的 HTML / .cast / .txt 落在 gauntlet-out/evidence/demos/（gitignored，第 6 阶段重跑即再生成）。",
+    "allVerified": "8 个脚本全部在 node 上真跑过，退出码 0（含 3 个「预期非 0」的步骤，见各条的 expectedExit）",
+    "items": [
+      { "file": "demo/01-build-and-test-gates.json", "主题": "离线构建 + 44 测试 + clippy/fmt + 无 CI", "verified": true, "exit": 0, "evidence": "CI-ABSENT / master 40 提交 / f9c080b" },
+      { "file": "demo/02-quality-gates-fail.json", "主题": "硬阈值三闸门 FAIL + 最严重函数 + 距离 409.505", "verified": true, "exit": 0, "evidence": "GATE quality exit=1；CRAP 552/342/240/156；next.md 97 项 409.505" },
+      { "file": "demo/03-doc-claims.json", "主题": "文档 ↔ 实现 7 条 FAIL", "verified": true, "exit": 0, "evidence": "7 条 FAIL 逐条列出" },
+      { "file": "demo/04-rest-security-audit-logs.json", "主题": "REST 安全矩阵 18/2 + audit-logs 500 的原始证据与根因", "verified": true, "exit": 0, "expectedNonZeroSteps": 1, "evidence": "api-checks exit 1；HTTP/1.1 500；表里 rows=13" },
+      { "file": "demo/05-job-lifecycle-e2e.json", "主题": "任务生命周期 + 告警去重 + WebSocket 广播", "verified": true, "exit": 0, "evidence": "JOB-E2E: ALL PASS；connected/subscribed/metrics/jobs 全有" },
+      { "file": "demo/06-job-pid-not-persisted.json", "主题": "jobs.pid 恒 NULL：agent 真 pid vs DB NULL", "verified": true, "exit": 0, "evidence": "Process spawned … pid=494272 vs succeeded | pid=NULL；jobs=22 with_pid=0" },
+      { "file": "demo/07-history-daily-tier-missing.json", "主题": "天级历史永不返回：psql 4 行、REST 直方图只有 raw+hourly", "verified": true, "exit": 0, "evidence": "rows=2008 → [{hourly:5},{raw:2003}]，daily 0" },
+      { "file": "demo/08-concurrency-and-ops.json", "主题": "并发正确性 + 运维检查", "verified": true, "exit": 0, "expectedNonZeroSteps": 2, "evidence": "concurrency exit 1（只有 CON-JOB-PID-PERSISTED FAIL）；ops exit 1（server --help / 天级历史 / active_alerts）" }
+    ]
+  },
   "extraNewChecks": [
     { "id": "Q200", "title": "SEC-10 的重复用户名 409（清单里列了但 stage-1 脚本没测）", "actual": "第一次建用户 200、同名第二次 409", "status": "pass", "evidence": "extra-facts.txt" },
     { "id": "Q201", "title": "GET /api/jobs 的响应形状（stage-1 脚本与部分文档都没写）", "actual": "{\"jobs\":[…],\"total\":16} —— 是对象而不是裸数组", "status": "pass", "evidence": "extra-checks.txt" },
