@@ -3,14 +3,17 @@
 写给"明天要拿这套审查包去验一遍的人"。本页只讲**怎么跑、看到什么、结果怎么读**，
 不讲实现细节；审查结论见 `report/review.html`（单文件证据包）与 `qa/qa-report.json`。
 
-## 它能做什么（3 条）
+## 它能做什么（4 条）
 
 1. **一条命令复跑全部机器闸门**：离线构建、44 个单元测试、clippy/fmt、复杂度/CRAP/覆盖率、
    重复代码、测量范围 —— 每个数字都能追溯到 `gauntlet-out/*.json`。
 2. **在真实进程上验端到端行为**：起 PostgreSQL 16.4 + server + agent，跑 REST 安全矩阵、
    任务生命周期、并发/容量调度、告警去重、WebSocket 广播、保留策略。
-3. **把每条结论钉在原始证据上**：81 条约束 → `qa/qa-report.json` 的逐条 verdict；
+3. **把每条结论钉在原始证据上**：104 条约束 → `qa/qa-report.json` 的逐条 verdict；
    每个 finding → `qa/evidence/` 下的原始输出文件 + 一条可复制的最小复现命令。
+4. **验「不用 root」这条需求**：`sh qa/harness/no-root-checks.sh`（23 条 `NR-*`，作者脚本）+
+   `sh qa/harness/nr-verify*.sh`（独立复推，判据更严：断言进程退出码）；合流不变量见
+   `report/merge-plan.md` 的 **M10（`NRM1`–`NRM8`）**。**注意**作者脚本的 `NR6` 是假阳性（判据取了 `grep` 的退出码）。
 
 ## 三步上手
 
@@ -60,7 +63,7 @@ sh qa/harness/server-down.sh
 
 ### 3. 一键复跑全部（约 5 分钟 + 两条 long 检查约 63 分钟）
 
-见 `qa/qa-report.json` 的 `reproduceInOneGo` 数组；8 个演示脚本可以逐个回放：
+见 `qa/qa-report.json` 的 `reproduceInOneGo` 数组；10 个演示脚本可以逐个回放：
 
 ```sh
 node .gauntlet/gauntlet.mjs demo demo/04-rest-security-audit-logs.json
@@ -80,10 +83,12 @@ node .gauntlet/gauntlet.mjs demo demo/04-rest-security-audit-logs.json
 | `concurrency-checks.sh` | 逐条 CHECK | **1 条 FAIL 是审查结论**（`CON-JOB-PID-PERSISTED`） | 1 |
 | `ops-checks.sh` | 逐条 CHECK | **3 条 FAIL 是审查结论**（server `--help`、天级历史、`active_alerts`） | 1 |
 | `auth-tui-checks.sh` | 14 条全 PASS | 脚本自己重启 server/agent，结束时保持停止 | 0 |
+| `no-root-checks.sh` | 逐条 `<CHECK-ID> PASS\|FAIL`（23 条） | `NR-13`/`NR-15` 是审查结论（部署件矛盾）；**`NR6` 那行是假阳性** | FAIL 条数 |
+| `nr-verify*.sh` | 同上，但断言进程退出码（判据更严） | 原始输出落 `qa/evidence/no-root-verify*.txt`（已提交） | FAIL 条数 |
 | `demo <script>.json` | 逐条 `-> exit N` + 录像路径 | 脚本里带 `expectCode` 的步骤会显示预期非 0 | 0（脚本级） |
 
 **读法**：`qa/qa-report.json` 的 `verdict: pass` **不等于产品健康**。它的语义是
-「81 条约束都被真实执行过，且每条的实际结果与清单预期一致」——其中 29 条是 `finding` 类
+「104 条约束都被真实执行过，且每条的实际结果与清单预期一致」（106 条检查：101 pass / 4 na / 1 unverifiable）——其中 38 条是 `finding` 类
 （**审计预期它不成立**），它们 FAIL 才是 pass。
 
 ## 在脚本或代码里怎么调用
@@ -111,15 +116,17 @@ sh qa/harness/server-down.sh
    换机器或那个 agent 停了这条会假 FAIL（见 N7）。
 5. **`ops-checks.sh:112` 会全表清空 `node_metrics`**：在共享 PostgreSQL 上会把所有节点的原始指标删掉（见 N9）。
    跑之前先备份，或请人把这条改成只删自己的 `node_id`。
+6. **别在有人跑 agent 的机器上试 `deploy/install-agent.sh` 的 nohup 分支**：它第 80 行先 `pkill -f clusterscope-agent`，
+   会杀掉同用户**所有** agent（`NF-02`，本机 PID 266643 就是活体受害者）。本审查因此**没有执行**它。
 
 ## 相关文件
 
 | 文件 | 内容 |
 |---|---|
-| `report/review.html` | **单文件证据包**（16 条 findings + 闸门面板 + 合流方案 + 5 分钟审阅路线） |
-| `report/merge-plan.md` | 三棵树合流方案（M1–M9 逐题） |
-| `qa/qa-report.json` | 81 条约束的逐条 verdict、16 条 findings、9 条清单自我纠错 |
-| `qa/evidence/` | 46 个原始证据文件 |
-| `demo/*.json` | 8 个可一键回放的演示脚本 |
+| `report/review.html` | **单文件证据包**（18 条 findings + 无 root 合规 + 闸门面板 + 合流方案 M1–M10 + 5 分钟审阅路线） |
+| `report/merge-plan.md` | 三棵树合流方案（M1–M10 逐题，含 no-root 不变量 `NRM1`–`NRM8`） |
+| `qa/qa-report.json` | 104 条约束的逐条 verdict、18 条 findings、14 条清单自我纠错 |
+| `qa/evidence/` | 79 个原始证据文件（含 27 个 no-root 复推证据） |
+| `demo/*.json` | 10 个可一键回放的演示脚本（`09`/`10` 是 no-root 维度） |
 | `docs/architecture/clusterscope-runtime.architecture.json` | 架构图候选（Archify 校验通过） |
 | `GAUNTLET.md` | 项目档案：构建/测试/运行、坑、硬阈值下的现状 |
