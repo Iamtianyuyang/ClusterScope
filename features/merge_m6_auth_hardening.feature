@@ -56,7 +56,18 @@
     那么 库里的值不等于这枚原始令牌
     而且 库里存的是一串固定长度的十六进制摘要
 
-  场景: the_last_enabled_administrator_cannot_be_disabled_or_deleted
-    假如 库里只剩 "m6-admin" 一个启用的管理员
-    当 有人试图把它停用、降级或删除
-    那么 这三次操作都被拒绝，且这个账号仍然是启用的管理员
+  场景: deleting_a_user_also_deletes_its_refresh_tokens
+    假如 用户 "m6-cascade" 有一枚有效的 refresh 令牌
+    当 管理员删除这个用户
+    那么 删除成功（不是外键约束报错）
+    而且 这个用户的 refresh 令牌在库里一条都不剩
+
+  场景: demoting_or_deleting_an_administrator_that_is_not_the_last_one_succeeds
+    假如 库里除了既有的管理员之外，还有一个新造的启用管理员 "m6-admin-extra"
+    当 管理员把它降级成 viewer、随后再删掉它
+    那么 这两步都必须成功
+    而且 既有的那个管理员账号没有被这次操作改动
+    # 口径说明：B 的「最后一个启用管理员不得停用/删除」守卫（`update_user_guarded` / `delete_user_guarded`）
+    # 需要「库里只剩一个启用管理员」的前置，而本机是**共享数据库**（既有 admin 必须一直在），
+    # 所以它的**拒绝路径**不在自动化判据里跑（只能在专属 schema/库里做），只在 QA 文档里作为人工核验项记录；
+    # 这里锁住的是它的**允许路径与既有保护**（不误伤、不越权改别人的账号）。

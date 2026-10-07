@@ -103,11 +103,16 @@ for f in $(cat ../backup-b-wip/list.txt); do printf '%-45s' "$f"; diff -u "$f" "
 | 2.5 | `cargo test --workspace --offline` | ≥59 passed / 0 failed（新增的验收测试逐条累加） | MRG6-02 |
 | 2.6 | 提交 `[merge] graft B <file>` | 每文件一次提交 → 任何一个文件出问题都能单提交 revert（M6 的风险表） | — |
 
+> **不进自动化判据的一项（人工核验）**：`update_user_guarded` / `delete_user_guarded` 的「**最后一个启用管理员**不得被停用/降级/删除」拒绝路径，
+> 需要「库里只剩一个启用管理员」的前置；本机是**共享数据库**（既有 `admin` 必须一直可用），所以这条只能在专属 schema/库里验证。
+> 本轮的处理：验收测试锁它的**允许路径**（非最后一个管理员可降级/可删除，且不误伤既有账号），
+> 拒绝路径由 QA 阶段用 `psql` 在**临时 schema**（`search_path` 指向自建 schema 的一次性连接）里人工核验一次并记录原始输出。
+
 **每个文件修好的 finding 与要走的验收场景**（M8 的「合流前必修」判据）：
 
 | graft 文件 | 修好的 finding | 对应的新验收场景（`features/merge_m6_auth_hardening.feature`） |
 |---|---|---|
-| `crates/storage/src/user_queries.rs` | **F-09**（令牌批量吊销）、最后管理员保护、令牌按摘要存储、单次消费 | `revoking_all_sessions_…`、`a_refresh_token_can_only_be_consumed_once`、`refresh_tokens_are_stored_as_digests_…`、`the_last_enabled_administrator_…` |
+| `crates/storage/src/user_queries.rs` | **F-09**（令牌批量吊销）、令牌按摘要存储、单次消费、最后管理员守卫（拒绝路径只做人工核验，理由见下） | `revoking_all_sessions_…`、`a_refresh_token_can_only_be_consumed_once`、`refresh_tokens_are_stored_as_digests_…`、`deleting_a_user_also_deletes_its_refresh_tokens`、`demoting_or_deleting_an_administrator_that_is_not_the_last_one_succeeds` |
 | `crates/server/src/auth_middleware.rs` | F-09 的请求侧（令牌失效后的行为） | 同上（走 REST 时由 `api-checks` 的 `SEC-*` 段覆盖） |
 | `crates/common/src/alert.rs` | 告警规则删除级联（B 版 `remove_rule_instances` vs C 版 `remove_rule`） | `job-e2e.sh` 的 `ALERT-RULE-DELETE-CASCADE` |
 | `crates/agent/src/metrics.rs` | 与 C 侧 NVML/per-core 版的取舍（**取语义更全的一侧**，两侧字段都要能上报） | `doc-claims` 的键清单 + `ops-checks` 的指标族 |
