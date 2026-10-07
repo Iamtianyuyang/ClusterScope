@@ -134,6 +134,35 @@ pub async fn list_jobs(
     Ok((jobs, total))
 }
 
+/// Oldest-first scan of queued jobs for the scheduler.
+///
+/// The API-facing [`list_jobs`] is newest-first and capped at one page, so a
+/// scheduler reusing it would starve the oldest jobs: whenever more than
+/// `page_size` jobs are queued, every cycle would re-scan the same newest
+/// 100 while older jobs never enter the in-memory queue. Oldest-first keeps
+/// FIFO ordering (a job waits while the jobs ahead of it wait).
+///
+/// All queued jobs are loaded (no page cap): the in-memory scheduler queue
+/// dedups on job_id, so a cap here would let the N oldest unschedulable jobs
+/// (e.g. all pinned to one busy node) occupy the queue forever while newer
+/// jobs — that could run on free nodes — never get a chance (head-of-line
+/// blocking).
+pub async fn list_queued_jobs_for_scheduling(pool: &PgPool) -> Result<Vec<JobRow>> {
+    sqlx::query_as::<_, JobRow>(
+        r#"
+        SELECT job_id, COALESCE(node_id, '') AS node_id, name, executable, arguments,
+       working_directory, environment, status, pid, exit_code, error_message,
+       created_at, started_at, finished_at, created_by, resource_quota,
+       retry_count, max_retries FROM jobs
+        WHERE status = 'queued'
+        ORDER BY created_at ASC
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+    .context("Failed to list queued jobs for scheduling")
+}
+
 /// Fetch jobs for a node that need agent attention: assigned (`starting`)
 /// and cancellation requests (`stopping`).
 pub async fn get_jobs_for_node(pool: &PgPool, node_id: &str) -> Result<Vec<JobRow>> {
@@ -154,11 +183,14 @@ pub async fn get_jobs_for_node(pool: &PgPool, node_id: &str) -> Result<Vec<JobRo
 }
 
 /// Assign a queued job to a node (scheduler dispatch) and mark it starting.
-pub async fn assign_job_to_node(pool: &PgPool, job_id: &str, node_id: &str) -> Result<()> {
-    sqlx::query(
+/// Conditional dispatch: only a job that is still `queued` is moved to
+/// `starting` (a job cancelled between the in-memory schedule pass and this
+/// write must not be resurrected). Returns true when the row was updated.
+pub async fn assign_job_to_node(pool: &PgPool, job_id: &str, node_id: &str) -> Result<bool> {
+    let result = sqlx::query(
         r#"
         UPDATE jobs SET node_id = $2, status = 'starting', started_at = NOW()
-        WHERE job_id = $1
+        WHERE job_id = $1 AND status = 'queued'
         "#,
     )
     .bind(job_id)
@@ -166,7 +198,7 @@ pub async fn assign_job_to_node(pool: &PgPool, job_id: &str, node_id: &str) -> R
     .execute(pool)
     .await
     .context("Failed to assign job to node")?;
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
 /// Re-queue jobs stuck in `starting` past the cutoff (e.g. the server
@@ -325,4 +357,133 @@ pub async fn get_running_jobs(pool: &PgPool, node_id: &str) -> Result<Vec<JobRow
     .fetch_all(pool)
     .await
     .context("Failed to get running jobs")
+}
+
+/// Cancel a job that has not been dispatched yet. Conditional on the job
+/// still being `queued` (a concurrent dispatch must win, not be clobbered),
+/// returns `true` when this call performed the cancellation.
+pub async fn cancel_queued_job(pool: &PgPool, job_id: &str) -> Result<bool> {
+    let result = sqlx::query(
+        r#"
+        UPDATE jobs SET status = 'cancelled',
+               error_message = 'cancelled before start',
+               finished_at = NOW()
+        WHERE job_id = $1 AND status = 'queued'
+        "#,
+    )
+    .bind(job_id)
+    .execute(pool)
+    .await
+    .context("Failed to cancel queued job")?;
+    Ok(result.rows_affected() > 0)
+}
+
+/// Record a forced-cancellation request on a `stopping` job so the agent
+/// escalates to SIGKILL immediately instead of waiting out the grace period
+/// (see `common::job::FORCE_CANCEL_MARKER`).
+pub async fn mark_force_cancel(pool: &PgPool, job_id: &str) -> Result<()> {
+    sqlx::query("UPDATE jobs SET error_message = $2 WHERE job_id = $1")
+        .bind(job_id)
+        .bind(common::job::FORCE_CANCEL_MARKER)
+        .execute(pool)
+        .await
+        .context("Failed to record the forced cancellation")?;
+    Ok(())
+}
+
+/// `starting`/`running` -> `stopping`; returns false when
+/// the job is not in a state an agent could still be running (the caller then
+/// re-reads the row instead of clobbering a terminal status).
+pub async fn mark_stopping_if_active(pool: &PgPool, job_id: &str) -> Result<bool> {
+    let result = sqlx::query(
+        r#"
+        UPDATE jobs SET status = 'stopping'
+        WHERE job_id = $1 AND status IN ('starting', 'running')
+        "#,
+    )
+    .bind(job_id)
+    .execute(pool)
+    .await
+    .context("Failed to mark job stopping")?;
+    Ok(result.rows_affected() > 0)
+}
+
+/// Jobs stuck in `stopping` past `cutoff` are marked `lost` and returned: the
+/// agent never reported the kill (crashed, or the process ignored
+/// SIGTERM+SIGKILL), and nothing else re-reads a `stopping` row.
+///
+/// M6 adaptation: B keyed this on a `status_updated_at` column this tree does
+/// not have (adding it would need a real migration on the shared database),
+/// so the run start is the closest available "running for too long" marker.
+pub async fn reset_stale_stopping_jobs(
+    pool: &PgPool,
+    cutoff: DateTime<Utc>,
+) -> Result<Vec<String>> {
+    let rows: Vec<(String,)> = sqlx::query_as(
+        r#"
+        UPDATE jobs
+        SET status = 'lost',
+            error_message = COALESCE(error_message, 'stopping timed out'),
+            finished_at = NOW()
+        WHERE status = 'stopping'
+          AND COALESCE(started_at, created_at) < $1
+        RETURNING job_id
+        "#,
+    )
+    .bind(cutoff)
+    .fetch_all(pool)
+    .await
+    .context("Failed to reset stale stopping jobs")?;
+    Ok(rows.into_iter().map(|(id,)| id).collect())
+}
+
+/// Mark `running` jobs of nodes that have been offline past the reap window as
+/// `lost` (agent died / network gone). Returns the affected job ids.
+pub async fn mark_running_jobs_lost(
+    pool: &PgPool,
+    dead_node_ids: &[String],
+) -> Result<Vec<String>> {
+    let rows: Vec<(String,)> = sqlx::query_as(
+        r#"
+        UPDATE jobs
+        SET status = 'lost',
+            error_message = COALESCE(error_message, 'node offline for extended period'),
+            finished_at = NOW()
+        WHERE node_id = ANY($1) AND status = 'running'
+        RETURNING job_id
+        "#,
+    )
+    .bind(dead_node_ids)
+    .fetch_all(pool)
+    .await
+    .context("Failed to mark running jobs lost")?;
+    Ok(rows.into_iter().map(|(id,)| id).collect())
+}
+
+/// Move jobs stuck in `starting` back to `queued` (agent died or the server
+/// restarted mid-dispatch), unless their node is still online — a slow but
+/// alive agent must not be raced by a second dispatch. Returns the job ids
+/// that were reset.
+pub async fn reset_stale_starting_jobs(
+    pool: &PgPool,
+    cutoff: DateTime<Utc>,
+    online_node_ids: &[String],
+) -> Result<Vec<String>> {
+    // NOT (node_id = ANY($2)): with an empty list every stale job qualifies
+    // (e.g. right after a server restart, before agents re-register).
+    let rows: Vec<(String,)> = sqlx::query_as(
+        r#"
+        UPDATE jobs
+        SET status = 'queued', started_at = NULL, pid = NULL, error_message = NULL
+        WHERE status = 'starting' AND started_at < $1
+          AND NOT (node_id = ANY($2))
+        RETURNING job_id
+        "#,
+    )
+    .bind(cutoff)
+    .bind(online_node_ids)
+    .fetch_all(pool)
+    .await
+    .context("Failed to reset stale starting jobs")?;
+    Ok(rows.into_iter().map(|(id,)| id).collect())
 }

@@ -317,3 +317,17 @@ pub async fn get_job_logs(
         .await
         .context("Failed to get job logs")
 }
+
+/// Latest metrics row of every node (cluster overview, one row per node).
+pub async fn get_latest_metrics_all(pool: &PgPool) -> Result<Vec<NodeMetricsRow>> {
+    sqlx::query_as::<_, NodeMetricsRow>(
+        r#"
+        SELECT DISTINCT ON (node_id) *
+        FROM node_metrics
+        ORDER BY node_id, timestamp_ms DESC
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+    .context("Failed to get latest metrics for all nodes")
+}

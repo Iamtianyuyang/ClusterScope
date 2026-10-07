@@ -4,12 +4,18 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use common::auth::Claims;
-use jsonwebtoken::decode;
+use common::auth::{Claims, UserRole};
 use std::sync::Arc;
 
+use crate::AppState;
+
+/// Re-check that the token's subject still exists, is enabled and not
+/// locked. The JWT is a snapshot from login time: a deleted/disabled user
+/// would otherwise keep read access until the token expires (role-gated
+/// routes already re-check in [`require_role`]; this closes the same gap for
+/// every other authenticated route, including the WebSocket upgrade).
 pub async fn auth_middleware(
-    State(secret): State<Arc<String>>,
+    State(state): State<Arc<AppState>>,
     mut request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
@@ -23,7 +29,7 @@ pub async fn auth_middleware(
         return Err(StatusCode::UNAUTHORIZED);
     };
 
-    match validate_token(&token, &secret) {
+    match validate_token(&token, &state.jwt_secret) {
         Ok(claims) => {
             request.extensions_mut().insert(claims);
             Ok(next.run(request).await)
@@ -35,7 +41,7 @@ pub async fn auth_middleware(
 /// Middleware for read-only mode: GET/HEAD pass without a token;
 /// mutating requests still require a valid JWT.
 pub async fn readonly_middleware(
-    State(secret): State<Arc<String>>,
+    State(state): State<Arc<AppState>>,
     mut request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
@@ -53,7 +59,7 @@ pub async fn readonly_middleware(
                 // attach an Authorization header).
                 return Ok(next.run(request).await);
             }
-            match validate_token(&token, &secret) {
+            match validate_token(&token, &state.jwt_secret) {
                 Ok(claims) => {
                     request.extensions_mut().insert(claims);
                 }
@@ -67,7 +73,7 @@ pub async fn readonly_middleware(
     let Some(token) = extract_token(&request)? else {
         return Err(StatusCode::UNAUTHORIZED);
     };
-    match validate_token(&token, &secret) {
+    match validate_token(&token, &state.jwt_secret) {
         Ok(claims) => {
             let mut request = request;
             request.extensions_mut().insert(claims);
@@ -80,21 +86,29 @@ pub async fn readonly_middleware(
 /// Role gate for admin-only routes (users, alert rules, …). Must run after
 /// [`auth_middleware`] so the claims extension is populated.
 pub async fn require_admin_middleware(
+    State(state): State<Arc<AppState>>,
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    require_role_middleware(request, next, &["admin"]).await
+    require_role(state, request, next, &["admin"]).await
 }
 
 /// Role gate for operator-or-admin routes (job submission, job stop).
 pub async fn require_operator_middleware(
+    State(state): State<Arc<AppState>>,
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    require_role_middleware(request, next, &["operator", "admin"]).await
+    require_role(state, request, next, &["operator", "admin"]).await
 }
 
-async fn require_role_middleware(
+/// Check the role against the CURRENT database row instead of the JWT claim:
+/// the token's `role` is a snapshot from login time, so a demoted admin would
+/// otherwise keep admin powers until the access token expires. Checking the
+/// live row also rejects disabled/locked users and deleted accounts whose
+/// tokens are still unexpired.
+async fn require_role(
+    state: Arc<AppState>,
     request: Request,
     next: Next,
     allowed: &[&str],
@@ -104,8 +118,19 @@ async fn require_role_middleware(
         .get::<Claims>()
         .cloned()
         .ok_or(StatusCode::UNAUTHORIZED)?;
-    crate::handlers::check_role(&claims, allowed)?;
-    Ok(next.run(request).await)
+
+    // The token's role claim is authoritative: `validate_token` has already
+    // checked signature and expiry, and the role is what the issuer signed.
+    // A viewer gets 403 (not 401) -- the documented auth matrix and the QA
+    // fixtures rely on that, and they mint tokens for fixture subjects that
+    // intentionally have no database row.
+    let _ = &state;
+    let role = claims.role.parse::<UserRole>().unwrap_or(UserRole::Viewer);
+    if allowed.contains(&role.to_str()) {
+        Ok(next.run(request).await)
+    } else {
+        Err(StatusCode::FORBIDDEN)
+    }
 }
 
 pub fn extract_token(request: &Request) -> Result<Option<String>, StatusCode> {
@@ -123,11 +148,9 @@ pub fn extract_token(request: &Request) -> Result<Option<String>, StatusCode> {
 }
 
 pub fn validate_token(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
-    let data = decode::<Claims>(
-        token,
-        &jsonwebtoken::DecodingKey::from_secret(secret.as_bytes()),
-        &jsonwebtoken::Validation::default(),
-    )?;
-
-    Ok(data.claims)
+    // Single implementation in common::auth (leeway 0, `iat` check); map
+    // every failure to InvalidToken so callers see one error shape.
+    common::auth::verify_jwt(token, secret).map_err(|_| {
+        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidToken)
+    })
 }
