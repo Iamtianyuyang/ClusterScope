@@ -1412,8 +1412,7 @@
     "verdict": "must-hold",
     "qa": "merge-m6.qa.md#8",
     "severity": "minor"
-  }
-,
+  },
   {
     "id": "MRG6-24",
     "text": "**处置记录（F-27，追加）**：A 的两样资产 `crates/common/src/metrics.rs`（含 `MetricsAggregation`）与 `crates/storage/src/conversions.rs`（`node_metrics_to_proto`）**目前只有测试与验收场景在调用，没有任何产品调用点**。本轮按「(b) 明确记为资产已就位、暂无消费者」处置，理由：① `MetricsAggregation` 的功能面（avg/max/min/p95/count）在本树由 `storage::aggregation` 用 SQL `percentile_cont` 实现并已被测试固定，把它接进聚合路径等于改写一条已测路径（超出本轮范围）；② `node_metrics_to_proto` 的逆向路径在本树不存在（REST 端点返回行自身的 JSON 形状），给它找消费者就要改一个已文档化的响应形状。两者都不是「接线改动小且语义正确」，因此**不为了消指标而删除测试或资产**（那正是 M3 判定「真丢失」要捡回的东西）：两个模块的文档头现在各自写明「asset in place, no product consumer yet」，并给出未来接线的前提；测试与 4 条 Gherkin 场景保持全绿。",
