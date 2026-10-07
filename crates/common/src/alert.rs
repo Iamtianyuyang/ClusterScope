@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -46,10 +46,20 @@ impl AlertOperator {
             Self::Gte => actual >= threshold,
             Self::Lt => actual < threshold,
             Self::Lte => actual <= threshold,
-            Self::Eq => (actual - threshold).abs() < f64::EPSILON,
-            Self::Neq => (actual - threshold).abs() >= f64::EPSILON,
+            Self::Eq => approx_eq(actual, threshold),
+            Self::Neq => !approx_eq(actual, threshold),
         }
     }
+}
+
+/// Float equality with a relative tolerance. An absolute `f64::EPSILON`
+/// comparison is useless for large-magnitude metrics (e.g. `gpu_power_watts`
+/// around 300.0): the representable gap between two readings is far larger
+/// than EPSILON, so `eq` would never fire. The tolerance scales with the
+/// magnitude of the values involved (and degrades to exact-equality for
+/// both-zero).
+fn approx_eq(a: f64, b: f64) -> bool {
+    (a - b).abs() <= f64::EPSILON * a.abs().max(b.abs())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,12 +147,19 @@ impl AlertEngine {
         }
     }
 
+    /// Evaluate a rule against one metrics reading at time `now`.
+    ///
+    /// The `now` parameter (instead of reading the clock internally) keeps
+    /// the state machine testable and makes the duration semantics explicit:
+    /// Pending -> Firing happens once the condition has held continuously
+    /// for `rule.duration_seconds`, independent of the reporting interval.
     pub fn evaluate(
         &self,
         rule: &AlertRule,
         node_id: &str,
         gpu_uuid: &str,
         value: f64,
+        now: DateTime<Utc>,
     ) -> Option<AlertEvent> {
         if !rule.enabled {
             return None;
@@ -163,7 +180,6 @@ impl AlertEngine {
         );
 
         let mut instances = self.instances.write();
-        let now = Utc::now();
 
         let instance = instances.entry(key.clone()).or_insert(AlertInstance {
             key: key.clone(),
@@ -207,8 +223,17 @@ impl AlertEngine {
                     instance.consecutive_count += 1;
                     instance.current_value = Some(value);
 
-                    let required_count = rule.duration_seconds.div_ceil(2);
-                    if instance.consecutive_count >= required_count as u32 {
+                    // Time-based: fire once the condition has held for the
+                    // rule's duration. (The previous count-based heuristic
+                    // assumed a fixed 2s report interval and silently drifted
+                    // when report_interval_secs was configured differently.)
+                    let held_for = instance
+                        .triggered_at
+                        .map(|t| now.signed_duration_since(t))
+                        .unwrap_or_default();
+                    let required =
+                        ChronoDuration::seconds(rule.duration_seconds.min(i64::MAX as u64) as i64);
+                    if held_for >= required {
                         instance.state = AlertState::Firing;
                         event = Some(AlertEvent {
                             event_id: Uuid::new_v4().to_string(),
@@ -253,6 +278,8 @@ impl AlertEngine {
                     instance.state = AlertState::Pending;
                     instance.resolved_at = None;
                     instance.consecutive_count = 1;
+                    // Restart the duration timer for the new pending window.
+                    instance.triggered_at = Some(now);
                     instance.current_value = Some(value);
                     event = Some(AlertEvent {
                         event_id: Uuid::new_v4().to_string(),
@@ -291,9 +318,10 @@ impl AlertEngine {
         }
     }
 
-    /// Drop all in-memory instances of a rule (called when the rule is
-    /// deleted, so stale state cannot surface via `get_alert_state`).
-    pub fn remove_rule(&self, rule_id: &str) {
+    /// Drop all in-memory instances for a rule (called when the rule is
+    /// deleted; otherwise instances accumulate forever — one entry per
+    /// rule × node × GPU).
+    pub fn remove_rule_instances(&self, rule_id: &str) {
         self.instances
             .write()
             .retain(|key, _| key.rule_id != rule_id);
@@ -341,100 +369,39 @@ mod tests {
 
         assert!(AlertOperator::Eq.evaluate(50.0, 50.0));
         assert!(!AlertOperator::Eq.evaluate(50.1, 50.0));
+
+        // Relative tolerance: `eq` must work on large-magnitude metrics too
+        // (a bare f64::EPSILON comparison would never match at ~300.0).
+        assert!(AlertOperator::Eq.evaluate(300.0, 300.0));
+        // One ulp apart at 300.0 (≈5.7e-14) is within the relative tolerance.
+        assert!(AlertOperator::Eq.evaluate(300.0_f64.next_up(), 300.0));
+        assert!(!AlertOperator::Eq.evaluate(300.1, 300.0));
+        assert!(AlertOperator::Neq.evaluate(300.1, 300.0));
+        assert!(!AlertOperator::Neq.evaluate(300.0, 300.0));
+        assert!(AlertOperator::Eq.evaluate(0.0, 0.0));
+        assert!(!AlertOperator::Eq.evaluate(0.0, 1e-9));
     }
 
     #[test]
     fn test_alert_state_machine() {
         let engine = AlertEngine::new();
         let rule = make_rule("rule-1", "gpu_temperature", 85.0, 30);
+        let t0 = Utc::now();
 
         // Normal -> Pending (first reading above threshold)
-        let event = engine.evaluate(&rule, "node-1", "gpu-0", 90.0);
+        let event = engine.evaluate(&rule, "node-1", "gpu-0", 90.0, t0);
         assert!(event.is_some());
         assert_eq!(event.unwrap().new_state, AlertState::Pending);
 
-        // Pending -> Firing (enough readings)
-        for _ in 0..20 {
-            engine.evaluate(&rule, "node-1", "gpu-0", 88.0);
-        }
-        assert_eq!(
-            engine
-                .get_state(&AlertKey::new(
-                    "rule-1".to_string(),
-                    "node-1".to_string(),
-                    "gpu-0".to_string()
-                ))
-                .unwrap(),
-            AlertState::Firing
+        // Still pending before the duration has elapsed.
+        let event = engine.evaluate(
+            &rule,
+            "node-1",
+            "gpu-0",
+            88.0,
+            t0 + ChronoDuration::seconds(10),
         );
-
-        // Firing -> Resolved (reading below threshold)
-        let event = engine.evaluate(&rule, "node-1", "gpu-0", 70.0);
-        assert!(event.is_some());
-        assert_eq!(event.unwrap().new_state, AlertState::Resolved);
-
-        // Resolved -> Pending (above again)
-        let event = engine.evaluate(&rule, "node-1", "gpu-0", 92.0);
-        assert!(event.is_some());
-        assert_eq!(event.unwrap().new_state, AlertState::Pending);
-
-        // Pending -> Firing again
-        for _ in 0..20 {
-            engine.evaluate(&rule, "node-1", "gpu-0", 88.0);
-        }
-        assert_eq!(
-            engine
-                .get_state(&AlertKey::new(
-                    "rule-1".to_string(),
-                    "node-1".to_string(),
-                    "gpu-0".to_string()
-                ))
-                .unwrap(),
-            AlertState::Firing
-        );
-    }
-
-    #[test]
-    fn test_alert_deduplication() {
-        let engine = AlertEngine::new();
-        let rule = make_rule("rule-1", "gpu_temperature", 85.0, 30);
-
-        // Same node+gpu should not re-fire
-        for _ in 0..50 {
-            engine.evaluate(&rule, "node-1", "gpu-0", 90.0);
-        }
-
-        let event = engine.evaluate(&rule, "node-1", "gpu-0", 90.0);
         assert!(event.is_none());
-    }
-
-    #[test]
-    fn test_remove_rule_drops_instances() {
-        let engine = AlertEngine::new();
-        let rule = make_rule("rule-1", "gpu_temperature", 85.0, 30);
-        engine.evaluate(&rule, "node-1", "gpu-0", 90.0);
-        engine.evaluate(&rule, "node-1", "gpu-1", 90.0);
-        assert_eq!(engine.get_all_states().len(), 2);
-
-        // Deleting the rule must drop every instance of it.
-        engine.remove_rule("rule-1");
-        assert!(engine.get_all_states().is_empty());
-
-        // Other rules are untouched.
-        let other = make_rule("rule-2", "gpu_temperature", 85.0, 30);
-        engine.evaluate(&other, "node-1", "gpu-0", 90.0);
-        engine.remove_rule("rule-1");
-        assert_eq!(engine.get_all_states().len(), 1);
-        engine.remove_rule("rule-2");
-        assert!(engine.get_all_states().is_empty());
-    }
-
-    #[test]
-    fn test_different_gpus() {
-        let engine = AlertEngine::new();
-        let rule = make_rule("rule-1", "gpu_temperature", 85.0, 30);
-
-        engine.evaluate(&rule, "node-1", "gpu-0", 90.0);
         assert_eq!(
             engine
                 .get_state(&AlertKey::new(
@@ -446,7 +413,130 @@ mod tests {
             AlertState::Pending
         );
 
-        engine.evaluate(&rule, "node-1", "gpu-1", 90.0);
+        // Pending -> Firing once the condition has held for `duration_seconds`.
+        let event = engine.evaluate(
+            &rule,
+            "node-1",
+            "gpu-0",
+            88.0,
+            t0 + ChronoDuration::seconds(31),
+        );
+        assert!(event.is_some());
+        assert_eq!(event.unwrap().new_state, AlertState::Firing);
+
+        // Firing -> Resolved (reading below threshold)
+        let event = engine.evaluate(
+            &rule,
+            "node-1",
+            "gpu-0",
+            70.0,
+            t0 + ChronoDuration::seconds(40),
+        );
+        assert!(event.is_some());
+        assert_eq!(event.unwrap().new_state, AlertState::Resolved);
+
+        // Resolved -> Pending (above again); the duration timer restarts.
+        let event = engine.evaluate(
+            &rule,
+            "node-1",
+            "gpu-0",
+            92.0,
+            t0 + ChronoDuration::seconds(50),
+        );
+        assert!(event.is_some());
+        assert_eq!(event.unwrap().new_state, AlertState::Pending);
+
+        // Not yet 30s since the second pending window opened.
+        let event = engine.evaluate(
+            &rule,
+            "node-1",
+            "gpu-0",
+            88.0,
+            t0 + ChronoDuration::seconds(70),
+        );
+        assert!(event.is_none());
+        assert_eq!(
+            engine
+                .get_state(&AlertKey::new(
+                    "rule-1".to_string(),
+                    "node-1".to_string(),
+                    "gpu-0".to_string()
+                ))
+                .unwrap(),
+            AlertState::Pending
+        );
+
+        // Fires again after the full duration.
+        let event = engine.evaluate(
+            &rule,
+            "node-1",
+            "gpu-0",
+            88.0,
+            t0 + ChronoDuration::seconds(81),
+        );
+        assert!(event.is_some());
+        assert_eq!(event.unwrap().new_state, AlertState::Firing);
+    }
+
+    #[test]
+    fn test_alert_deduplication() {
+        let engine = AlertEngine::new();
+        let rule = make_rule("rule-1", "gpu_temperature", 85.0, 30);
+        let t0 = Utc::now();
+
+        // Same node+gpu should not re-fire
+        for _ in 0..50 {
+            engine.evaluate(&rule, "node-1", "gpu-0", 90.0, t0);
+        }
+
+        let event = engine.evaluate(&rule, "node-1", "gpu-0", 90.0, t0);
+        assert!(event.is_none());
+    }
+
+    #[test]
+    fn test_remove_rule_drops_instances() {
+        // C-side regression test, kept: deleting a rule must drop every
+        // in-memory instance of it (ported to B's evaluate/now signature and
+        // B's remove_rule_instances name).
+        let engine = AlertEngine::new();
+        let rule = make_rule("rule-1", "gpu_temperature", 85.0, 30);
+        let t0 = Utc::now();
+        engine.evaluate(&rule, "node-1", "gpu-0", 90.0, t0);
+        engine.evaluate(&rule, "node-1", "gpu-1", 90.0, t0);
+        assert_eq!(engine.get_all_states().len(), 2);
+
+        // Deleting the rule must drop every instance of it.
+        engine.remove_rule_instances("rule-1");
+        assert!(engine.get_all_states().is_empty());
+
+        // Other rules are untouched.
+        let other = make_rule("rule-2", "gpu_temperature", 85.0, 30);
+        engine.evaluate(&other, "node-1", "gpu-0", 90.0, t0);
+        engine.remove_rule_instances("rule-1");
+        assert_eq!(engine.get_all_states().len(), 1);
+        engine.remove_rule_instances("rule-2");
+        assert!(engine.get_all_states().is_empty());
+    }
+
+    #[test]
+    fn test_different_gpus() {
+        let engine = AlertEngine::new();
+        let rule = make_rule("rule-1", "gpu_temperature", 85.0, 30);
+        let t0 = Utc::now();
+
+        engine.evaluate(&rule, "node-1", "gpu-0", 90.0, t0);
+        assert_eq!(
+            engine
+                .get_state(&AlertKey::new(
+                    "rule-1".to_string(),
+                    "node-1".to_string(),
+                    "gpu-0".to_string()
+                ))
+                .unwrap(),
+            AlertState::Pending
+        );
+
+        engine.evaluate(&rule, "node-1", "gpu-1", 90.0, t0);
         assert_eq!(
             engine
                 .get_state(&AlertKey::new(

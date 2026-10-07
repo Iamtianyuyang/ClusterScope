@@ -762,7 +762,7 @@ pub async fn delete_alert_rule(
     storage::alert_queries::delete_alert_rule_cascade(state.database.pool(), &rule_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    state.alert_engine.remove_rule(&rule_id);
+    state.alert_engine.remove_rule_instances(&rule_id);
 
     Ok(StatusCode::OK)
 }
