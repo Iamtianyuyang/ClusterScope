@@ -71,3 +71,26 @@ sh qa/harness/auth-tui-checks.sh                   # 预期：全 PASS
 1. **只按 PID 文件停进程**（`server.pid` / `agent.pid`）：这台机器是共享的，`pkill -f clusterscope` 会误杀别人的进程。
 2. **不要用 `| head` 截断 kit 命令**：SIGPIPE 会让 node 提前死掉，而报告是最后才写的（GAUNTLET.md 坑 #7）。
 3. **不要并发跑两条 kit 命令**：它们会互相删 `gauntlet-out/junit.xml` / `lcov.info`。
+
+## 本轮（no-root 修复）复跑 —— 分支 `gauntlet/no-root-fixes`
+
+本分支修四处 no-root 缺陷（`NF-01` / `NF-02` + 随仓库缺用户级 unit + 无 root 的 PG 路径未文档化），
+QA 入口是**新增的** `qa/no-root-fixes.qa.md`（F1–F12）：
+
+```sh
+cd /public/tianyuyang/code/ClusterScope-review/nr-fixes
+sh qa/harness/no-root-fixes-checks.sh              # 全量：含 release 构建 + systemd 真装真启 + 还原
+sh qa/harness/no-root-fixes-checks.sh --no-slow    # 跳过 F1 动态探针与 F5 的 systemd 起停
+
+node .gauntlet/gauntlet.mjs gate --profile specifier   # 第 1 阶段：预期 PASS（1 feature / 6 scenario）
+node .gauntlet/gauntlet.mjs test                       # 第 2 阶段起：tests 全绿 + ACCEPTANCE 6/6
+```
+
+规格阶段（2026-10-07、**未修复**的代码）实跑：`PASS=3 FAIL=9`，退出码 9 —— F1–F9 FAIL（逐条对应四处缺陷）、
+F10–F12 PASS。**F1 有安全阀**：脚本里还有「用字面量名字整机匹配」的 `pkill`/`killall` 时只做静态判定、
+**不执行**动态探针（否则会在这台共享机器上误杀别人正在跑的 agent）。
+
+本轮 13 条验收约束是 `qa/constraints.json` 里的 **`FIX-01`…`FIX-13`**（全部 `must-hold`）；判据、期望与证据落点
+见 `qa/no-root-fixes.qa.md`。
+
+> 上面「一键复跑」的 1)–5) 是**审查分支 `gh-line`** 的入口；本分支（`nr-fixes`）用本节这两条。

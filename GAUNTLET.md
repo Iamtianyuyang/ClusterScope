@@ -433,4 +433,73 @@ Rust workspace（Cargo，resolver 2，edition 2024），7 个成员 crate，`[wo
 4. **探针要 bind 8080/50051**：刚停掉的 server 会让端口短暂处于 `TIME_WAIT`，脚本用 `SO_REUSEADDR` + 重试 3 次；
    `ss` 显示已被别人占用时，该端口记为「busy 未探测」而不是 FAIL（这台机器是共享的）。
 
+## 第 1 阶段（本轮编码）：no-root 修复的规格（2026-10-07）
+
+> 分支 `gauntlet/no-root-fixes`（基点 `7ca587a` = 上一轮审查分支 tip），工作树
+> `/public/tianyuyang/code/ClusterScope-review/nr-fixes`。
+> **本轮只跑 1 → 2 → 5 → 6 阶段**（不跑 clean/harden：用户已裁决硬阈值判定，97 项既有欠账是**审查结论**、
+> 不属本轮验收范围）。需求原文：「这个项目是要做一个不用 root 的程序」——本轮修的是上一轮审查查出的四处缺陷：
+> `NF-02`（`install-agent.sh` 误杀他人 agent）、`NF-01`（agent 配置缺失语义）、随仓库缺用户级 unit、无 root 的 PG 路径未文档化。
+>
+> **本档案前面几节针对的是审查分支 `gh-line`**（例如「features/ 还是空的」「审查模式不改产品代码」）；
+> 本分支已经进入**编码模式**，以本节为准。
+
+**本轮产出（第 1 阶段）**
+
+| 文件 | 内容 |
+|---|---|
+| `features/no_root_agent_config.feature` | **6 个场景**：显式 `-c` 缺失的报错语义、错误文案点名用户级配置位置、不静默回退、默认路径缺失的告警、node identity 父目录创建、配置生效对照 |
+| `qa/no-root-fixes.qa.md` | **F1–F12**：不能靠 Rust 测试覆盖的三项（安装脚本 / 用户级 unit / 部署文档）的执行程序 + 过程约束 |
+| `qa/harness/no-root-fixes-checks.sh` | 上表的自包含执行脚本（`sh qa/harness/no-root-fixes-checks.sh [--no-slow]`），证据落 `gauntlet-out/qa/evidence/` |
+| `qa/constraints.json` | **追加 13 条** `FIX-01`…`FIX-13`（全部 `must-hold`）；既有 104 条**逐字节未动**，合计 **117** 条 |
+
+**场景名 ↔ 测试名的硬契约（第 2 阶段必读）**：commands 适配器按 `.gauntlet/lib/adapter-commands.mjs:130-163`
+的 `matchAcceptance` 配对——把场景名与 JUnit 测试名都转小写、折叠空白后做**子串**匹配（`_` 与空格不等价）。
+Rust 标识符不能有空格，所以**场景名本身写成 snake_case**，测试函数名照抄即可：
+`场景: agent_refuses_to_start_when_the_explicit_config_file_is_missing`
+⇔ `fn agent_refuses_to_start_when_the_explicit_config_file_is_missing()`（在 `config_loader::tests::` 或
+`crates/agent/tests/` 里都行；libtest 名会包含它）。
+
+**当前闸门状态**：`node .gauntlet/gauntlet.mjs gate --profile specifier` = **PASS**
+（`spec: 1 feature(s), 6 scenario(s)`）。`ACCEPTANCE` 在写完测试前必然 FAIL（`missing=6`），这是预期，不是坏了。
+
+**本轮待实现的行为（第 2 阶段的合同）**
+
+1. `crates/agent`：显式 `-c PATH` 而文件不存在 → **非 0 退出**，错误文案逐字**点名该路径**、说明它不存在，
+   并点出用户级安装的配置位置 `.config/clusterscope/agent.yaml`；这一次运行里不得再出现默认地址 `http://localhost:50051`。
+   实现提示：`Cli.config` 现在是带 `default_value` 的 `PathBuf`（`crates/agent/src/main.rs:15`），
+   改成 `Option<PathBuf>` 才能区分「显式给了」与「没给」。
+2. 不带 `-c`、默认 `/etc/clusterscope/agent.yaml` 缺失 → **告警点名默认路径**后仍按内置默认值启动
+   （守住既有 `NR-06` must-hold：不许崩）。
+3. 启动时 `create_dir_all` 建 node identity 文件的父目录（干净 HOME、`$HOME/.config` 不存在也要能起来）。
+4. `deploy/install-agent.sh`：停止/替换**只影响本次安装启动的进程**（PID 文件或含 `$` 的精确匹配），
+   **删掉** `pkill -f clusterscope-agent`（第 80 行）；脚本里写明它做了什么。
+5. `deploy/` 新增用户级 unit `clusterscope-agent.service` / `clusterscope-server.service`（名字与 README:288-293
+   的命令逐字一致、路径走 `%h`、`WantedBy=default.target`）；系统级 `agent.service` / `server.service` **保留**，
+   文件头注明「系统级、需 root」。
+6. README：补「无 root、无 docker 时准备 PostgreSQL」的两条路径 + **实测走的是哪条**、用户级部署的 **linger 前提**、
+   系统级 vs 用户级的分工与前提。
+
+**第 1 阶段的反向证据（在**未修复**的代码上实跑，2026-10-07）**
+
+```text
+$ sh qa/harness/no-root-fixes-checks.sh        # 退出码 9 = FAIL 条数
+F1  FAIL  install-agent.sh:80 仍是 pkill -f clusterscope-agent（静态判 FAIL；安全阀阻止了动态探针）
+F2  FAIL  显式 -c 缺失：不点名那个文件、仍按默认 http://localhost:50051 起步
+F3  FAIL  不带 -c：exit=1（干净 HOME 上直接死），不是「还在跑」的 124
+F4  FAIL  $HOME/.config/node_id 没被创建；输出 Failed to write node identity
+F5  FAIL  仓库里没有用户级 unit
+F6  FAIL  系统级 unit 文件头没有注明角色
+F7  FAIL  README 没有 initdb/pg_ctl 路径、docker 前提
+F8  FAIL  README 没有 loginctl/Linger/enable-linger
+F9  FAIL  README 没提用户级 unit 文件
+F10 PASS  44 个既有测试全绿、没有测试被删
+F11 PASS  qa/constraints.json 只追加、未改既有条目
+F12 PASS  改动范围合规（storage/server 零改动）
+```
+
+9 条 FAIL 逐条对应审查清单里预期的那处缺陷——这就是「检查会咬」的证明；第 2 阶段改完必须转 PASS
+（F10–F12 保持 PASS）。完整输出 `/tmp/nr-fixes-run2.log`、逐条证据 `gauntlet-out/qa/evidence/no-root-fixes-*.txt`
+（都在远端、未入库；复跑命令见 `qa/README.md`）。
+
 
