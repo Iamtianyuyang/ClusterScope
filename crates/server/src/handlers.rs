@@ -13,6 +13,18 @@ use uuid::Uuid;
 
 use crate::AppState;
 
+/// Submission input limits (the jobs columns have no DB-side length caps).
+/// `pub(crate)` so the gRPC `submit_job` path enforces the same caps.
+pub(crate) const MAX_JOB_NAME_LEN: usize = 255;
+pub(crate) const MAX_EXECUTABLE_LEN: usize = 4096;
+pub(crate) const MAX_WORKDIR_LEN: usize = 4096;
+pub(crate) const MAX_QUOTA_LEN: usize = 64;
+pub(crate) const MAX_ARGS: usize = 256;
+pub(crate) const MAX_ARG_LEN: usize = 4096;
+pub(crate) const MAX_ENV_ENTRIES: usize = 128;
+pub(crate) const MAX_ENV_KEY_LEN: usize = 255;
+pub(crate) const MAX_ENV_VALUE_LEN: usize = 4096;
+
 // ===== Auth Handlers =====
 
 #[derive(Deserialize)]
