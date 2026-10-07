@@ -112,8 +112,9 @@ fn run_agent(args: &[&str], home: &Path, grace: Duration) -> Outcome {
     let still_running = exit.is_none();
     if still_running {
         let _ = child.kill();
-        let _ = child.wait();
     }
+    // Reap on every path (std returns the cached status once the child is collected).
+    let _ = child.wait();
 
     let output = format!(
         "{}{}",
