@@ -47,3 +47,12 @@ DEMO_RC=0
 ?? qa/evidence/m6-qa7-f28.txt
 ?? qa/evidence/m6-qa7-gates.txt
 ?? qa/harness/m6-demo-f28.sh
+
+===== 第二次连续重放（幂等性检查：上一次运行把对拍变体的产物留在了同一个 deps/ 路径上） =====
+node .gauntlet/gauntlet.mjs demo demo/16-m6-f28-storage-tests-serialized.json
+$ sh qa/harness/m6-demo-f28.sh clippy  -> exit 0
+$ sh qa/harness/m6-demo-f28.sh serial  -> exit 0
+$ sh qa/harness/m6-demo-f28.sh parallel  -> exit 0
+$ sh qa/harness/m6-demo-f28.sh narrowed  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/evidence/demos/16-m6-f28-storage-tests-serialized.html
+DEMO_RC=0 （四步 clippy/serial/parallel/narrowed 全部 exit 0）
