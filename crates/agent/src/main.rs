@@ -12,8 +12,11 @@ mod node_identity;
 #[derive(Parser)]
 #[command(name = "clusterscope-agent", about = "ClusterScope GPU Node Agent")]
 struct Cli {
-    #[arg(short, long, default_value = "/etc/clusterscope/agent.yaml")]
-    config: PathBuf,
+    /// Config file. Omitted = `/etc/clusterscope/agent.yaml`, and the agent warns
+    /// and keeps running with built-in defaults when that file is missing.
+    /// A path given here explicitly must exist (a missing one is a hard error).
+    #[arg(short, long)]
+    config: Option<PathBuf>,
 
     #[arg(long)]
     config_dir: Option<PathBuf>,
@@ -53,14 +56,15 @@ async fn connect_with_retry(
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    // Load config
-    let config = config_loader::load_config(&cli)?;
-
-    // Initialize tracing
+    // Initialize tracing first: config loading warns when the default config file
+    // is missing (FIX-04) and that warning has to reach the user.
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .with_target(false)
         .init();
+
+    // Load config (hard error when an explicit -c path is missing, FIX-02/03)
+    let config = config_loader::load_config(&cli)?;
 
     info!(
         server_addr = %config.server_addr,
