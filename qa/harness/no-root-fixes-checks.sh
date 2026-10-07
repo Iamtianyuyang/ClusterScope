@@ -581,7 +581,7 @@ f12() {
   while IFS= read -r f; do
     [ -z "$f" ] && continue
     case "$f" in
-      crates/agent/src/config_loader.rs|crates/agent/src/node_identity.rs|crates/agent/src/main.rs) ;;
+      crates/agent/src/*.rs) ;;
       crates/agent/tests/*|crates/common/src/config.rs) ;;
       deploy/*|README.md|docs/*|features/*|qa/*|GAUNTLET.md) ;;
       *) bad="$bad $f" ;;
