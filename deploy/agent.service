@@ -1,3 +1,7 @@
+# System-wide unit -- OPTIONAL, requires root: install into /etc/systemd/system/
+# and `systemctl enable --now clusterscope-agent`. It runs as User=clusterscope and
+# reads /etc/clusterscope/agent.yaml. The no-root default is the user-level unit
+# deploy/clusterscope-agent.service (systemctl --user).
 [Unit]
 Description=ClusterScope GPU Agent
 After=network.target

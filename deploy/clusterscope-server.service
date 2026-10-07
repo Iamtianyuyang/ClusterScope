@@ -1,0 +1,25 @@
+# User-level systemd unit -- the default, no root required.
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/clusterscope-server.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now clusterscope-server
+#
+# %h expands to the installing user's home directory; the server reads its
+# config (postgres_url, ports, jwt_secret) from %h/.config/clusterscope/server.yaml.
+# The optional system-wide variant (needs root) is deploy/server.service.
+#
+# Requires a running user manager (systemd --user) and, to survive logout,
+# logind linger for this user (`loginctl show-user $USER` / `Linger=yes`).
+[Unit]
+Description=ClusterScope Central Server (user)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/clusterscope-server %h/.config/clusterscope/server.yaml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
