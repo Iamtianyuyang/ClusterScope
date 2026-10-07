@@ -1,0 +1,105 @@
+# F12 范围口径修订的复核证据（FIX-15，2026-10-07，[spec] 阶段）
+
+## 背景与裁决
+
+第 5 阶段报告的「范围定义漏洞」：`demo/*.json` 是 QA 阶段的**法定产物**（`gauntlet-qa` 技能：可回放的演示脚本），
+第 5 阶段新增的 `demo/11-no-root-fixes-install-agent-safety.json`、`demo/12-no-root-fixes-user-units-and-config-errors.json`
+却被 F12 判越界——原允许集（`in_scope()`）写于第 1 阶段，里面没有 `demo/`。
+
+Leader 2026-10-07 裁决 = 候选 1：**只改 harness 的允许集与注释，不动 `qa/constraints.json`**
+（避开 `FIX-12`/`F11` 的「零删行」口径）。落地位置：
+
+- `qa/harness/no-root-fixes-checks.sh:584` —— `in_scope()` 允许集加入 `demo/*`，理由注释在 `:581-583`（含裁决日期）；
+- `qa/harness/no-root-fixes-checks.sh:604-606`、`:619-620` —— F12 新增 1 条**正例自检**（`demo/*` 必须判**允许**）；
+- 负例自检 5 条（`:599-602`、`:617`）与 `5/5` 计数**原样不变**。
+
+## 1 复跑命令与结论
+
+命令（node 上，仓库根 /public/tianyuyang/code/ClusterScope-review/nr-fixes）：
+`sh qa/harness/no-root-fixes-checks.sh`（全量：含 F1 动态探针与 F5 的 systemd 真装真启）
+结论：**PASS=12 FAIL=0，退出码 0**（F1…F12 全 PASS；其余 11 条的逐条输出见 gauntlet-out/qa/evidence/no-root-fixes-checks.txt）
+
+## 2 F12 段原始输出（逐字未改）
+
+---- gauntlet-out/qa/evidence/no-root-fixes-F12-scope.txt ----
+== 本次改动/新增的文件 ==
+crates/agent/src/config_loader.rs
+crates/agent/src/main.rs
+crates/agent/src/node_identity.rs
+crates/agent/tests/no_root_agent_config.rs
+demo/11-no-root-fixes-install-agent-safety.json
+demo/12-no-root-fixes-user-units-and-config-errors.json
+deploy/agent.service
+deploy/clusterscope-agent.service
+deploy/clusterscope-server.service
+deploy/install-agent.sh
+deploy/server.service
+features/no_root_agent_config.feature
+GAUNTLET.md
+gauntlet-tools/rust-gate.mjs
+qa/constraints.json
+qa/evidence/no-root-fixes-checks-rerun-raw.txt
+qa/evidence/no-root-fixes-FIX14-tool-fix-recheck.txt
+qa/evidence/no-root-fixes-FIX15-scope-amendment.txt
+qa/evidence/no-root-fixes-phase5-demos-rerun.txt
+qa/evidence/no-root-fixes-phase5-gate-coder-rerun.txt
+qa/evidence/no-root-fixes-phase5-install-and-units.txt
+qa/evidence/no-root-fixes-phase5-nr06-rerun.txt
+qa/evidence/no-root-fixes-phase5-nr-regression.txt
+qa/evidence/no-root-fixes-phase5-static-gate-hypothesis.txt
+qa/harness/no-root-fixes-checks.sh
+qa/no-root-fixes.qa.md
+qa/qa-report.json
+qa/README.md
+README.md
+== 允许集之外的 ==
+<none>
+== crates/storage 与 crates/server 的改动 ==
+<none>
+== 负例自检（这些必须全部判越界）==
+ crates/storage/src/lib.rs crates/server/src/lib.rs Cargo.toml gauntlet.config.json .gauntlet/gauntlet.mjs
+== 正例自检（demo/* 是 2026-10-07 修订加入的允许项，必须判允许）==
+demo/01-build-and-test-gates.json -> 允许
+  ok   改动文件全部落在本轮允许集内
+  ok   crates/storage 与 crates/server 零改动
+  ok   负例自检：storage/server/Cargo.toml/gauntlet.config.json/.gauntlet 仍被判越界（实际 5/5）
+  ok   正例自检：demo/*（QA 阶段法定产物）判允许（实际 允许）
+---- 结束 ----
+
+## 3 逐条复核（对照 Leader 裁决的四处口径）
+
+| # | 口径 | 证据 | 结果 |
+|---|---|---|---|
+| 1 | 允许集含 `demo/*`，理由注释在案 | `:581-583` 注释（理由 + 裁决日期）+ `:584` 允许集 | ✅ |
+| 2 | 负例自检仍是 5/5（`crates/storage/**`、`crates/server/**`、`Cargo.toml`、`gauntlet.config.json`、`.gauntlet/**` 判越界） | 第 2 节输出 `负例自检 ... 实际 5/5` 及其 `ok` 行 | ✅ |
+| 3 | 新增正例自检存在且会被执行（`demo/*` 判允许） | 第 2 节输出 `demo/01-build-and-test-gates.json -> 允许` + `ok 正例自检` 行（`f12()` 内无提前 return，必执行） | ✅ |
+| 4 | `qa/constraints.json` 未被改动（`F11` 的「零删行」口径原样有效、`FIX-01…FIX-14` 口径未动） | F11 PASS + 总条数 118 + `FIX-01…FIX-14` 齐 + `git status` 里没有 `qa/constraints.json` | ✅ |
+| 5 | 产品代码 / `features/` / `.gauntlet/` / `gauntlet.config.json` 未动 | 相对 `b62bb12` 的未提交改动只有 3 个文件：`qa/README.md`、`qa/harness/no-root-fixes-checks.sh`、`qa/no-root-fixes.qa.md` | ✅ |
+| 6 | `crates/storage`、`crates/server` 零改动 | 第 2 节 `== crates/storage 与 crates/server 的改动 ==` 为 `<none>` | ✅ |
+
+## 4 共享机器安全记录（跑前各留逐字节副本 → 跑后 cmp 复验）
+
+跑前备份（`cp -a`）落在 `/tmp/nr-fixes-fix15-backup`，sha256 清单：
+
+```
+855afb68cde86e39a2de389a05e92a936643c127d86bd9db37c268d465a83abd  .config/systemd/user/clusterscope-agent.service
+038082e78fdcf68f6da803d9fd8b0c30e388a39bfe7aeb8aba7e525483f96299  .config/clusterscope/agent.yaml
+2246c1cfae724f8877e5e0e85b3072d1cf32b7c776c7f01dd5b63744bd7f8ae1  .config/clusterscope/server.yaml
+228dfa2aea97bc7a817be820c4206441cd8e6444e112f993e45b9c26641c8f58  .config/clusterscope/node_id
+```
+
+`.config/systemd/user/clusterscope-server.service` → 跑前**不存在**（脚本记录为 `ABSENT`）。
+
+跑后复验（`cmp`）：**4/4 逐字节一致**——
+
+```
+IDENTICAL systemd/clusterscope-agent.service
+IDENTICAL clusterscope/agent.yaml
+IDENTICAL clusterscope/server.yaml
+IDENTICAL clusterscope/node_id
+```
+
+常驻实例：`clusterscope-agent.service` MainPID **266643 → 266643**
+（ActiveState=active、SubState=running、NRestarts=0、is-enabled=enabled、Linger=yes）。
+harness 临时装的 `clusterscope-server.service` 已移除（`is-active` = inactive，文件不存在）。
+进程操作：全程只 `kill` 脚本自己记录/自己筛出的 PID，**没有** `pkill`/`killall`。

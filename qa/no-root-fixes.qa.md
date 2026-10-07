@@ -70,7 +70,7 @@ sh qa/harness/no-root-fixes-checks.sh --no-slow    # 跳过 F1 动态探针与 F
 | F9 | README 写清**系统级 vs 用户级**两种安装的分工与前提 | `grep -nE 'deploy/clusterscope-(agent\|server)\.service' README.md`；`grep -nE 'deploy/(agent\|server)\.service' README.md`；`grep -n 'systemctl --user' README.md` | 同一节里同时出现「用户级（默认、无需 root）」与「系统级（可选、需 root）」两条路径，各自的前置条件写在旁边 | `FIX-10` |
 | F10 | 既有 44 个测试继续全绿，不删/不跳/不弱化 | `sh -c 'export PATH=$HOME/.cargo/bin:$PATH; cargo test --workspace --offline'`；`git diff 7ca587a -- crates \| grep -E '^-[^-].*#\[(tokio::)?test\]'` | 所有 suite `0 failed`，`passed` 合计 ≥ **44**；diff 里**没有**被删掉的 `#[test]`/`#[tokio::test]` 行 | `FIX-11` |
 | F11 | 既有 104 条约束**只追加、不改** | `git diff 7ca587a -- qa/constraints.json \| grep '^-' \| grep -v '^---'`；`node -e 'console.log(JSON.parse(require("fs").readFileSync("qa/constraints.json","utf8")).length)'`；`grep -c '"NR-' qa/constraints.json` | 第一条输出**为空**（没有任何被删/被改的行——`FIX-13` 的修订以**追加** `FIX-14` 落地，没有改写原文）；条数 = 104 + 本轮 14 = **118**；`"NR-` 计数不减少（既有 22 条 id 以 `NR-` 开头：`NR-01`…`NR-21` + `NR-06b`，另有 `MRG-02`） | `FIX-12` |
-| F12 | 改动范围仅限本轮四项相关文件 | `git diff --name-only 7ca587a`；`git ls-files --others --exclude-standard`；`git diff --name-only 7ca587a -- crates/storage crates/server` | 改动文件全部落在允许集（`crates/agent/src/{config_loader,node_identity,main}.rs`、`crates/agent/tests/**`、`crates/common/src/config.rs`、`deploy/**`、`README.md`、`docs/**`、`features/**`、`qa/**`、`GAUNTLET.md`，以及 `FIX-14` 修订加入的 `gauntlet-tools/**`）；`crates/storage`、`crates/server` **零改动**；脚本里的负例自检（`crates/storage`/`crates/server`/`Cargo.toml`/`gauntlet.config.json`/`.gauntlet/**` 必须仍判越界）5/5 通过 | `FIX-13` `FIX-14` |
+| F12 | 改动范围仅限本轮四项相关文件 | `git diff --name-only 7ca587a`；`git ls-files --others --exclude-standard`；`git diff --name-only 7ca587a -- crates/storage crates/server` | 改动文件全部落在允许集（`crates/agent/src/{config_loader,node_identity,main}.rs`、`crates/agent/tests/**`、`crates/common/src/config.rs`、`deploy/**`、`README.md`、`docs/**`、`features/**`、`qa/**`、`GAUNTLET.md`，以及 `FIX-14` 修订加入的 `gauntlet-tools/**`）；`crates/storage`、`crates/server` **零改动**；脚本里的负例自检（`crates/storage`/`crates/server`/`Cargo.toml`/`gauntlet.config.json`/`.gauntlet/**` 必须仍判越界）5/5 通过；另见「工具修复复核」⑤（2026-10-07 允许集加入 `demo/*`，并补 1 条正例自检） | `FIX-13` `FIX-14` |
 
 ## 每条检查的证据落点
 
@@ -147,6 +147,16 @@ diff -u /tmp/f5b.txt /tmp/f5a.txt && echo "F5 断言集合一致"
 证据见 `gauntlet-out/qa/evidence/no-root-fixes-F12-scope.txt` 的「负例自检」段。另外 F11 段的口径**没有改动**
 （仍是「`git diff 7ca587a -- qa/constraints.json` 零删行」）：`FIX-13` 的修订以**追加** `FIX-14` 的形式落地，
 `FIX-13` 原文与既有 104 条逐字节未动。
+
+**⑤ 允许集加入 `demo/*`（2026-10-07 Leader 裁决，本阶段落笔）**
+
+`demo/*.json` 是 **QA 阶段的法定产物**（`gauntlet-qa` 技能：可回放的演示脚本），第 5 阶段写演示文件属预期行为——
+第 5 阶段报告的 F12 失败即由此而来（`qa/README.md`「一条要请 Leader 裁决的范围口径缺口」）。
+落地方式：只在 `in_scope()` 的允许集里加 `demo/*` 这一项（该行上方注释写明理由与裁决日期），**不动** `qa/constraints.json`
+（`FIX-13` 原文与既有 104 条逐字节未动，`F11` 的「零删行」口径原样有效），`FIX-01`…`FIX-14` 的判据无一处改变。
+强度未削弱：5 条负例自检原样 **5/5**，另**新增 1 条正例自检**（`demo/*` 必须判**允许**，守住这次修订）。
+复跑证据：`qa/evidence/no-root-fixes-FIX15-scope-amendment.txt` 状态 C、
+`qa/evidence/no-root-fixes-FIX15-F12-scope-after-amendment.txt`。
 
 ## 硬规矩（脚本已遵守，人工复跑时也请遵守）
 

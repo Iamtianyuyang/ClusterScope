@@ -578,14 +578,17 @@ console.log(JSON.stringify({
 in_scope() { # in_scope <仓库相对路径> → 0 = 允许改动，1 = 越界
   case "$1" in
     crates/agent/src/*.rs|crates/agent/tests/*|crates/common/src/config.rs) return 0 ;;
-    deploy/*|README.md|docs/*|features/*|qa/*|GAUNTLET.md|gauntlet-tools/*) return 0 ;;
+    # demo/*：QA 阶段的**法定产物**（gauntlet-qa 技能产出可回放的演示脚本 demo/*.json），第 5 阶段
+    # 写演示文件属预期行为，不是越界——原允许集漏了这一项（第 5 阶段报告的 F12「范围定义漏洞」）。
+    # 本修订由 Leader 于 2026-10-07 裁决：只加 demo/* 这一项，负例自检 5/5 原样，另加 1 条正例自检守住它。
+    deploy/*|README.md|docs/*|features/*|qa/*|demo/*|GAUNTLET.md|gauntlet-tools/*) return 0 ;;
     *) return 1 ;;
   esac
 }
 
 f12() {
   start_check "no-root-fixes-F12-scope.txt"
-  local changed bad f hs probe probe_bad
+  local changed bad f hs probe probe_bad probe_ok
   changed="$( { git diff --name-only "$BASE" 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null; } | sort -u)"
   bad=""
   while IFS= read -r f; do
@@ -598,17 +601,24 @@ f12() {
   for probe in crates/storage/src/lib.rs crates/server/src/lib.rs Cargo.toml gauntlet.config.json .gauntlet/gauntlet.mjs; do
     in_scope "$probe" || probe_bad="$probe_bad $probe"
   done
+  # 正例自检（2026-10-07 修订新增）：demo/* 是本次加入的允许项，必须判**允许** —— 守住这条裁决，
+  # 防止允许集被下一次改动悄悄改回去（那会让 QA 阶段的法定产物再次被判越界）。负例 5 条与 5/5 计数不变。
+  in_scope demo/01-build-and-test-gates.json && probe_ok=允许 || probe_ok=越界
   {
     echo "== 本次改动/新增的文件 =="; echo "$changed"
     echo "== 允许集之外的 =="; echo "${bad:-<none>}"
     echo "== crates/storage 与 crates/server 的改动 =="; echo "${hs:-<none>}"
     echo "== 负例自检（这些必须全部判越界）=="; echo "${probe_bad:-<none>}"
+    echo "== 正例自检（demo/* 是 2026-10-07 修订加入的允许项，必须判允许）=="
+    echo "demo/01-build-and-test-gates.json -> $probe_ok"
   } >> "$CUR_LOG"
   A "改动文件全部落在本轮允许集内" "$([ -z "$bad" ] && echo 0 || echo 1)"
   A "crates/storage 与 crates/server 零改动" "$([ -z "$hs" ] && echo 0 || echo 1)"
   A "负例自检：storage/server/Cargo.toml/gauntlet.config.json/.gauntlet 仍被判越界（实际 $(printf '%s' "$probe_bad" | wc -w)/5）" \
     "$([ "$(printf '%s' "$probe_bad" | wc -w)" = 5 ] && echo 0 || echo 1)"
-  end_check F12 "改动范围仅限本轮四项相关文件 + 两处已准入的工具修复"
+  A "正例自检：demo/*（QA 阶段法定产物）判允许（实际 $probe_ok）" \
+    "$([ "$probe_ok" = 允许 ] && echo 0 || echo 1)"
+  end_check F12 "改动范围仅限本轮四项相关文件 + 两处已准入的工具修复 + demo/*（2026-10-07 裁决）"
 }
 
 f1

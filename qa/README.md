@@ -142,3 +142,14 @@ F12 的允许集（`in_scope()`）写于第 1 阶段，里面没有 `demo/`。**
 
 证据：`qa/evidence/no-root-fixes-FIX15-scope-amendment.txt`（三种状态 A/B/C 的原始输出）、
 `qa/evidence/no-root-fixes-checks-rerun-raw.txt`（干净状态 F12 PASS 的原文）。
+
+**2026-10-07 裁决（已落地）**：Leader 采纳**候选 1**，执行口径是「只改 harness 的一行 + 注释里写理由，
+**不**动 `qa/constraints.json`（避开 `F11` 的『零删行』口径）」。落笔在第 1 阶段（`[spec]`）：
+
+- `qa/harness/no-root-fixes-checks.sh` 的 `in_scope()` 允许集加入 `demo/*`（该行上方注释写明理由与裁决日期）；
+- F12 另加 **1 条正例自检**（`demo/*` 必须判**允许**），5 条负例自检与 `5/5` 计数**原样不变**；
+- `qa/constraints.json` **一字未动**（既有 104 条与 `FIX-01`…`FIX-14` 的口径不变，`F11` 继续原样有效）。
+
+复跑结果：**`PASS=12 FAIL=0`（退出码 0）** —— 上一节记录的 F12 FAIL 已消解，四处修复本身未被改动。
+证据：`qa/evidence/no-root-fixes-FIX15-scope-amendment.txt` 状态 C（复跑全文）、
+`qa/evidence/no-root-fixes-FIX15-F12-scope-after-amendment.txt`（F12 段的改动文件清单 + 正/负例自检）。
