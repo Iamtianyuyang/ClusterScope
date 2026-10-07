@@ -17,8 +17,8 @@
 use chrono::{DateTime, Duration, Utc};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
-use std::sync::Mutex;
 use storage::audit_queries::{insert_audit_log, list_audit_logs};
+use tokio::sync::{Mutex, MutexGuard};
 
 const DEFAULT_POSTGRES_URL: &str =
     "postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope";
@@ -34,12 +34,13 @@ const ACTION_CREATE: &str = "m6-create";
 
 /// All four scenarios share one fixture table, so they are serialized: a
 /// parallel run would let one test's fixtures show up in another test's count.
-static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
+static FIXTURE_LOCK: Mutex<()> = Mutex::const_new(());
 
-fn lock_fixture() -> std::sync::MutexGuard<'static, ()> {
-    FIXTURE_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+/// The guard has to span the whole test body -- the database awaits included --
+/// so the lock is the async-aware one: a `std::sync` guard held across an await
+/// point blocks the runtime thread the test runs on.
+async fn lock_fixture() -> MutexGuard<'static, ()> {
+    FIXTURE_LOCK.lock().await
 }
 
 async fn accept_pool() -> PgPool {
@@ -139,7 +140,7 @@ async fn set_timestamp(pool: &PgPool, log_id: &str, at: DateTime<Utc>) {
 
 #[tokio::test]
 async fn audit_listing_filters_rows_and_returns_a_matching_total() {
-    let _guard = lock_fixture();
+    let _guard = lock_fixture().await;
     let fixture = seed_fixture().await;
 
     let (rows, total) = list_audit_logs(&fixture.pool, Some(USER_AUDIT), None, None, None, 0, 50)
@@ -162,7 +163,7 @@ async fn audit_listing_filters_rows_and_returns_a_matching_total() {
 
 #[tokio::test]
 async fn audit_listing_returns_zero_total_instead_of_an_error_when_nothing_matches() {
-    let _guard = lock_fixture();
+    let _guard = lock_fixture().await;
     let fixture = seed_fixture().await;
 
     let result = list_audit_logs(&fixture.pool, Some(USER_ABSENT), None, None, None, 0, 50).await;
@@ -176,7 +177,7 @@ async fn audit_listing_returns_zero_total_instead_of_an_error_when_nothing_match
 
 #[tokio::test]
 async fn audit_listing_is_ordered_newest_first_and_pages_by_offset() {
-    let _guard = lock_fixture();
+    let _guard = lock_fixture().await;
     let fixture = seed_fixture().await;
     let newest = &fixture.audit_ids[2];
     let middle = &fixture.audit_ids[1];
@@ -220,7 +221,7 @@ async fn audit_listing_is_ordered_newest_first_and_pages_by_offset() {
 
 #[tokio::test]
 async fn audit_listing_combines_user_action_and_time_filters() {
-    let _guard = lock_fixture();
+    let _guard = lock_fixture().await;
     let fixture = seed_fixture().await;
     let base = fixture.oldest;
 

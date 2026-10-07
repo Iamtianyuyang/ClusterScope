@@ -14,11 +14,11 @@
 use chrono::{Duration, Utc};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
-use std::sync::Mutex;
 use storage::user_queries::{
     add_refresh_token, consume_refresh_token, create_user, delete_user_guarded,
     revoke_all_refresh_tokens, update_user_guarded,
 };
+use tokio::sync::{Mutex, MutexGuard};
 
 const DEFAULT_POSTGRES_URL: &str =
     "postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope";
@@ -44,12 +44,13 @@ const FIXTURE_USERS: [&str; 5] = [
 /// All scenarios share the `users` / `refresh_tokens` tables, so they run
 /// serialized (a parallel run would let one test's admin demotion change the
 /// enabled-admin count another test depends on).
-static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
+static FIXTURE_LOCK: Mutex<()> = Mutex::const_new(());
 
-fn lock_fixture() -> std::sync::MutexGuard<'static, ()> {
-    FIXTURE_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+/// The guard has to span the whole test body -- the database awaits included --
+/// so the lock is the async-aware one: a `std::sync` guard held across an await
+/// point blocks the runtime thread the test runs on.
+async fn lock_fixture() -> MutexGuard<'static, ()> {
+    FIXTURE_LOCK.lock().await
 }
 
 async fn accept_pool() -> PgPool {
@@ -96,7 +97,7 @@ async fn issue_token(pool: &PgPool, raw: &str, user_id: &str) {
 
 #[tokio::test]
 async fn revoking_all_sessions_invalidates_every_outstanding_refresh_token_of_the_user() {
-    let _guard = lock_fixture();
+    let _guard = lock_fixture().await;
     let pool = accept_pool().await;
     cleanup(&pool).await;
 
@@ -142,7 +143,7 @@ async fn revoking_all_sessions_invalidates_every_outstanding_refresh_token_of_th
 
 #[tokio::test]
 async fn a_refresh_token_can_only_be_consumed_once() {
-    let _guard = lock_fixture();
+    let _guard = lock_fixture().await;
     let pool = accept_pool().await;
     cleanup(&pool).await;
 
@@ -169,7 +170,7 @@ async fn a_refresh_token_can_only_be_consumed_once() {
 
 #[tokio::test]
 async fn refresh_tokens_are_stored_as_digests_so_the_raw_value_is_not_in_the_database() {
-    let _guard = lock_fixture();
+    let _guard = lock_fixture().await;
     let pool = accept_pool().await;
     cleanup(&pool).await;
 
@@ -212,7 +213,7 @@ async fn refresh_tokens_are_stored_as_digests_so_the_raw_value_is_not_in_the_dat
 
 #[tokio::test]
 async fn deleting_a_user_also_deletes_its_refresh_tokens() {
-    let _guard = lock_fixture();
+    let _guard = lock_fixture().await;
     let pool = accept_pool().await;
     cleanup(&pool).await;
 
@@ -244,7 +245,7 @@ async fn deleting_a_user_also_deletes_its_refresh_tokens() {
 
 #[tokio::test]
 async fn demoting_or_deleting_an_administrator_that_is_not_the_last_one_succeeds() {
-    let _guard = lock_fixture();
+    let _guard = lock_fixture().await;
     let pool = accept_pool().await;
     cleanup(&pool).await;
 
