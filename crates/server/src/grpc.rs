@@ -1,4 +1,5 @@
 use crate::AppState;
+use chrono::Utc;
 use common::alert::{AlertEvent, AlertRule, AlertSeverity, AlertState};
 use common::job::status_from_str;
 use protocol::*;
@@ -635,7 +636,7 @@ async fn evaluate_alerts(state: &AppState, report: &NodeMetricsReport) {
                 if let Some(event) =
                     state
                         .alert_engine
-                        .evaluate(rule, &report.node_id, &gpu.uuid, value)
+                        .evaluate(rule, &report.node_id, &gpu.uuid, value, Utc::now())
                 {
                     persist_alert_event(state, &event).await;
                 }
@@ -655,7 +656,7 @@ async fn evaluate_alerts(state: &AppState, report: &NodeMetricsReport) {
             };
             if let Some(event) = state
                 .alert_engine
-                .evaluate(rule, &report.node_id, "", value)
+                .evaluate(rule, &report.node_id, "", value, Utc::now())
             {
                 persist_alert_event(state, &event).await;
             }
