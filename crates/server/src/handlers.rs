@@ -790,6 +790,39 @@ async fn audit_username(state: &AppState, claims: &Claims) -> String {
 /// columns have no DB-side length limits, so without these a single call
 /// could insert a gigantic row). Returns `BAD_REQUEST` plus a message naming
 /// the violated limit.
+/// Is the target node usable for a submission?
+///
+/// Either it is live in the in-memory registry, or the cluster still knows it
+/// in the persistent `node_info` table -- which is also what the
+/// `jobs.node_id` foreign key points at. Right after a server restart the
+/// registry is empty until the agents re-register, and a submission for a
+/// known node must not be refused in that window.
+async fn node_is_known(state: &AppState, node_id: &str) -> bool {
+    if state.node_registry.exists(node_id) {
+        return true;
+    }
+    storage::queries::node_exists(state.database.pool(), node_id)
+        .await
+        .unwrap_or(false)
+}
+
+/// Record a refused job submission (F-10: refusals are audited the same way
+/// failed logins are, so an operator can see who tried to submit what).
+async fn audit_job_rejection(state: &AppState, claims: &Claims, client_ip: &str, reason: &str) {
+    storage::audit_queries::insert_audit_log(
+        state.database.pool(),
+        &audit_username(state, claims).await,
+        "create_job",
+        None,
+        Some("job"),
+        Some(reason),
+        "rejected",
+        Some(client_ip),
+    )
+    .await
+    .ok();
+}
+
 pub(crate) fn validate_job_request(req: &JobCreateRequest) -> Result<(), (StatusCode, String)> {
     if req.arguments.len() > MAX_ARGS {
         return Err((
@@ -838,16 +871,23 @@ pub async fn create_job(
     // be known to the cluster (otherwise the row violates the node_info FK
     // and the job is silently un-runnable).
     if req.name.trim().is_empty() || req.executable.trim().is_empty() {
+        let reason = "name and executable are required";
+        warn!(reason, "Rejected job submission");
+        audit_job_rejection(&state, &claims, &client_ip, reason).await;
         return Err(StatusCode::BAD_REQUEST);
     }
-    if !req.node_id.trim().is_empty() && !state.node_registry.exists(&req.node_id) {
+    if !req.node_id.trim().is_empty() && !node_is_known(&state, &req.node_id).await {
+        let reason = format!("unknown target node: {}", req.node_id);
+        warn!(reason = %reason, "Rejected job submission");
+        audit_job_rejection(&state, &claims, &client_ip, &reason).await;
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    validate_job_request(&req).map_err(|(_status, reason)| {
+    if let Err((_status, reason)) = validate_job_request(&req) {
         warn!(reason = %reason, "Rejected job submission");
-        StatusCode::BAD_REQUEST
-    })?;
+        audit_job_rejection(&state, &claims, &client_ip, &reason).await;
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     let job_id = Uuid::new_v4().to_string();
     let env: HashMap<String, String> = req
@@ -1000,12 +1040,10 @@ pub async fn stop_job(
     };
 
     let new_status: String = match row.status.as_str() {
-        // Already terminal — nothing to stop.
+        // Already terminal: a stop request is a conflict, not a silent
+        // success (the documented contract and the QA matrix expect 409).
         "succeeded" | "failed" | "cancelled" | "lost" => {
-            return Ok(Json(serde_json::json!({
-                "job_id": job_id,
-                "status": row.status,
-            })));
+            return Err(StatusCode::CONFLICT);
         }
         // Not dispatched yet: cancel atomically, no agent involved. Leaving
         // it 'stopping' would strand it forever (scheduler only picks
