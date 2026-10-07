@@ -260,25 +260,42 @@ def main():
         raise SystemExit("unexpected tail of %s: %r" % (PATH, text[-40:]))
 
     ids = [c["id"] for c in json.loads(text)]
-    for e in E:
-        if e["id"] in ids:
-            raise SystemExit("duplicate id: %s" % e["id"])
+    before = len(ids)
 
-    body = json.dumps(E, ensure_ascii=False, indent=2)
+    # 可选：第 2 个参数是「额外条目」的 JSON 数组（用于后续的勘误 / 修订）。
+    # 纪律同前：只追加，**不改写**既有条目。
+    if len(sys.argv) > 2:
+        with io.open(sys.argv[2], encoding="utf-8") as fh:
+            E.extend(json.load(fh))
+
+    # 已经在文件里的 id 一律跳过 —— 本脚本可以重复执行（幂等）。
+    seen = set(ids)
+    todo = []
+    for e in E:
+        if e["id"] in seen:
+            continue
+        seen.add(e["id"])
+        todo.append(e)
+
+    if not todo:
+        print("nothing to append (all ids already present in %s)" % PATH)
+        return
+
+    body = json.dumps(todo, ensure_ascii=False, indent=2)
     inner = body[body.index("\n") + 1 : body.rindex("\n")]      # drop the outer [ ]
 
     # 插在最后的 `  }` 与 `]` 之间：`  }` 行与 `]` 行逐字节不动 → diff 是纯追加。
     new_text = text[: -len("]")] + ",\n" + inner + "\n]"
 
     parsed = json.loads(new_text)                                # 语法自检
-    assert len(parsed) == len(ids) + len(E)
+    assert len(parsed) == before + len(todo)
     assert len({c["id"] for c in parsed}) == len(parsed)
 
     with io.open(PATH, "w", encoding="utf-8", newline="") as fh:
         fh.write(new_text)
 
-    print("appended %d constraints -> total %d" % (len(E), len(parsed)))
-    print("ids: %s" % ", ".join(e["id"] for e in E))
+    print("appended %d constraints -> total %d" % (len(todo), len(parsed)))
+    print("ids: %s" % ", ".join(e["id"] for e in todo))
 
 
 if __name__ == "__main__":

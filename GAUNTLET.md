@@ -523,7 +523,7 @@ F12 PASS  改动范围合规（storage/server 零改动）
 | 文件 | 内容 |
 |---|---|
 | `features/merge_m6_audit_queries.feature` | **4 个场景**：审计查询的筛选/总数/分页/组合筛选（F-01 + F-16 的库上判据） |
-| `features/merge_m6_auth_hardening.feature` | **8 个场景**：按 IP 与全局登录限速、代理头取客户端地址、令牌批量吊销、单次消费、摘要存储、最后管理员守卫（F-08/F-09） |
+| `features/merge_m6_auth_hardening.feature` | **9 个场景**：按 IP 与全局登录限速、代理头取客户端地址、令牌批量吊销、单次消费、摘要存储、令牌级联删除、管理员的降级/删除允许路径（F-08/F-09；「最后一个启用管理员」的拒绝路径见 `qa/merge-m6.qa.md` §3 的人工核验项） |
 | `features/merge_m6_job_safety.feature` | **6 个场景**：`MAX_ARGS`/`MAX_ARG_LEN` 边界、SIGTERM→SIGKILL 升级与正对照、死配置键生效、TLS 缺证书的明确报错（F-11/F-05/F-06） |
 | `features/merge_m6_legacy_assets.feature` | **4 个场景**：A 的 `MetricsAggregation` 与 `node_metrics_to_proto` 的类型行为（M6 步骤 3） |
 | `qa/merge-m6.qa.md` | M6 步骤 1/2/3/5 的**执行程序与判据**：合流前基线表、逐文件 graft 的验收表、M9 行为等价清单、M10 不变量、PASS/FAIL **翻转登记表**、F12 的轮次口径、决策记录 |
@@ -531,7 +531,7 @@ F12 PASS  改动范围合规（storage/server 零改动）
 | `qa/constraints.json` | **追加 20 条** `MRG6-01`…`MRG6-20`（全部 `must-hold`）；既有 118 条（104 审计 + `FIX-01`…`FIX-14`）**逐字节未动**，合计 **138** 条；追加是**纯插入**（`git diff --numstat 7ca587a -- qa/constraints.json` → `341 0`） |
 
 **场景名 ↔ 测试名的硬契约**：与上一轮相同（`matchAcceptance`：小写 + 折叠空白的**子串**匹配，`_` ≠ 空格）——
-本轮 22 个新场景一律写成 snake_case，编码阶段把场景名照抄成测试函数名；加上上一轮的 6 条，验收场景共 **28** 条。
+本轮 23 个新场景一律写成 snake_case，编码阶段把场景名照抄成测试函数名；加上上一轮的 6 条，验收场景共 **29** 条（勘误记录见 `qa/constraints.json` 的 `MRG6-21`）。
 
 **合流前实测基线（2026-10-07，本工作树；判据的对照面只能是这张表）**
 
@@ -568,5 +568,5 @@ sh qa/harness/merge-m6-checks.sh                         # 合流后：要求 0 
 sh qa/harness/no-root-fixes-checks.sh --no-slow           # 12/12（全量版：M6_FULL_NOROOT=1 或去掉 --no-slow）
 ```
 
-**当前状态**：`gate --profile specifier` = **PASS**（`spec: 5 feature(s), 28 scenario(s)`）。
-`ACCEPTANCE` 在写完这 22 个测试前必然不完整（`missing=22`），这是预期，不是坏了。
+**当前状态**：`gate --profile specifier` = **PASS**（`spec: 5 feature(s), 29 scenario(s)`）。
+`ACCEPTANCE` 在写完这 23 个测试前必然不完整（`missing=23`），这是预期，不是坏了。

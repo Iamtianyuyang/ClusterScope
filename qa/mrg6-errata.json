@@ -1,0 +1,12 @@
+[
+  {
+    "id": "MRG6-21",
+    "text": "**勘误（追加，不改写 MRG6-03）**：本轮新验收场景的条数由 **22 条（合计 28）** 修订为 **23 条（合计 29）** —— `features/merge_m6_auth_hardening.feature` 由 8 条改为 9 条：原场景 `the_last_enabled_administrator_cannot_be_disabled_or_deleted` 的**拒绝路径**在本机的共享数据库上无法构造前置（库里始终有既有的 `admin`），已拆成两条可测场景 `deleting_a_user_also_deletes_its_refresh_tokens` 与 `demoting_or_deleting_an_administrator_that_is_not_the_last_one_succeeds`；「最后一个启用管理员」的拒绝路径改为 QA 阶段的人工核验项（临时 schema，原始输出留证）。MRG6-03 的判据本身不变：每个场景都要有一个通过的、名字逐字包含它的测试；条数以 `node .gauntlet/gauntlet.mjs spec` 与 `gate --profile coder` 的 ACCEPTANCE 一栏为唯一准绳。",
+    "basis": "第 1 阶段实跑 `node .gauntlet/gauntlet.mjs spec` → `5 feature(s), 29 scenario(s)`；共享库前置不可构造的论证见 qa/merge-m6.qa.md §3 的「不进自动化判据的一项（人工核验）」",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/merge-m6 && node .gauntlet/gauntlet.mjs spec（应为 5 feature(s), 29 scenario(s)）；node .gauntlet/gauntlet.mjs gate --profile coder（ACCEPTANCE 一栏应无 missing、无失败）",
+    "expect": "spec 输出 29 个场景；coder 闸门的 ACCEPTANCE 全绿",
+    "verdict": "must-hold",
+    "qa": "merge-m6.qa.md#M6-02",
+    "severity": "minor"
+  }
+]

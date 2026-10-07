@@ -38,7 +38,7 @@
 |---|---|---|---|---|
 | 1 | 构建 | exit 0 | `cargo build --workspace --all-targets --offline` | exit 0（**不得**引入需要联网的新依赖） |
 | 2 | 测试 | **59 passed / 0 failed**（`F10` 证据 `no-root-fixes-F10-tests.txt`） | `cargo test --workspace --offline` | ≥ 59 passed、0 failed |
-| 3 | 验收场景 | 6 场景（`features/no_root_agent_config.feature`），`gate --profile coder` 显示 59/59 + 6/6 | `node .gauntlet/gauntlet.mjs test` | 验收场景**只增不减**：6 + 本轮新增 22 = 28，全部要有**通过的**同名测试 |
+| 3 | 验收场景 | 6 场景（`features/no_root_agent_config.feature`），`gate --profile coder` 显示 59/59 + 6/6 | `node .gauntlet/gauntlet.mjs test` | 验收场景**只增不减**：6 + 本轮新增 23 = 29，全部要有**通过的**同名测试 |
 | 4 | REST 矩阵 | **18 PASS / 2 FAIL**：`DOC-GET-USERS-READONLY`（期望 200 实际 **401**）、`DOC-GET-AUDIT-LOGS`（期望 200 实际 **500**） | `sh qa/harness/server-up.sh false && sh qa/harness/api-checks.sh; sh qa/harness/server-down.sh` | PASS 数**不减少**（≥18）；`DOC-GET-AUDIT-LOGS` **必须翻成 PASS**（= F-01 修好的机器判据） |
 | 5 | 文档一致性 | **71 PASS / 9 FAIL**（见 §5 翻转登记表） | `sh qa/harness/doc-claims-checks.sh` | FAIL 数**不增加**（≤9）；`DOC-CODE-SIGKILL-EXISTS`、`DOC-CODE-FORCE-OPTION` 必须翻成 PASS |
 | 6 | TUI 快捷键 | 13 条 `DOC-TUI-KEY`（合流前已 PASS） | `doc-claims-checks.sh` | 13/13 PASS |
@@ -163,7 +163,7 @@ sh qa/harness/doc-claims-checks.sh                                          # FA
 |---|---|---|
 | 构建 | exit 0 | `cargo build --workspace --all-targets --offline` |
 | 测试 | ≥59 passed / 0 failed | `cargo test --workspace --offline` |
-| 验收场景 | 28 个场景都有通过的测试（6 旧 + 22 新） | `node .gauntlet/gauntlet.mjs test` |
+| 验收场景 | 29 个场景都有通过的测试（6 旧 + 23 新） | `node .gauntlet/gauntlet.mjs test` |
 | REST 端点表 | PASS ≥18，且 `DOC-GET-AUDIT-LOGS` 由 FAIL 转 PASS | `merge-m6-checks.sh` 的 `M6-11` |
 | TUI 快捷键 | 13/13 PASS（`DOC-TUI-KEY`） | `M6-09`；TUI 真渲染见 `auth-tui-checks.sh` 的 `TUI-RENDERS-HEADER` |
 | gRPC 任务生命周期 + WS 广播 | `job-e2e.sh` 0 FAIL（含 `WS-CONNECTED/SUBSCRIBED/METRICS-PUSH/JOB-UPDATE-PUSH`） | `M6-14` |

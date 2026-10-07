@@ -164,7 +164,7 @@ F12 的允许集（`in_scope()`）写于第 1 阶段，里面没有 `demo/`。**
 | 文件 | 内容 |
 |---|---|
 | `qa/merge-m6.qa.md` | **本轮的执行程序与判据**：合流前基线表、M6 步骤 1/2/3/5 的逐条检查、M9 行为等价清单、M10 不变量（NRM1–NRM8）、**PASS/FAIL 翻转登记表**、F12 的轮次口径、F-02/F-07/F-12 的取舍记录 |
-| `features/merge_m6_*.feature` | 22 个新验收场景（审计查询 / 登录限速与令牌吊销 / 任务参数上限与 SIGKILL 升级与配置键 / A 的指标类型），场景名一律 snake_case |
+| `features/merge_m6_*.feature` | 23 个新验收场景（审计查询 / 登录限速与令牌吊销 / 任务参数上限与 SIGKILL 升级与配置键 / A 的指标类型），场景名一律 snake_case |
 | `qa/harness/merge-m6-checks.sh` | 判据程序 **M6-01…M6-15**（`--static` 只跑不需要 server/agent 的 10 段） |
 | `qa/constraints.json` | 追加 **`MRG6-01`…`MRG6-20`**（`must-hold`）；既有 118 条逐字节未动，合计 138 条，追加是纯插入（`--numstat` 第二列为 0） |
 
