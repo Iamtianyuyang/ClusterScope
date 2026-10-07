@@ -1,0 +1,3 @@
+exit=1
+== stderr+stdout
+Error: refusing to start: jwt_secret is missing/too weak with auth_required: true. Set a strong jwt_secret in server.yaml (or JWT_SECRET env), or set auth_required: false for trusted LANs.

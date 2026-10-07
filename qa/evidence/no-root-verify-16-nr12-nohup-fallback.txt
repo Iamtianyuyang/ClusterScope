@@ -1,0 +1,16 @@
+nohup_pid=1897435 alive=yes
+greeting_lines=1
+after manual kill: alive=no  (nothing restarts it)
+== supervision exists only in the systemd --user branch of install-agent.sh
+12:# remote host and started via systemd --user (or nohup as a fallback).
+60:if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+70:Restart=always
+76:    systemctl --user daemon-reload
+77:    systemctl --user enable --now clusterscope-agent.service
+80:    pkill -f clusterscope-agent 2>/dev/null || true
+81:    nohup "$HOME/.local/bin/clusterscope-agent" -c "$HOME/.config/clusterscope/agent.yaml" \
+83:    echo "started via nohup"
+== FOOTGUN: the nohup branch runs 'pkill -f clusterscope-agent' first (install-agent.sh:80).
+   On a shared host that kills *every* agent of this user, including ones this
+   installer did not start. Live proof that such a process exists right now:
+ 266643 Wed Sep  2 12:59:26 2026 /public/tianyuyang/.local/bin/clusterscope-agent -c /public/tianyuyang/.config/clusterscope/agent.yaml

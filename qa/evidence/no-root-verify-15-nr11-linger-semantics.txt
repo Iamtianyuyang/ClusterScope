@@ -1,0 +1,16 @@
+== Linger value THIS RUN depends on (see qa/no-root.qa.md NR11 / qa-report env note)
+Linger=yes
+== probe unit
+  MainPID=1897321  is-active=active
+  fragment=/public/tianyuyang/.config/systemd/user/nr-persist-unit.service
+== tear a separate ssh session down (does the user manager kill it?)
+  VERDICT: MainPID 1897321 still alive after session teardown (linger keeps the user manager)
+== the other direction: what a node with Linger=no does, and whether we can test it here
+  loginctl enable-linger/disable-linger requires root; we have no sudo ->
+  sudo exists (not used: cluster-level change, forbidden this round)
+  SEMANTICS (systemd-logind): without linger, the per-user systemd instance is
+  stopped when the last session of that user ends -> all of its units, including
+  Restart=always ones, are terminated with it. Linger is per-machine state.
+  EVIDENCE that a 'no-linger' node is a real scenario: install-agent.sh:60 only
+  checks `systemctl --user show-environment`, never the Linger property:
+60:if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then

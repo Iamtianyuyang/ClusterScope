@@ -1,0 +1,38 @@
+== README 'systemctl --user' lines
+288:systemctl --user status  clusterscope-server    # 中央服务
+289:systemctl --user restart clusterscope-server
+290:systemctl --user restart clusterscope-agent     # 本机 agent
+291:ssh node-01 'systemctl --user restart clusterscope-agent'
+321:- **节点迟迟不出现**:`systemctl --user status clusterscope-agent` 是否运行、`journalctl --user -u clusterscope-agent` 有无报错、server 的 50051 端口是否可达、`agent_token` 是否与 server 一致
+== units shipped in the repo
+clusterscope-server.service (excluding target/): 0
+/public/tianyuyang/code/ClusterScope-review/gh-line/deploy/server.service
+/public/tianyuyang/code/ClusterScope-review/gh-line/deploy/agent.service
+== is any repo file able to generate the user-level server unit?
+/public/tianyuyang/code/ClusterScope-review/gh-line/qa/evidence/no-root-verify-08-nr15-install-attempts.txt
+/public/tianyuyang/code/ClusterScope-review/gh-line/qa/evidence/no-root-verify-10-nr13-no-user-server-unit.txt
+/public/tianyuyang/code/ClusterScope-review/gh-line/qa/merge-plan-requirements.md
+/public/tianyuyang/code/ClusterScope-review/gh-line/qa/constraints.json
+/public/tianyuyang/code/ClusterScope-review/gh-line/qa/harness/no-root-checks.sh
+/public/tianyuyang/code/ClusterScope-review/gh-line/qa/harness/nr-verify.sh
+/public/tianyuyang/code/ClusterScope-review/gh-line/qa/no-root.qa.md
+/public/tianyuyang/code/ClusterScope-review/gh-line/GAUNTLET.md
+== docs/: systemctl --user or ~/.config/systemd mentions: 0
+== machine-local unit (NOT from the repo)
+[Unit]
+Description=ClusterScope Central Server
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/public/tianyuyang/.local/bin/clusterscope-server /public/tianyuyang/.config/clusterscope/server.yaml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+/public/tianyuyang/.config/systemd/user/clusterscope-server.service mtime=2026-08-10 10:36:45.669981397 +0800
+state=disabled/inactive
+ExecStart points into HOME (hand-written marker): 1
+== clean-machine consequence: 'systemctl --user restart clusterscope-server' on a host without that file
+  (proof by construction: the command resolves a unit name that no repo artefact installs)

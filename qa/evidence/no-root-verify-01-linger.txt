@@ -1,0 +1,11 @@
+== loginctl show-user tianyuyang
+Display=56512
+State=active
+Sessions=56611 56608 56512 56511 55343 42341 37394 33684 23353
+Linger=yes
+== enable-linger is a root-only operation (no sudo available here)
+sudo binary present
+== runtime dir owner (created by the user manager when a session/logind user exists)
+drwx------ 8 tianyuyang tianyuyang 220 Oct  7 03:12 /run/user/3000
+== persistence of the pre-existing user service (author-run instance)
+266643 /public/tianyuyang/.config/systemd/user/clusterscope-agent.service Wed 2026-09-02 12:59:26 CST 

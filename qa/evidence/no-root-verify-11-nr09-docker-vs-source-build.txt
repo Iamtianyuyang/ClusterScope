@@ -1,0 +1,28 @@
+== README promise
+57:| PostgreSQL | v16+(server 必需;可用 `deploy/docker-compose.yml` 一键起) |
+87:无 root 时可用 `docker compose up`(`deploy/docker-compose.yml`,只含 postgres + server)。
+337:deploy/          # systemd、docker-compose、install-agent.sh、tui.sh
+== compose file shipped
+-rw-r--r-- 1 tianyuyang tianyuyang 1063 Oct  7 02:52 /public/tianyuyang/code/ClusterScope-review/gh-line/deploy/docker-compose.yml
+== runtime availability
+docker: absent
+docker-compose: absent
+/usr/bin/podman
+== podman images (must be empty for compose to work offline)
+time="2026-10-07T13:53:27+08:00" level=warning msg="Network file system detected as backing store.  Enforcing overlay option `force_mask=\"700\"`.  Add it to storage.conf to silence this warning"
+REPOSITORY  TAG         IMAGE ID    CREATED     SIZE
+== the documented command, actually attempted (bounded by timeout)
+timeout: failed to run command ‘podman-compose’: Permission denied
+  podman-compose exit=0
+timeout: failed to run command ‘docker’: Permission denied
+  docker-compose exit=0
+== outbound network (README assumes an image can be pulled)
+curl failed (no egress)
+== the route that DOES work here, undocumented in README
+pg_ctl: server is running (PID: 4176115)
+/public/tianyuyang/code/ClusterScope-review/pg16/bin/postgres "-D" "/public/tianyuyang/code/ClusterScope-review/pgdata" "-p" "5432" "-k" "/tmp" "-c" "listen_addresses=127.0.0.1"
+  pg_ctl exit=0
+PostgreSQL 16.4 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-11), 64-bit
+clusterscope|clusterscope
+  psql on PATH? no
+  README mentions building PostgreSQL from source? 0 hits

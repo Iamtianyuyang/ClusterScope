@@ -1,0 +1,16 @@
+command: HOME=/tmp/nr-verify2/home-a timeout 8 clusterscope-agent -c /tmp/nr-verify2/absent.yaml
+exit=1   (124 = still running when timeout fired; 1 = died)
+== output (full)
+  [2m2026-10-07T05:54:55.512563Z[0m [32m INFO[0m ClusterScope Agent starting [3mserver_addr[0m[2m=[0mhttp://localhost:50051 [3mnode_id[0m[2m=[0mNone
+  Error: Failed to write node identity to "/tmp/nr-verify2/home-a/.config/node_id"
+  
+  Caused by:
+      No such file or directory (os error 2)
+== effective server_addr actually dialled (default is http://localhost:50051)
+== does anything mention the missing config file /tmp/nr-verify2/absent.yaml?
+  mentions=0
+== files created under the HOME
+  /tmp/nr-verify2/home-a
+  /tmp/nr-verify2/home-a/.local
+  /tmp/nr-verify2/home-a/.local/state
+  /tmp/nr-verify2/home-a/.local/state/clusterscope-agent

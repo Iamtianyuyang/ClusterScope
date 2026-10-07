@@ -1,0 +1,10 @@
+== process identity of the running server (must be uid 3000)
+    PID USER       UID CMD
+1894692 tianyuy+  3000 /public/tianyuyang/code/ClusterScope-review/gh-line/target/release/clusterscope-server /tmp/nr-verify/server.yaml
+== listeners owned by it
+LISTEN 0      128          0.0.0.0:8080       0.0.0.0:*    users:(("clusterscope-se",pid=1894692,fd=12))
+LISTEN 0      128          0.0.0.0:50051      0.0.0.0:*    users:(("clusterscope-se",pid=1894692,fd=11))
+== health
+http_code=200
+== for reference: both ports are >1024 (no CAP_NET_BIND_SERVICE needed)
+8080 > 1024: yes; 50051 > 1024: yes

@@ -1,0 +1,13 @@
+== attempt 1: systemctl link (the documented 'just install the unit' step) as uid 3000
+  Failed to link unit: Interactive authentication required.
+  exit=0
+== attempt 2: copy the unit to /etc/systemd/system (what the README implies)
+  cp: cannot create regular file '/etc/systemd/system/clusterscope-server.service': Permission denied
+  exit=0
+== attempt 3: systemctl --user start the shipped unit file (it is a system unit)
+  Failed to start public-tianyuyang-code-ClusterScope\x2dreview-gh\x2dline-deploy-server.service.mount: Unit public-tianyuyang-code-ClusterScope\x2dreview-gh\x2dline-deploy-server.service.mount not found.
+  exit=0
+== attempt 4: systemd-analyze verify (parses fine, still needs root to install)
+  /public/tianyuyang/code/ClusterScope-review/gh-line/deploy/server.service:12: LogsDirectory= path is absolute, ignoring: /var/log/clusterscope-server
+  server.service: Command /usr/local/bin/clusterscope-server is not executable: No such file or directory
+  exit=0

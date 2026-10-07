@@ -1,0 +1,18 @@
+== side by side with the documented default (no -c at all)
+  no -c        : exit=1 greeting=1
+  missing -c   : exit=1  greeting=1  (see Q1b above)
+  => the -c flag itself changes the outcome: the agent creates the log dir but
+     NOT the parent directory of node_id_file ($HOME/.config), so it dies on
+     'Failed to write node identity' -- with no hint that the config file was missing.
+== is /etc/clusterscope present on this host?
+  ls: cannot access '/etc/clusterscope': No such file or directory
+== relevant code: crates/common/src/config.rs:37-39 and node_identity.rs
+      fn default() -> Self {
+          Self {
+              server_addr: "http://localhost:50051".to_string(),
+              node_id: None,
+              node_id_file: dirs::config_dir()
+                  .unwrap_or_else(|| PathBuf::from("/etc/clusterscope"))
+                  .join("node_id"),
+              report_interval_secs: 2,
+  27:            .with_context(|| format!("Failed to write node identity to {:?}", path))?;

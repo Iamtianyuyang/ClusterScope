@@ -1,0 +1,30 @@
+== argv of the env-only server (no config file argument)
+/public/tianyuyang/code/ClusterScope-review/gh-line/target/release/clusterscope-server 
+== health=http_code=200
+== lsof root-only path hits:
+count=0
+== cwd/root of the process (both must be the repo, not a system dir)
+lrwxrwxrwx 1 tianyuyang tianyuyang 0 Oct  7 13:52 /proc/1894870/cwd -> /public/tianyuyang/code/ClusterScope-review/gh-line
+lrwxrwxrwx 1 tianyuyang tianyuyang 0 Oct  7 13:52 /proc/1894870/root -> /
+== full open-file list (first 25, for the reviewer)
+COMMAND       PID       USER   FD      TYPE             DEVICE SIZE/OFF       NODE NAME
+clustersc 1894870 tianyuyang  cwd       DIR               0,48     8192    8949263 /public/tianyuyang/code/ClusterScope-review/gh-line
+clustersc 1894870 tianyuyang  rtd       DIR                8,4      281        512 /
+clustersc 1894870 tianyuyang  txt       REG               0,48 12396704    8314122 /public/tianyuyang/code/ClusterScope-review/gh-line/target/release/clusterscope-server
+clustersc 1894870 tianyuyang  mem       REG                8,4  2549264  805307370 /usr/lib64/libc.so.6
+clustersc 1894870 tianyuyang  mem       REG                8,4   904760  805307377 /usr/lib64/libm.so.6
+clustersc 1894870 tianyuyang  mem       REG                8,4   116512  805307345 /usr/lib64/libgcc_s-11-20240719.so.1
+clustersc 1894870 tianyuyang  mem       REG                8,4   932832  805307363 /usr/lib64/ld-linux-x86-64.so.2
+clustersc 1894870 tianyuyang    0r      CHR                1,3      0t0          4 /dev/null
+clustersc 1894870 tianyuyang    1w      REG                8,4     3356 1008997086 /tmp/nr-verify/server-env.log
+clustersc 1894870 tianyuyang    2w      REG                8,4     3356 1008997086 /tmp/nr-verify/server-env.log
+clustersc 1894870 tianyuyang    3u  a_inode               0,14        0       2081 [eventpoll:4,8,9,10,11,12]
+clustersc 1894870 tianyuyang    4u  a_inode               0,14        0       2081 [eventfd:58]
+clustersc 1894870 tianyuyang    5u  a_inode               0,14        0       2081 [eventpoll:4,8,9,10,11,12]
+clustersc 1894870 tianyuyang    6u     unix 0x0000000000000000      0t0  434778078 type=STREAM (CONNECTED)
+clustersc 1894870 tianyuyang    7u     unix 0x0000000000000000      0t0  434778079 type=STREAM (CONNECTED)
+clustersc 1894870 tianyuyang    8u     unix 0x0000000000000000      0t0  434778078 type=STREAM (CONNECTED)
+clustersc 1894870 tianyuyang    9u     IPv4          434930911      0t0        TCP localhost:60630->localhost:postgres (ESTABLISHED)
+clustersc 1894870 tianyuyang   10u     IPv4          434930912      0t0        TCP localhost:60634->localhost:postgres (ESTABLISHED)
+clustersc 1894870 tianyuyang   11u     IPv4          434979098      0t0        TCP *:50051 (LISTEN)
+clustersc 1894870 tianyuyang   12u     IPv4          434979099      0t0        TCP *:webcache (LISTEN)

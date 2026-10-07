@@ -1,0 +1,40 @@
+# NRM1-NRM8 pre-merge snapshot (stage 5, no-root addendum)
+# host=lyy-node03 user=tianyuyang uid=3000 date=2026-10-07T06:0xZ commit=24b5b0d
+
+== NRM3: hardcoded system paths in crates + the user-level scripts
+$ grep -rn "/etc/clusterscope|/var/lib/clusterscope|/var/log/clusterscope|/usr/local/bin" crates deploy/install-agent.sh deploy/tui.sh
+crates/server/src/main.rs:186:        .unwrap_or("/etc/clusterscope/server.yaml");
+crates/agent/src/main.rs:15:    #[arg(short, long, default_value = "/etc/clusterscope/agent.yaml")]
+crates/common/src/config.rs:38:                .unwrap_or_else(|| PathBuf::from("/etc/clusterscope"))
+count=3   (all three are override-able defaults; same count as the pre-audit baseline)
+
+== NRM5: privilege primitives -- the pattern printed in merge-plan-requirements.md is broken
+$ grep -rnE "setuid\|setgid\|pre_exec\|pkexec\|sudo \|chown" crates/ | wc -l     # escaped pipes under -E
+0
+$ grep -rnE "setuid|setgid|pre_exec|pkexec|sudo |chown" crates/                   # correct pattern
+crates/agent/src/job_executor.rs:128:        cmd.pre_exec(|| {
+$ sed -n '126,132p' crates/agent/src/job_executor.rs
+    // Set process group
+    unsafe {
+        cmd.pre_exec(|| {
+            libc::setsid();
+            Ok(())
+        });
+    }
+=> setsid() only puts the job child into its own session/process group (group kill). No setuid/setgid/pkexec/sudo/chown anywhere. grep --version: GNU grep 3.6
+
+== NRM6 / NRM8 anchors
+$ grep -c 'systemctl --user' README.md                                  -> 5
+$ find . -name clusterscope-server.service -not -path './target/*' | wc -l -> 0
+$ sh qa/harness/no-root-checks.sh                                       -> PASS=23 FAIL=0 (exit 0), reproduced twice
+$ ls ~/.config/systemd/user/                                            -> clusterscope-server.service (hand-written, 2026-08-10), clusterscope-agent.service (active)
+
+== NRM1 / NRM2 / NRM7: see the Q300-Q322 evidence files in this directory
+NRM1 uid 3000 + CapEff 0 + listeners owned by uid 3000 + TUI pty render
+NRM2 server env-only: argv=[binary], health=200, lsof root-only hits=0; agent: NF-01 correction (dies at node identity write on a clean HOME)
+NRM7 docker absent / podman 0 images / no egress; README has 0 hits for building PostgreSQL from source
+
+== NRM4: not evaluable here
+The 12 uncommitted files live in tree B (/public/tianyuyang/code/ClusterScope, uncommitted); they are not in this repo.
+Per-file check to run on the merged branch:
+  for f in <12 files>; do git diff -- "$f" | grep -nE '/etc/|/var/lib|/var/log|/usr/local|pre_exec|setuid|setgid|chown|CAP_'; done

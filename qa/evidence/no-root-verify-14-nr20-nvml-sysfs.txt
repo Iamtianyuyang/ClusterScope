@@ -1,0 +1,13 @@
+== nvidia-smi -L
+GPU 0: NVIDIA L20 (UUID: GPU-2eef3d29-56fd-cfe3-9ada-4031de98b34b)
+GPU 1: NVIDIA L20 (UUID: GPU-b4cc679d-b31c-a384-ecb1-224961407349)
+GPU 2: NVIDIA L20 (UUID: GPU-b4164bcb-e2d1-96b2-431f-3676fad8fdc0)
+GPU 3: NVIDIA L20 (UUID: GPU-90e56ca1-2247-2367-1c93-a1374cf7fabc)
+GPU 4: NVIDIA L20 (UUID: GPU-f89812fe-ad14-1e18-7c76-be9cece275fb)
+GPU 5: NVIDIA L20 (UUID: GPU-91ff8843-f6f4-ee4b-d4b5-af394f39ae57)
+== /sys/class/drm/card0/device/power/runtime_status
+active
+== /sys/block/nvme0n1/device/model
+IEIT NS6500G2U384                       
+== samples the agent collects itself (proc/dev as a plain user)
+proc self io/statm readable
