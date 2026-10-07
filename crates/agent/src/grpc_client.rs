@@ -20,6 +20,27 @@ fn local_ip() -> String {
     }
 }
 
+/// Attach `Authorization: Bearer <token>` to a request (free-function form).
+///
+/// `AgentClient` owns a precomputed metadata value, but `job_executor`
+/// receives the raw `AgentServiceClient`, so it needs the same behaviour
+/// without an `AgentClient` instance. An empty token attaches nothing (the
+/// documented "no auth on a trusted network" mode).
+pub fn authed<T>(token: &str, mut request: tonic::Request<T>) -> tonic::Request<T> {
+    if token.is_empty() {
+        return request;
+    }
+    match format!("Bearer {}", token)
+        .parse::<tonic::metadata::MetadataValue<tonic::metadata::Ascii>>()
+    {
+        Ok(value) => {
+            request.metadata_mut().insert("authorization", value);
+        }
+        Err(e) => tracing::warn!(error = %e, "Invalid agent_token - request sent unauthenticated"),
+    }
+    request
+}
+
 #[derive(Clone)]
 pub struct AgentClient {
     client: AgentServiceClient<tonic::transport::Channel>,
@@ -232,7 +253,7 @@ impl AgentClient {
                             .pids
                             .lock()
                             .await
-                            .insert(job.job_id.clone(), 0);
+                            .insert(job.job_id.clone(), (0, 0));
                         // Execute the job concurrently so long-running jobs do
                         // not block polling for new jobs / cancellations.
                         let config = self.config.clone();

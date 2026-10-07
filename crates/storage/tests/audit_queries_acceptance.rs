@@ -15,8 +15,8 @@
 //! the database is shared with the QA harness.
 
 use chrono::{DateTime, Duration, Utc};
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use std::sync::Mutex;
 use storage::audit_queries::{insert_audit_log, list_audit_logs};
 
@@ -35,7 +35,9 @@ const ACTION_CREATE: &str = "m6-create";
 static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
 
 fn lock_fixture() -> std::sync::MutexGuard<'static, ()> {
-    FIXTURE_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    FIXTURE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 async fn accept_pool() -> PgPool {
@@ -133,17 +135,9 @@ async fn audit_listing_filters_rows_and_returns_a_matching_total() {
     let _guard = lock_fixture();
     let fixture = seed_fixture().await;
 
-    let (rows, total) = list_audit_logs(
-        &fixture.pool,
-        Some(USER_AUDIT),
-        None,
-        None,
-        None,
-        0,
-        50,
-    )
-    .await
-    .expect("filtering by user must not fail (F-01/F-16 regression)");
+    let (rows, total) = list_audit_logs(&fixture.pool, Some(USER_AUDIT), None, None, None, 0, 50)
+        .await
+        .expect("filtering by user must not fail (F-01/F-16 regression)");
 
     assert_eq!(rows.len(), 3, "the three m6-audit rows must be returned");
     assert_eq!(total, 3, "total must match the filtered row count");
@@ -164,16 +158,7 @@ async fn audit_listing_returns_zero_total_instead_of_an_error_when_nothing_match
     let _guard = lock_fixture();
     let fixture = seed_fixture().await;
 
-    let result = list_audit_logs(
-        &fixture.pool,
-        Some("m6-nobody"),
-        None,
-        None,
-        None,
-        0,
-        50,
-    )
-    .await;
+    let result = list_audit_logs(&fixture.pool, Some("m6-nobody"), None, None, None, 0, 50).await;
 
     let (rows, total) = result.expect("an empty result set is not an error");
     assert_eq!(rows.len(), 0);
@@ -197,7 +182,10 @@ async fn audit_listing_is_ordered_newest_first_and_pages_by_offset() {
     assert_eq!(page_one.len(), 2, "the first page holds page_size rows");
     assert_eq!(page_one[0].log_id, *newest, "newest row comes first");
     assert_eq!(page_one[1].log_id, *middle);
-    assert_eq!(total_one, 3, "total is the whole filtered set, not the page");
+    assert_eq!(
+        total_one, 3,
+        "total is the whole filtered set, not the page"
+    );
 
     let (page_two, total_two) =
         list_audit_logs(&fixture.pool, Some(USER_AUDIT), None, None, None, 1, 2)
@@ -214,7 +202,11 @@ async fn audit_listing_is_ordered_newest_first_and_pages_by_offset() {
         .collect();
     seen.sort_unstable();
     seen.dedup();
-    assert_eq!(seen.len(), 3, "both pages together are exactly the three rows");
+    assert_eq!(
+        seen.len(),
+        3,
+        "both pages together are exactly the three rows"
+    );
 
     remove_fixture_rows(&fixture.pool).await;
 }

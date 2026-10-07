@@ -12,8 +12,8 @@
 //! deleted -- never a TRUNCATE / DELETE of a whole table.
 
 use chrono::{Duration, Utc};
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use std::sync::Mutex;
 use storage::user_queries::{
     add_refresh_token, consume_refresh_token, create_user, delete_user_guarded,
@@ -47,7 +47,9 @@ const FIXTURE_USERS: [&str; 5] = [
 static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
 
 fn lock_fixture() -> std::sync::MutexGuard<'static, ()> {
-    FIXTURE_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    FIXTURE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 async fn accept_pool() -> PgPool {
@@ -121,12 +123,16 @@ async fn revoking_all_sessions_invalidates_every_outstanding_refresh_token_of_th
         .expect("revoking all sessions must succeed");
 
     assert_eq!(
-        consume_refresh_token(&pool, raw_token).await.expect("consume must not fail"),
+        consume_refresh_token(&pool, raw_token)
+            .await
+            .expect("consume must not fail"),
         None,
         "a revoked refresh token must no longer produce a session"
     );
     assert_eq!(
-        consume_refresh_token(&pool, second_raw).await.expect("consume must not fail"),
+        consume_refresh_token(&pool, second_raw)
+            .await
+            .expect("consume must not fail"),
         None,
         "revocation covers every outstanding token of the user, not just one"
     );
@@ -179,7 +185,11 @@ async fn refresh_tokens_are_stored_as_digests_so_the_raw_value_is_not_in_the_dat
             .expect("the token row must exist");
 
     assert_ne!(stored, raw_token, "the raw token must not be persisted");
-    assert_eq!(stored.len(), 64, "the stored digest is a fixed-length digest");
+    assert_eq!(
+        stored.len(),
+        64,
+        "the stored digest is a fixed-length digest"
+    );
     assert!(
         stored.chars().all(|c| c.is_ascii_hexdigit()),
         "the stored digest must be hexadecimal, got {stored}"
@@ -191,7 +201,9 @@ async fn refresh_tokens_are_stored_as_digests_so_the_raw_value_is_not_in_the_dat
 
     // The digest must still be usable: the raw token authenticates.
     assert_eq!(
-        consume_refresh_token(&pool, raw_token).await.expect("consume must not fail"),
+        consume_refresh_token(&pool, raw_token)
+            .await
+            .expect("consume must not fail"),
         Some(user_id.clone())
     );
 
@@ -252,7 +264,10 @@ async fn demoting_or_deleting_an_administrator_that_is_not_the_last_one_succeeds
     let demoted = update_user_guarded(&pool, &extra_id, Some("viewer"), None, None)
         .await
         .expect("demoting a non-last administrator must not error");
-    assert!(demoted, "an administrator that is not the last one can be demoted");
+    assert!(
+        demoted,
+        "an administrator that is not the last one can be demoted"
+    );
 
     let (role, enabled): (String, bool) =
         sqlx::query_as("SELECT role, enabled FROM users WHERE user_id = $1")
@@ -266,7 +281,10 @@ async fn demoting_or_deleting_an_administrator_that_is_not_the_last_one_succeeds
     let deleted = delete_user_guarded(&pool, &extra_id)
         .await
         .expect("deleting a non-last administrator must not error");
-    assert!(deleted, "the viewer can then be deleted like any other account");
+    assert!(
+        deleted,
+        "the viewer can then be deleted like any other account"
+    );
 
     let existing_after: (String, bool) =
         sqlx::query_as("SELECT role, enabled FROM users WHERE username = $1")
