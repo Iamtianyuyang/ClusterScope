@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites name="cargo test --workspace" tests="59" failures="0" errors="0" skipped="0">
+  <testsuite name="clusterscope-agent (bin)" tests="11" failures="0" errors="0" skipped="0" time="0.921">
+    <testcase classname="clusterscope-agent (bin)" name="config_loader::tests::default_config_missing_message_names_the_default_path_and_the_fallback" time="0.000"/>
+    <testcase classname="clusterscope-agent (bin)" name="config_loader::tests::explicit_config_that_is_not_a_file_is_rejected" time="0.000"/>
+    <testcase classname="clusterscope-agent (bin)" name="config_loader::tests::explicit_missing_config_is_a_hard_error_that_names_the_file_and_the_user_path" time="0.000"/>
+    <testcase classname="clusterscope-agent (bin)" name="config_loader::tests::missing_default_config_falls_back_to_built_in_defaults" time="0.000"/>
+    <testcase classname="clusterscope-agent (bin)" name="node_identity::tests::reuses_the_persisted_identity" time="0.000"/>
+    <testcase classname="clusterscope-agent (bin)" name="node_identity::tests::creates_the_missing_parent_directory_and_writes_the_identity" time="0.000"/>
+    <testcase classname="clusterscope-agent (bin)" name="node_identity::tests::replaces_an_empty_identity_file" time="0.000"/>
+    <testcase classname="clusterscope-agent (bin)" name="config_loader::tests::existing_default_config_is_read" time="0.000"/>
+    <testcase classname="clusterscope-agent (bin)" name="config_loader::tests::explicit_config_is_read_and_cli_overrides_win" time="0.000"/>
+    <testcase classname="clusterscope-agent (bin)" name="metrics::smoke_tests::smoke_collect_gpus" time="0.000"/>
+    <testcase classname="clusterscope-agent (bin)" name="metrics::process_smoke_tests::smoke_sysinfo_processes" time="0.000"/>
+  </testsuite>
+  <testsuite name="clusterscope-server (bin)" tests="6" failures="0" errors="0" skipped="0" time="0.011">
+    <testcase classname="clusterscope-server (bin)" name="grpc::tests::test_status_int_to_str" time="0.000"/>
+    <testcase classname="clusterscope-server (bin)" name="handlers::tests::test_history_tiers_older_than_hourly" time="0.000"/>
+    <testcase classname="clusterscope-server (bin)" name="handlers::tests::test_history_tiers_spanning_all_tiers" time="0.000"/>
+    <testcase classname="clusterscope-server (bin)" name="handlers::tests::test_history_tiers_within_raw_window" time="0.000"/>
+    <testcase classname="clusterscope-server (bin)" name="handlers::tests::test_history_tiers_recent_range_ends_before_raw_cutoff" time="0.000"/>
+    <testcase classname="clusterscope-server (bin)" name="grpc::tests::test_job_to_proto_status_mapping" time="0.000"/>
+  </testsuite>
+  <testsuite name="clusterscope-tui (bin)" tests="3" failures="0" errors="0" skipped="0" time="0.011">
+    <testcase classname="clusterscope-tui (bin)" name="ui::tests::core_bar_empty_renders_label_only" time="0.000"/>
+    <testcase classname="clusterscope-tui (bin)" name="ui::tests::core_bar_groups_by_eight_and_truncates" time="0.000"/>
+    <testcase classname="clusterscope-tui (bin)" name="ui::tests::core_bar_marks_hot_cores" time="0.000"/>
+  </testsuite>
+  <testsuite name="common (lib)" tests="21" failures="0" errors="0" skipped="0" time="1.642">
+    <testcase classname="common (lib)" name="alert::tests::test_operator_evaluate" time="0.000"/>
+    <testcase classname="common (lib)" name="auth::tests::test_role_permissions" time="0.000"/>
+    <testcase classname="common (lib)" name="job::tests::test_invalid_transitions" time="0.000"/>
+    <testcase classname="common (lib)" name="alert::tests::test_different_gpus" time="0.000"/>
+    <testcase classname="common (lib)" name="alert::tests::test_remove_rule_drops_instances" time="0.000"/>
+    <testcase classname="common (lib)" name="job::tests::test_job_creation_from_definition" time="0.000"/>
+    <testcase classname="common (lib)" name="job::tests::test_job_status_is_terminal" time="0.000"/>
+    <testcase classname="common (lib)" name="alert::tests::test_alert_deduplication" time="0.000"/>
+    <testcase classname="common (lib)" name="job::tests::test_job_transition_sets_timestamps" time="0.000"/>
+    <testcase classname="common (lib)" name="alert::tests::test_alert_state_machine" time="0.000"/>
+    <testcase classname="common (lib)" name="job::tests::test_transition_validation" time="0.000"/>
+    <testcase classname="common (lib)" name="job::tests::test_lost_transitions" time="0.000"/>
+    <testcase classname="common (lib)" name="job::tests::test_valid_transitions" time="0.000"/>
+    <testcase classname="common (lib)" name="node_registry::tests::test_register_and_get" time="0.000"/>
+    <testcase classname="common (lib)" name="node_registry::tests::test_list_online" time="0.000"/>
+    <testcase classname="common (lib)" name="node_registry::tests::test_node_status_check" time="0.000"/>
+    <testcase classname="common (lib)" name="node_registry::tests::test_remove" time="0.000"/>
+    <testcase classname="common (lib)" name="node_registry::tests::test_update_last_seen" time="0.000"/>
+    <testcase classname="common (lib)" name="auth::tests::test_jwt_invalid_secret" time="0.000"/>
+    <testcase classname="common (lib)" name="auth::tests::test_jwt_roundtrip" time="0.000"/>
+    <testcase classname="common (lib)" name="auth::tests::test_password_hash_and_verify" time="0.000"/>
+  </testsuite>
+  <testsuite name="no_root_agent_config (test)" tests="6" failures="0" errors="0" skipped="0" time="5.033">
+    <testcase classname="no_root_agent_config (test)" name="missing_config_error_points_at_the_user_level_config_path" time="0.000"/>
+    <testcase classname="no_root_agent_config (test)" name="agent_refuses_to_start_when_the_explicit_config_file_is_missing" time="0.000"/>
+    <testcase classname="no_root_agent_config (test)" name="missing_config_is_not_silently_replaced_by_the_default_server_address" time="0.000"/>
+    <testcase classname="no_root_agent_config (test)" name="configured_server_address_is_the_address_the_agent_uses" time="0.000"/>
+    <testcase classname="no_root_agent_config (test)" name="agent_creates_the_missing_parent_directory_of_the_node_identity_file" time="0.000"/>
+    <testcase classname="no_root_agent_config (test)" name="agent_warns_about_the_missing_default_config_file_and_keeps_running" time="0.000"/>
+  </testsuite>
+  <testsuite name="protocol (lib)" tests="0" failures="0" errors="0" skipped="0" time="0.008">
+  </testsuite>
+  <testsuite name="scheduler (lib)" tests="12" failures="0" errors="0" skipped="0" time="0.009">
+    <testcase classname="scheduler (lib)" name="tests::test_parse_gpu_requirement" time="0.000"/>
+    <testcase classname="scheduler (lib)" name="tests::test_complete_job" time="0.000"/>
+    <testcase classname="scheduler (lib)" name="tests::test_enqueue_dedup" time="0.000"/>
+    <testcase classname="scheduler (lib)" name="tests::test_restore_running" time="0.000"/>
+    <testcase classname="scheduler (lib)" name="tests::test_schedule_prefers_requested_node" time="0.000"/>
+    <testcase classname="scheduler (lib)" name="tests::test_schedule_picks_node_with_capacity" time="0.000"/>
+    <testcase classname="scheduler (lib)" name="tests::test_schedule_falls_back_when_preferred_full" time="0.000"/>
+    <testcase classname="scheduler (lib)" name="tests::test_complete_job_lost_frees_capacity" time="0.000"/>
+    <testcase classname="scheduler (lib)" name="tests::test_enqueue_and_schedule" time="0.000"/>
+    <testcase classname="scheduler (lib)" name="tests::test_remove_running_frees_capacity" time="0.000"/>
+    <testcase classname="scheduler (lib)" name="tests::test_gpu_capacity_freed_after_completion" time="0.000"/>
+    <testcase classname="scheduler (lib)" name="tests::test_schedule_respects_capacity" time="0.000"/>
+  </testsuite>
+  <testsuite name="storage (lib)" tests="0" failures="0" errors="0" skipped="0" time="0.012">
+  </testsuite>
+  <testsuite name="Doc-tests common" tests="0" failures="0" errors="0" skipped="0" time="0.000">
+  </testsuite>
+  <testsuite name="Doc-tests protocol" tests="0" failures="0" errors="0" skipped="0" time="0.000">
+  </testsuite>
+  <testsuite name="Doc-tests scheduler" tests="0" failures="0" errors="0" skipped="0" time="0.000">
+  </testsuite>
+  <testsuite name="Doc-tests storage" tests="0" failures="0" errors="0" skipped="0" time="0.000">
+  </testsuite>
+</testsuites>

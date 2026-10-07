@@ -1,0 +1,12 @@
+== 文档里 linger 相关行 ==
+README.md:347:loginctl show-user "$USER" | grep '^Linger='   # Linger=yes 才会常驻;Linger=no 时登出即死
+README.md:348:loginctl enable-linger "$USER"                 # 需要管理员/root 代办(普通用户通常没权限)
+README.md:351:本机实测 `Linger=yes`,所以用户级 agent 断开 SSH 后仍在跑;`Linger=no` 的机器要先请管理员执行
+README.md:352:上面的 `loginctl enable-linger`(否则改用系统级安装)。linger 是**每台机器**的配置,换机器要重新确认。
+== 本机实测 ==
+Linger=yes
+  ok   文档给出 loginctl 的检查方法
+  ok   文档说明 Linger 的含义（登出后用户服务是否存活）
+  ok   文档给出 enable-linger
+  ok   文档写明 enable-linger 需要管理员/root
+  ok   本机 loginctl 可查 Linger

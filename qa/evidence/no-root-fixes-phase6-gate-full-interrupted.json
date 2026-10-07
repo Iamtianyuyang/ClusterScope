@@ -1,0 +1,32 @@
+{
+  "profile": "coder",
+  "startedAt": "2026-10-07T10:16:10.378Z",
+  "finishedAt": "2026-10-07T10:16:21.708Z",
+  "commit": "1279b48",
+  "pass": true,
+  "gates": {
+    "spec": {
+      "pass": true,
+      "scenarios": 6,
+      "undefinedSteps": 0,
+      "ambiguous": 0
+    },
+    "build": {
+      "pass": true
+    },
+    "tests": {
+      "pass": true,
+      "total": 59,
+      "failed": 0
+    },
+    "acceptance": {
+      "pass": true,
+      "scenarios": 6,
+      "passed": 6,
+      "failed": 0,
+      "missing": 0,
+      "failedScenarios": [],
+      "missingScenarios": []
+    }
+  }
+}

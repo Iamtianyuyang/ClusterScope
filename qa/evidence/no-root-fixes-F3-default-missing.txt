@@ -1,0 +1,12 @@
+== 命令 ==
+HOME=/tmp/nr-fixes-checks/home-c timeout 6 /public/tianyuyang/code/ClusterScope-review/nr-fixes/target/release/clusterscope-agent   # 不带 -c
+== exit=124（124 = 被 timeout 收掉，说明进程还在跑）==
+2026-10-07T10:20:06.203299Z  WARN default config file not found: /etc/clusterscope/agent.yaml does not exist, continuing with built-in defaults (user-level installs keep this file at $HOME/.config/clusterscope/agent.yaml).
+2026-10-07T10:20:06.203420Z  INFO ClusterScope Agent starting server_addr=http://localhost:50051 node_id=None
+2026-10-07T10:20:06.203491Z  INFO Node identity resolved node_id=lyy-node03
+2026-10-07T10:20:06.204297Z  WARN Failed to connect to server, retrying error=Failed to connect to server at http://localhost:50051: transport error delay_secs=1
+2026-10-07T10:20:07.205778Z  WARN Failed to connect to server, retrying error=Failed to connect to server at http://localhost:50051: transport error delay_secs=2
+2026-10-07T10:20:09.207419Z  WARN Failed to connect to server, retrying error=Failed to connect to server at http://localhost:50051: transport error delay_secs=4
+  ok   进程仍在运行（exit 124，实际 124）—— 守住既有 NR-06
+  ok   输出有启动横幅
+  ok   输出点名默认配置路径 /etc/clusterscope/agent.yaml（回退不再静默）

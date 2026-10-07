@@ -1,0 +1,69 @@
+{
+  "note": "第 6 阶段复验：coder profile 由 node .gauntlet/gauntlet.mjs gate --profile coder 真实重跑；qa / constraints 两个闸门复用 kit 自己的 .gauntlet/lib/checks.mjs 单独复算（它们正是 full profile 的最后两步），不修改任何东西。",
+  "branch": "gauntlet/no-root-fixes",
+  "commit": "1279b48",
+  "base": "gauntlet/audit-gh-line @ 7ca587a",
+  "machine": "lyy-node03 · uid 3000 · no sudo · Rust 1.97.1 · node v26",
+  "generatedAt": "2026-10-07T10:16:10Z..10:29Z",
+  "round": "第 6 阶段（Reporter）复跑：1 → 2 → 5 → 6，未跑 3（clean）/4（harden）",
+  "coderProfile": {
+    "command": "node .gauntlet/gauntlet.mjs gate --profile coder",
+    "pass": true,
+    "gates": {
+      "spec": { "pass": true, "scenarios": 6, "undefinedSteps": 0, "ambiguous": 0 },
+      "build": { "pass": true },
+      "tests": { "pass": true, "total": 59, "failed": 0 },
+      "acceptance": { "pass": true, "scenarios": 6, "passed": 6, "failed": 0, "missing": 0 }
+    },
+    "log": "qa/evidence/no-root-fixes-phase6-gate-coder.log",
+    "json": "qa/evidence/no-root-fixes-phase6-gate-coder.json"
+  },
+  "handoffGates": {
+    "source": ".gauntlet/lib/checks.mjs（kit 自身实现）",
+    "qa": { "pass": false, "checks": 132, "nonPass": 5 },
+    "constraints": { "pass": false, "total": 118, "met": 113, "unproven": [], "violated": ["OPS-05", "OPS-09", "OPS-10", "FE-01", "MRG-01"] },
+    "fixConstraints": { "total": 14, "met": 14, "notMet": [] }
+  },
+  "nonPassReason": {
+    "OPS-05": "docker-compose 路径不可验证（本机无 docker/podman 镜像、无外网）——na，上一轮已记录",
+    "OPS-09": "纯 CPU 节点降级路径——本机有 6 张 L20，属更强条件，未覆盖——na，上一轮已记录",
+    "OPS-10": "防火墙策略需 root，本机不可验证——na，上一轮已记录",
+    "FE-01": "前端维度在本线 N/A（审查对象已删除 web/）——na，上一轮已记录",
+    "MRG-01": "合流方案必答问题（M1–M9）——unverifiable，属父 PR #2 的交付物，不在本 PR 范围"
+  },
+  "harness": {
+    "command": "sh qa/harness/no-root-fixes-checks.sh",
+    "pass": 12,
+    "fail": 0,
+    "log": "qa/evidence/no-root-fixes-phase6-harness.txt",
+    "perCheckPrefix": "qa/evidence/no-root-fixes-F"
+  },
+  "fullProfileAttempt": {
+    "command": "node .gauntlet/gauntlet.mjs gate --profile full",
+    "note": "按本轮任务书，clean/harden 阶段的重型闸门不重算；full 跑到 mutation 阶段（736 个变异体）时在 [22/736] 被人工终止，完整日志原样留证。复杂度/CRAP/覆盖率三个 ✅/❌ 是本次运行的观测值，也是既有审查结论。",
+    "passingInThisRun": ["spec", "build", "tests", "acceptance", "scope", "warnings", "tidy", "duplication"],
+    "failingInThisRun": {
+      "complexity": { "pass": false, "functions": 335, "offenders": 21, "maxComplexity": 23 },
+      "crap": { "pass": false, "offenders": 43, "maxCrap": 552, "lineCoverage": 0.229 },
+      "coverage": { "pass": false, "lineCoverage": 0.229, "threshold": 0.9 },
+      "mutation": { "pass": null, "interrupted": true, "stoppedAt": "22/736", "mutants": 736 }
+    },
+    "skipped": { "sanitize": "commands 适配器未配置该项", "arch": "未配置 commands.arch（记录为需要人确认）" },
+    "log": "qa/evidence/no-root-fixes-phase6-gate-full-interrupted.log",
+    "gateJson": "qa/evidence/no-root-fixes-phase6-gate-full-interrupted.json"
+  },
+  "sharedMachineVerification": {
+    "before": { "mainPid": 266643, "isActive": "active", "linger": "yes" },
+    "after": { "mainPid": 266643, "isActive": "active", "linger": "yes" },
+    "byteIdentical": ["~/.config/systemd/user/clusterscope-agent.service", "~/.config/clusterscope/agent.yaml", "~/.config/clusterscope/server.yaml", "~/.config/clusterscope/node_id"],
+    "evidence": "qa/evidence/no-root-fixes-phase6-restore-verification.txt"
+  },
+  "demos": {
+    "recorded": [
+      { "script": "demo/11-no-root-fixes-install-agent-safety.json", "rc": 0 },
+      { "script": "demo/12-no-root-fixes-user-units-and-config-errors.json", "rc": 0 }
+    ],
+    "log": "qa/evidence/no-root-fixes-phase6-demos-rerun.txt",
+    "transcripts": ["qa/evidence/11-no-root-fixes-install-agent-safety.txt", "qa/evidence/12-no-root-fixes-user-units-and-config-errors.txt"]
+  }
+}

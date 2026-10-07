@@ -1,0 +1,43 @@
+# FIX-01/NF-02：上一轮的 deploy/install-agent.sh 在用 nohup 回退时先跑 `pkill -f clusterscope-agent`，会把同用户下别人的 agent（含本机常驻实例 PID 266643）一起杀掉。先静态确认它已经不在了。
+$ echo "字面量整机匹配的杀进程调用：$(grep -cE '(^|[[:space:]])(pkill|killall)([[:space:]]|$)' deploy/install-agent.sh) 处"; grep -n 'PIDFILE\|/proc/\$pid/cmdline' deploy/install-agent.sh
+字面量整机匹配的杀进程调用：0 处
+71:PIDFILE="$HOME/.config/clusterscope/agent.pid"
+79:    [ -f "$PIDFILE" ] || return 0
+80:    pid="$(cat "$PIDFILE" 2>/dev/null || true)"
+81:    rm -f "$PIDFILE"
+85:    if [ ! -r "/proc/$pid/cmdline" ]; then
+89:    cmdline="$(tr '\0' ' ' < "/proc/$pid/cmdline" || true)"
+129:    echo "$!" > "$PIDFILE"
+130:    echo "started via nohup (pid $(cat "$PIDFILE"))"
+
+# 它现在按「自己的 PID 文件 + /proc/<pid>/cmdline 核对」停进程。动态证明开始：建一个固定 scratch 目录，起一个与本次安装无关的探针 agent（独立副本、死端口 59999）。
+$ set -eu; W=/tmp/nr-demo-install; rm -rf "$W"; mkdir -p "$W/bin" "$W/fakehome" "$W/stub" "$W/probe/logs" "$W/probe-home"; cp target/release/clusterscope-agent "$W/bin/clusterscope-agent"; printf '#!/bin/bash\nexit 1\n' > "$W/stub/systemctl"; printf '#!/bin/bash\nhome="${QA_FAKE_HOME:?}"\ntarget=""; cmd=""\nwhile [ $# -gt 0 ]; do case "$1" in -o) shift 2 ;; -q|-T|-n|-v|-C) shift ;; *) if [ -z "$target" ]; then target="$1"; else cmd="$1"; fi; shift ;; esac; done\n[ -n "$cmd" ] || exit 1\nexport HOME="$home"; exec /bin/bash -c "$cmd"\n' > "$W/stub/ssh"; printf '#!/bin/bash\nsrc=""; dst=""\nwhile [ $# -gt 0 ]; do case "$1" in -q|-r|-p|-B) shift ;; -o) shift 2 ;; *) if [ -z "$src" ]; then src="$1"; else dst="$1"; fi; shift ;; esac; done\ndst="${dst#*:}"; mkdir -p "$(dirname "$dst")"; cp -f "$src" "$dst"\n' > "$W/stub/scp"; chmod +x "$W/stub/"*; printf 'server_addr: "http://127.0.0.1:59999"\nnode_id: "unrelated-victim"\nnode_id_file: %s/probe/node_id\nreport_interval_secs: 30\nlog_dir: %s/probe/logs\n' "$W" "$W" > "$W/probe/agent.yaml"; HOME="$W/probe-home" nohup "$W/bin/clusterscope-agent" -c "$W/probe/agent.yaml" > "$W/probe/probe.log" 2>&1 & echo $! > "$W/probe.pid"; sleep 3; cat "$W/probe.pid" > /tmp/nr-demo-install.pid; echo "无关探针 agent pid=$(cat "$W/probe.pid")，存活=$(kill -0 $(cat "$W/probe.pid") 2>/dev/null && echo yes || echo no)"; echo "常驻 agent pid=266643，存活=$(kill -0 266643 2>/dev/null && echo yes || echo no)"
+无关探针 agent pid=2780913，存活=yes
+常驻 agent pid=266643，存活=yes
+
+# 第一次安装：把「远端」用 ssh/scp 桩落到 scratch HOME，走 nohup 回退分支（就是本轮改过停止逻辑的那一支）。
+$ set -eu; W=/tmp/nr-demo-install; QA_FAKE_HOME="$W/fakehome" PATH="$W/stub:$PATH" bash deploy/install-agent.sh qa@fake-host http://127.0.0.1:59999 qa-fix-node 2>&1 | tail -3
+==> starting agent on qa@fake-host
+started via nohup (pid 2781411)
+==> done. Check the dashboard: node 'qa-fix-node' should appear within ~10s.
+
+# 第二次安装：它必须只停掉自己上一次起的那个进程（打印 stopping previous agent (pid …)），而不是按名字扫全场。
+$ set -eu; W=/tmp/nr-demo-install; QA_FAKE_HOME="$W/fakehome" PATH="$W/stub:$PATH" bash deploy/install-agent.sh qa@fake-host http://127.0.0.1:59999 qa-fix-node 2>&1 | tail -3
+stopping previous agent (pid 2781411)
+started via nohup (pid 2781572)
+==> done. Check the dashboard: node 'qa-fix-node' should appear within ~10s.
+
+# 断言：无关探针还活着、常驻 agent 还活着、scratch HOME 下只有安装脚本自己起的 1 个进程、探针的日志里只有它连不上死端口的告警（没有任何被误杀的痕迹）。
+$ set -u; W=/tmp/nr-demo-install; P=$(cat "$W/probe.pid"); echo "无关探针 pid=$P 存活=$(kill -0 $P 2>/dev/null && echo yes || echo no)"; echo "常驻 agent pid=266643 存活=$(kill -0 266643 2>/dev/null && echo yes || echo no)（is-active=$(systemctl --user is-active clusterscope-agent)）"; echo "scratch HOME 下 agent 进程数=$(pgrep -c -f "$W/fakehome" || echo 0)"; echo "探针日志行数=$(wc -l < "$W/probe/probe.log")："; sed -n '1,3p' "$W/probe/probe.log"; echo "探针日志里出现被杀/重启的迹象：$(grep -ciE 'killed|terminated|shutdown' "$W/probe/probe.log") 行（应为 0）"
+无关探针 pid=2780913 存活=yes
+常驻 agent pid=266643 存活=yes（is-active=active）
+scratch HOME 下 agent 进程数=1
+探针日志行数=5：
+[2m2026-10-07T10:22:07.201074Z[0m [32m INFO[0m ClusterScope Agent starting [3mserver_addr[0m[2m=[0mhttp://127.0.0.1:59999 [3mnode_id[0m[2m=[0mSome("unrelated-victim")
+[2m2026-10-07T10:22:07.201131Z[0m [32m INFO[0m Node identity resolved [3mnode_id[0m[2m=[0munrelated-victim
+[2m2026-10-07T10:22:07.201245Z[0m [33m WARN[0m Failed to connect to server, retrying [3merror[0m[2m=[0mFailed to connect to server at http://127.0.0.1:59999: transport error [3mdelay_secs[0m[2m=[0m1
+探针日志里出现被杀/重启的迹象：0 行（应为 0）
+
+# 收尾：只杀自己按 PID 记录起的进程，删掉 scratch 目录。
+$ set -u; W=/tmp/nr-demo-install; P=$(cat "$W/probe.pid" 2>/dev/null || echo 0); kill "$P" 2>/dev/null; for p in $(pgrep -f "$W/fakehome" 2>/dev/null); do kill "$p" 2>/dev/null; done; sleep 1; kill -9 "$P" 2>/dev/null; for p in $(pgrep -f "$W/fakehome" 2>/dev/null); do kill -9 "$p" 2>/dev/null; done; rm -rf "$W" /tmp/nr-demo-install.pid; echo "清理完成；常驻 agent 仍在：$(kill -0 266643 2>/dev/null && echo yes || echo no)"
+清理完成；常驻 agent 仍在：yes

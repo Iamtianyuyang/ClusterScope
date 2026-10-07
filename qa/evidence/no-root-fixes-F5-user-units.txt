@@ -1,0 +1,119 @@
+  ok   仓库里有用户级 agent unit（deploy/clusterscope-agent.service）
+  ok   仓库里有用户级 server unit（deploy/clusterscope-server.service）
+== README 里的 systemctl --user 行 ==
+335:systemctl --user daemon-reload
+336:systemctl --user enable --now clusterscope-server clusterscope-agent
+337:systemctl --user status clusterscope-agent
+372:systemctl --user status  clusterscope-server    # 中央服务
+373:systemctl --user restart clusterscope-server
+374:systemctl --user restart clusterscope-agent     # 本机 agent
+375:ssh node-01 'systemctl --user restart clusterscope-agent'
+405:- **节点迟迟不出现**:`systemctl --user status clusterscope-agent` 是否运行、`journalctl --user -u clusterscope-agent` 有无报错、server 的 50051 端口是否可达、`agent_token` 是否与 server 一致
+== deploy/*.service ==
+-rw-r--r-- 1 tianyuyang tianyuyang 654 Oct  7 15:31 deploy/agent.service
+-rw-r--r-- 1 tianyuyang tianyuyang 809 Oct  7 15:31 deploy/clusterscope-agent.service
+-rw-r--r-- 1 tianyuyang tianyuyang 889 Oct  7 15:31 deploy/clusterscope-server.service
+-rw-r--r-- 1 tianyuyang tianyuyang 821 Oct  7 15:31 deploy/server.service
+== deploy/clusterscope-agent.service ==
+# User-level systemd unit -- the default, no root required.
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/clusterscope-agent.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now clusterscope-agent
+#
+# %h expands to the installing user's home directory. The optional system-wide
+# variant (needs root, writes into /etc and /usr/local) is deploy/agent.service.
+#
+# Requires a running user manager (systemd --user) and, to survive logout,
+# logind linger for this user (`loginctl show-user $USER` / `Linger=yes`).
+[Unit]
+Description=ClusterScope GPU Agent (user)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/clusterscope-agent -c %h/.config/clusterscope/agent.yaml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+
+== deploy/clusterscope-server.service ==
+# User-level systemd unit -- the default, no root required.
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/clusterscope-server.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now clusterscope-server
+#
+# %h expands to the installing user's home directory; the server reads its
+# config (postgres_url, ports, jwt_secret) from %h/.config/clusterscope/server.yaml.
+# The optional system-wide variant (needs root) is deploy/server.service.
+#
+# Requires a running user manager (systemd --user) and, to survive logout,
+# logind linger for this user (`loginctl show-user $USER` / `Linger=yes`).
+[Unit]
+Description=ClusterScope Central Server (user)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/clusterscope-server %h/.config/clusterscope/server.yaml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+  ok   用户级 unit 不含 User=/Group=
+  ok   用户级 unit 不走 /usr/local/bin
+  ok   用户级 unit 不挂 multi-user.target
+  ok   agent unit 挂 default.target
+  ok   server unit 挂 default.target
+  ok   agent unit 二进制走 %h/.local/bin
+  ok   agent unit 配置走 %h/.config/clusterscope/agent.yaml
+  ok   server unit 二进制走 %h/.local/bin
+  ok   server unit 配置走 %h/.config/clusterscope/server.yaml
+  ok   README 提到 clusterscope-agent 这个名字
+  ok   README 提到 clusterscope-server 这个名字
+  ok   install-agent.sh 生成的 unit 名与仓库用户级 unit 同名（clusterscope-agent.service）
+  ok   daemon-reload rc=0
+  ok   enable clusterscope-agent.service rc=0
+  ok   is-enabled = enabled
+  ok   enable --now clusterscope-agent.service rc=0
+  ok   agent unit is-active = active
+  ok   装上仓库 unit 后，本机生产 agent 的 MainPID 不变（266643 → 266643）
+{ path=/public/tianyuyang/.local/bin/clusterscope-agent ; argv[]=/public/tianyuyang/.local/bin/clusterscope-agent -c /public/tianyuyang/.config/clusterscope/agent.yaml ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }
+/public/tianyuyang/.config/systemd/user/clusterscope-agent.service
+● clusterscope-agent.service - ClusterScope GPU Agent (user)
+     Loaded: loaded (/public/tianyuyang/.config/systemd/user/clusterscope-agent.service; enabled; preset: disabled)
+     Active: active (running) since Wed 2026-09-02 12:59:26 CST; 1 month 4 days ago
+   Main PID: 266643 (clusterscope-ag)
+      Tasks: 258 (limit: 3295052)
+     Memory: 162.1M (peak: 212.8M)
+        CPU: 4h 25min 29.215s
+     CGroup: /user.slice/user-3000.slice/user@3000.service/app.slice/clusterscope-agent.service
+             └─266643 /public/tianyuyang/.local/bin/clusterscope-agent -c /public/tianyuyang/.config/clusterscope/agent.yaml
+  ok   enable --now clusterscope-server.service rc=0（实际 0）
+2776075
+{ path=/public/tianyuyang/.local/bin/clusterscope-server ; argv[]=/public/tianyuyang/.local/bin/clusterscope-server /public/tianyuyang/.config/clusterscope/server.yaml ; ignore_errors=no ; start_time=[Wed 2026-10-07 18:20:18 CST] ; stop_time=[n/a] ; pid=2776075 ; code=(null) ; status=0/0 }
+/public/tianyuyang/.config/systemd/user/clusterscope-server.service
+● clusterscope-server.service - ClusterScope Central Server (user)
+     Loaded: loaded (/public/tianyuyang/.config/systemd/user/clusterscope-server.service; enabled; preset: disabled)
+     Active: active (running) since Wed 2026-10-07 18:20:18 CST; 3s ago
+   Main PID: 2776075 (clusterscope-se)
+      Tasks: 129 (limit: 3295052)
+     Memory: 8.0M (peak: 17.5M)
+        CPU: 42ms
+     CGroup: /user.slice/user-3000.slice/user@3000.service/app.slice/clusterscope-server.service
+             └─2776075 /public/tianyuyang/.local/bin/clusterscope-server /public/tianyuyang/.config/clusterscope/server.yaml
+  ok   server unit is-active = active（真起）
+curl /api/health -> 200
+  ok   server 起来后 /api/health = 200（实际 200）
+  ok   还原：~/.config/systemd/user/clusterscope-agent.service 与安装前逐字节一致
+  ok   还原：仓库装的 server unit 已移除
+  ok   还原：server 已停（is-active = inactive）
+  ok   还原：~/.config/clusterscope/server.yaml 与安装前逐字节一致
+  ok   还原：生产 agent 仍在跑（MainPID 266643 → 266643，未被本轮检查打扰）
+(selfcfg=1  ports_busy=0  agent_active_before=active  server.yaml_existed=1)

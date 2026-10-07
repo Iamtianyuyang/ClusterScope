@@ -1,0 +1,45 @@
+== 本次改动/新增的文件 ==
+crates/agent/src/config_loader.rs
+crates/agent/src/main.rs
+crates/agent/src/node_identity.rs
+crates/agent/tests/no_root_agent_config.rs
+demo/11-no-root-fixes-install-agent-safety.json
+demo/12-no-root-fixes-user-units-and-config-errors.json
+deploy/agent.service
+deploy/clusterscope-agent.service
+deploy/clusterscope-server.service
+deploy/install-agent.sh
+deploy/server.service
+features/no_root_agent_config.feature
+GAUNTLET.md
+gauntlet-tools/rust-gate.mjs
+qa/constraints.json
+qa/evidence/no-root-fixes-checks-rerun-raw.txt
+qa/evidence/no-root-fixes-FIX14-tool-fix-recheck.txt
+qa/evidence/no-root-fixes-FIX15-F12-scope-after-amendment.txt
+qa/evidence/no-root-fixes-FIX15-scope-amendment.txt
+qa/evidence/no-root-fixes-phase5-demos-rerun.txt
+qa/evidence/no-root-fixes-phase5-gate-coder-rerun.txt
+qa/evidence/no-root-fixes-phase5-install-and-units.txt
+qa/evidence/no-root-fixes-phase5-nr06-rerun.txt
+qa/evidence/no-root-fixes-phase5-nr-regression.txt
+qa/evidence/no-root-fixes-phase5-static-gate-hypothesis.txt
+qa/evidence/no-root-fixes-phase6-gate-coder.json
+qa/evidence/no-root-fixes-phase6-junit.xml
+qa/harness/no-root-fixes-checks.sh
+qa/no-root-fixes.qa.md
+qa/qa-report.json
+qa/README.md
+README.md
+== 允许集之外的 ==
+<none>
+== crates/storage 与 crates/server 的改动 ==
+<none>
+== 负例自检（这些必须全部判越界）==
+ crates/storage/src/lib.rs crates/server/src/lib.rs Cargo.toml gauntlet.config.json .gauntlet/gauntlet.mjs
+== 正例自检（demo/* 是 2026-10-07 修订加入的允许项，必须判允许）==
+demo/01-build-and-test-gates.json -> 允许
+  ok   改动文件全部落在本轮允许集内
+  ok   crates/storage 与 crates/server 零改动
+  ok   负例自检：storage/server/Cargo.toml/gauntlet.config.json/.gauntlet 仍被判越界（实际 5/5）
+  ok   正例自检：demo/*（QA 阶段法定产物）判允许（实际 允许）
