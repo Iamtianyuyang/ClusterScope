@@ -2,7 +2,8 @@
 # qa/harness/no-root-fixes-checks.sh
 #
 # 本轮「无 root 修复」的 QA 执行程序（自包含、离线、可复制粘贴）。
-# 覆盖 qa/constraints.json 里 FIX-01..FIX-13 共 13 条约束（F2 一条检查证实两条约束）。
+# 覆盖 qa/constraints.json 里本轮追加的 FIX-01..FIX-14 共 14 条约束（F2 一条检查证实两条约束；
+# FIX-14 = 两处流水线工具修复的准入记录，按 qa/no-root-fixes.qa.md#工具修复复核 由 QA 独立复核）。
 #
 # 用法：
 #   sh qa/harness/no-root-fixes-checks.sh              # 全量（含 release 构建与 systemd 真装真启）
@@ -547,7 +548,7 @@ const fs = require("fs");
 const a = JSON.parse(fs.readFileSync("qa/constraints.json", "utf8"));
 const ids = a.map((c) => c.id);
 const need = [];
-for (let i = 1; i <= 13; i++) need.push("FIX-" + String(i).padStart(2, "0"));
+for (let i = 1; i <= 14; i++) need.push("FIX-" + String(i).padStart(2, "0"));
 console.log(JSON.stringify({
   total: ids.length,
   missingFix: need.filter((x) => !ids.includes(x)),
@@ -561,40 +562,53 @@ console.log(JSON.stringify({
   } >> "$CUR_LOG"
   A "qa/constraints.json 只有新增（diff 里没有被删/被改的行）" "$([ -z "$removed" ] && echo 0 || echo 1)"
   contains '"missingFix":[]' "$info"
-  A "FIX-01..FIX-13 都在" $?
+  A "FIX-01..FIX-14 都在" $?
   contains '"dup":[]' "$info"
   A "约束 id 唯一" $?
-  echo "$info" | grep -qE '"total":(11[7-9]|1[2-9][0-9])'
-  A "约束总条数 ≥117（104 既有 + 13 本轮）" $?
+  echo "$info" | grep -qE '"total":(11[89]|1[2-9][0-9])'
+  A "约束总条数 ≥118（104 既有 + 14 本轮）" $?
   echo "$info" | grep -qE '"missingNr":(2[2-9]|[3-9][0-9])'
   A "既有 NR-* 约束仍在（≥22 条）" $?
   end_check F11 "约束只追加、不改既有条目"
 }
 
 # ------------------------------------------------------------------ F12 改动范围
+# 允许集（单一来源）= FIX-13 原文的范围 + FIX-14 的修订（显式加入 gauntlet-tools/*，理由与来源见
+# qa/constraints.json#FIX-14）。改动范围检查与下面的负例自检共用这一个判断函数，避免两份清单走偏。
+in_scope() { # in_scope <仓库相对路径> → 0 = 允许改动，1 = 越界
+  case "$1" in
+    crates/agent/src/*.rs|crates/agent/tests/*|crates/common/src/config.rs) return 0 ;;
+    deploy/*|README.md|docs/*|features/*|qa/*|GAUNTLET.md|gauntlet-tools/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 f12() {
   start_check "no-root-fixes-F12-scope.txt"
-  local changed bad f hs
+  local changed bad f hs probe probe_bad
   changed="$( { git diff --name-only "$BASE" 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null; } | sort -u)"
   bad=""
   while IFS= read -r f; do
     [ -z "$f" ] && continue
-    case "$f" in
-      crates/agent/src/*.rs) ;;
-      crates/agent/tests/*|crates/common/src/config.rs) ;;
-      deploy/*|README.md|docs/*|features/*|qa/*|GAUNTLET.md) ;;
-      *) bad="$bad $f" ;;
-    esac
+    in_scope "$f" || bad="$bad $f"
   done <<< "$changed"
   hs="$(git diff --name-only "$BASE" -- crates/storage crates/server 2>/dev/null || true)"
+  # 负例自检：允许集不能被放宽到吞掉真正的越界文件。这 5 条探测路径**必须**逐条判越界。
+  probe_bad=""
+  for probe in crates/storage/src/lib.rs crates/server/src/lib.rs Cargo.toml gauntlet.config.json .gauntlet/gauntlet.mjs; do
+    in_scope "$probe" || probe_bad="$probe_bad $probe"
+  done
   {
     echo "== 本次改动/新增的文件 =="; echo "$changed"
     echo "== 允许集之外的 =="; echo "${bad:-<none>}"
     echo "== crates/storage 与 crates/server 的改动 =="; echo "${hs:-<none>}"
+    echo "== 负例自检（这些必须全部判越界）=="; echo "${probe_bad:-<none>}"
   } >> "$CUR_LOG"
   A "改动文件全部落在本轮允许集内" "$([ -z "$bad" ] && echo 0 || echo 1)"
   A "crates/storage 与 crates/server 零改动" "$([ -z "$hs" ] && echo 0 || echo 1)"
-  end_check F12 "改动范围仅限本轮四项相关文件"
+  A "负例自检：storage/server/Cargo.toml/gauntlet.config.json/.gauntlet 仍被判越界（实际 $(printf '%s' "$probe_bad" | wc -w)/5）" \
+    "$([ "$(printf '%s' "$probe_bad" | wc -w)" = 5 ] && echo 0 || echo 1)"
+  end_check F12 "改动范围仅限本轮四项相关文件 + 两处已准入的工具修复"
 }
 
 f1

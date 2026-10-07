@@ -90,7 +90,12 @@ node .gauntlet/gauntlet.mjs test                       # 第 2 阶段起：tests
 F10–F12 PASS。**F1 有安全阀**：脚本里还有「用字面量名字整机匹配」的 `pkill`/`killall` 时只做静态判定、
 **不执行**动态探针（否则会在这台共享机器上误杀别人正在跑的 agent）。
 
-本轮 13 条验收约束是 `qa/constraints.json` 里的 **`FIX-01`…`FIX-13`**（全部 `must-hold`）；判据、期望与证据落点
+返工（2026-10-07、`[spec]`）：F12 的允许集加入 `gauntlet-tools/*` 并新增 5 条负例自检、F11 的期望条数
+117→118（新增 `FIX-14`，口径未动）——改动、理由与复核步骤见 `qa/no-root-fixes.qa.md#工具修复复核`。
+返工后重跑：**`PASS=12 FAIL=0`，退出码 0**（证据 `gauntlet-out/qa/evidence/no-root-fixes-checks.txt`）。
+
+本轮 14 条验收约束是 `qa/constraints.json` 里的 **`FIX-01`…`FIX-14`**（全部 `must-hold`；`FIX-14` = 两处流水线
+工具修复的准入记录，独立复核步骤见 `qa/no-root-fixes.qa.md#工具修复复核`）；判据、期望与证据落点
 见 `qa/no-root-fixes.qa.md`。
 
 > 上面「一键复跑」的 1)–5) 是**审查分支 `gh-line`** 的入口；本分支（`nr-fixes`）用本节这两条。

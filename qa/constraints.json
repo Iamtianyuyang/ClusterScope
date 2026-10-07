@@ -1168,5 +1168,15 @@
     "verdict": "must-hold",
     "qa": "no-root-fixes.qa.md#F12",
     "severity": "minor"
+  },
+  {
+    "id": "FIX-14",
+    "text": "本轮准入的**两处流水线工具修复**（都是工具自身的缺陷，不碰产品代码；Leader 2026-10-07 逐行核验两个 diff 后裁决「准予纳入」），并据此**修订 `FIX-13` 的允许改动集：显式加入 `gauntlet-tools/*`**（本次只有 `gauntlet-tools/rust-gate.mjs`）——修订以本条**追加**的形式落地，`FIX-13` 原文与既有 104 条逐字节不动（理由见 basis 末句）。① rust-gate（+15/−3）：`cargo test` 会为集成测试引用的 `CARGO_BIN_EXE_*` 额外构建**产品二进制**（产物里 `profile.test === false`；本机实测恰好 1 个：`clusterscope-agent (bin)`，而它同时还有一个 `profile.test === true` 的同名测试产物——名字分不开，只有 `profile.test` 分得开），`clusterscope-agent` 是常驻守护进程，被当测试目标 spawn 会让 `gate --profile coder` 挂死（实测 31 分钟、进程 2226159/2233900）；修法只 spawn `profile.test === true` 的产物、产品产物仍留在覆盖率对象表里、日志显式标注被排除的数量，**没有跳过任何测试、没有弱化任何断言**（59 个测试照跑）。② `qa/harness/no-root-fixes-checks.sh` 的 F5 段（**断言集合一字未改**：`b6149ee^` 与当前版本的 F5 段 `A \"…\"` 行集合逐行相同，各 30 条）：F5 改为**自带配置**（由 `deploy/server.yaml.example` 生成，连 `127.0.0.1:5432` + 本检查自己的 `jwt_secret`），不再复用机器上已有的 `~/.config/clusterscope/server.yaml`——那份文件的 `postgres_url` 实测指向 `127.0.0.1:5433`（那里没有实例在听），server 会卡在连库超时里，使 F5 的 health 断言在**任何正确实现**上都不可能通过；备份/还原逻辑照旧。两处都必须在 QA 里被**独立复核**（`qa/no-root-fixes.qa.md#工具修复复核`），不得成为「编码阶段可以顺手改检查工具」的先例。",
+    "basis": "Leader 2026-10-07 对 `2807ef5`（rust-gate）与 `b6149ee`（F5 harness）两个 diff 的逐行核验与裁决；`gate --profile coder` 实测的 31 分钟挂死（`crates/agent/tests/**` 经 `env!(\"CARGO_BIN_EXE_clusterscope-agent\")` 引用产品二进制）；F5 段的原始写法见 `git show b6149ee^:qa/harness/no-root-fixes-checks.sh`；本机环境事实「那份 server.yaml 指向 5433」由本次返工独立复核（`grep -nE \":(5432|5433)/\" ~/.config/clusterscope/server.yaml`）。修订以**追加**落地而不改写 `FIX-13` 原文，是为了保住 `FIX-12` 的「只追加」性质与 F11 段「`git diff 7ca587a -- qa/constraints.json` 零删行」这条原样未动的检查：改写 `FIX-13` 原文必然产生删行，只能靠放宽 F11 的口径来兜，而放宽检查正是本轮要避免的事。",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F12 段的允许集包含 `gauntlet-tools/*`、且负例自检仍把 storage/server/Cargo.toml/gauntlet.config.json/.gauntlet 判越界；F5 段仍 PASS：server unit 真起、`/api/health = 200`）；再按 `qa/no-root-fixes.qa.md#工具修复复核` 独立复核三项：rust-gate 排除的确实是产品二进制而非测试（`cargo test --no-run --message-format=json` 的产物分类）、测试总数与 `cargo test` 输出一致、F5 的断言集合未被削减",
+    "expect": "F12 PASS：`gauntlet-tools/rust-gate.mjs` 在允许集内、`crates/storage` 与 `crates/server` 仍零改动、负例 5/5 被咬住；F5 PASS：server unit 真起且 health=200、机器状态还原；三项独立复核全部成立，结论写进 `qa/qa-report.json` 里 `constraint: \"FIX-14\"` 的 status=pass 条目",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#工具修复复核",
+    "severity": "minor"
   }
 ]
