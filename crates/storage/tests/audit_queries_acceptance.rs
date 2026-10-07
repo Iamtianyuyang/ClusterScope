@@ -27,6 +27,8 @@ const DEFAULT_POSTGRES_URL: &str =
 const USER_AUDIT: &str = "m6-audit";
 /// The one record that must never leak into a filtered listing.
 const USER_OTHER: &str = "m6-other";
+/// A name no fixture ever creates; used by the "nothing matches" scenario.
+const USER_ABSENT: &str = "m6-absent-user";
 const ACTION_LOGIN: &str = "m6-login";
 const ACTION_CREATE: &str = "m6-create";
 
@@ -51,9 +53,14 @@ async fn accept_pool() -> PgPool {
 }
 
 async fn remove_fixture_rows(pool: &PgPool) {
-    sqlx::query("DELETE FROM audit_logs WHERE username = $1 OR username = $2")
+    // The fixture also owns the "absent" name used by the empty-result
+    // scenario: the server itself writes audit rows for unknown logins (a
+    // failed login for a user that does not exist is still an audit event),
+    // so the test must not assume the name is untouched in the shared DB.
+    sqlx::query("DELETE FROM audit_logs WHERE username = $1 OR username = $2 OR username = $3")
         .bind(USER_AUDIT)
         .bind(USER_OTHER)
+        .bind(USER_ABSENT)
         .execute(pool)
         .await
         .expect("cleaning the m6- fixture rows must succeed");
@@ -158,7 +165,7 @@ async fn audit_listing_returns_zero_total_instead_of_an_error_when_nothing_match
     let _guard = lock_fixture();
     let fixture = seed_fixture().await;
 
-    let result = list_audit_logs(&fixture.pool, Some("m6-nobody"), None, None, None, 0, 50).await;
+    let result = list_audit_logs(&fixture.pool, Some(USER_ABSENT), None, None, None, 0, 50).await;
 
     let (rows, total) = result.expect("an empty result set is not an error");
     assert_eq!(rows.len(), 0);

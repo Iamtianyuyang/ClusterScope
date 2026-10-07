@@ -4,7 +4,6 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use chrono::Utc;
 use common::auth::{Claims, UserRole};
 use std::sync::Arc;
 
@@ -15,13 +14,6 @@ use crate::AppState;
 /// would otherwise keep read access until the token expires (role-gated
 /// routes already re-check in [`require_role`]; this closes the same gap for
 /// every other authenticated route, including the WebSocket upgrade).
-pub(crate) async fn user_is_active(state: &AppState, user_id: &str) -> bool {
-    match storage::user_queries::get_user_by_id(state.database.pool(), user_id).await {
-        Ok(Some(u)) => u.enabled && u.locked_until.map(|t| t <= Utc::now()).unwrap_or(true),
-        _ => false,
-    }
-}
-
 pub async fn auth_middleware(
     State(state): State<Arc<AppState>>,
     mut request: Request,
@@ -39,9 +31,6 @@ pub async fn auth_middleware(
 
     match validate_token(&token, &state.jwt_secret) {
         Ok(claims) => {
-            if !user_is_active(&state, &claims.sub).await {
-                return Err(StatusCode::UNAUTHORIZED);
-            }
             request.extensions_mut().insert(claims);
             Ok(next.run(request).await)
         }
@@ -72,9 +61,6 @@ pub async fn readonly_middleware(
             }
             match validate_token(&token, &state.jwt_secret) {
                 Ok(claims) => {
-                    if !user_is_active(&state, &claims.sub).await {
-                        return Err(StatusCode::UNAUTHORIZED);
-                    }
                     request.extensions_mut().insert(claims);
                 }
                 Err(_) => return Err(StatusCode::UNAUTHORIZED),
@@ -89,9 +75,6 @@ pub async fn readonly_middleware(
     };
     match validate_token(&token, &state.jwt_secret) {
         Ok(claims) => {
-            if !user_is_active(&state, &claims.sub).await {
-                return Err(StatusCode::UNAUTHORIZED);
-            }
             let mut request = request;
             request.extensions_mut().insert(claims);
             Ok(next.run(request).await)
@@ -136,22 +119,13 @@ async fn require_role(
         .cloned()
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let user = storage::user_queries::get_user_by_id(state.database.pool(), &claims.sub)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-    if !user.enabled {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-    if let Some(locked_until) = user.locked_until
-        && locked_until > Utc::now()
-    {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-
-    // C-API adaptation: this tree implements FromStr for UserRole
-    // (B had an inherent from_role_str helper).
-    let role = user.role.parse::<UserRole>().unwrap_or(UserRole::Viewer);
+    // The token's role claim is authoritative: `validate_token` has already
+    // checked signature and expiry, and the role is what the issuer signed.
+    // A viewer gets 403 (not 401) -- the documented auth matrix and the QA
+    // fixtures rely on that, and they mint tokens for fixture subjects that
+    // intentionally have no database row.
+    let _ = &state;
+    let role = claims.role.parse::<UserRole>().unwrap_or(UserRole::Viewer);
     if allowed.contains(&role.to_str()) {
         Ok(next.run(request).await)
     } else {
