@@ -121,3 +121,14 @@ pub async fn list_audit_logs(
 
     Ok((logs, total))
 }
+
+/// Drop audit-log rows older than the 90-day retention window.
+pub async fn prune_old_audit_logs(pool: &PgPool) -> Result<()> {
+    let cutoff = Utc::now() - chrono::Duration::days(90);
+    sqlx::query("DELETE FROM audit_logs WHERE timestamp < $1")
+        .bind(cutoff)
+        .execute(pool)
+        .await
+        .context("Failed to prune audit logs")?;
+    Ok(())
+}

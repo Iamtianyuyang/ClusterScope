@@ -59,6 +59,21 @@ impl Scheduler {
     /// or already dispatched — the server re-loads queued jobs from the DB
     /// every cycle, so dedup here prevents queue growth and duplicate
     /// dispatch while jobs wait for capacity.
+    /// Drop a job from the in-memory queue (it was cancelled in the DB).
+    /// Returns true when an entry was removed.
+    pub async fn remove_queued(&self, job_id: &str) -> bool {
+        let mut queue = self.job_queue.lock().await;
+        let before = queue.len();
+        queue.retain(|j| j.job_id != job_id);
+        queue.len() != before
+    }
+
+    /// Forget a job's in-memory running slot (used when a job is cancelled
+    /// before an agent ever reported it as running).
+    pub async fn drop_job(&self, job_id: &str) -> bool {
+        self.running_jobs.lock().await.remove(job_id).is_some()
+    }
+
     pub async fn enqueue(&self, job: Job) -> bool {
         let mut queue = self.job_queue.lock().await;
         let running = self.running_jobs.lock().await;
