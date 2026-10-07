@@ -3,3 +3,6 @@ node_modules/
 *.log
 .DS_Store
 *.tar.gz
+# gauntlet
+gauntlet-out/
+gauntlet.local.json
