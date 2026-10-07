@@ -1,0 +1,32 @@
+### 状态 A：仓库工作树 = a19a846 + 本阶段新增文件（尚未提交），harness 与 constraints 都是 HEAD 原文
+
+F1 PASS - 两次安装只动自己启动的进程；探针与既存实例全部存活（见 no-root-fixes-F1-install-agent-stop.txt）
+F2 PASS - 显式 -c 指向不存在的文件：非 0 退出且点名该文件、不回退默认值
+F3 PASS - 不带 -c 时：点名默认路径后仍按内置默认值启动
+F4 PASS - 干净 HOME（无 ~/.config）下也能建父目录并写下身份文件
+F5 PASS - 用户级 unit 名字/路径/真装真启/status 与还原
+F6 PASS - 系统级 unit 保留，且角色/前提写清楚
+F7 PASS - README 记录无 root、无 docker 下的两条 PG 路径与实测选择
+F8 PASS - 用户级部署的 linger 前提写进文档
+F9 PASS - 两种安装方式的分工与前提写进 README
+F10 PASS - 既有测试继续全绿，未删未跳
+F11 PASS - 约束只追加、不改既有条目
+F12 FAIL - 改动范围仅限本轮四项相关文件 + 两处已准入的工具修复 — 失败项: | 改动文件全部落在本轮允许集内
+
+PASS=11 FAIL=1  证据目录: /public/tianyuyang/code/ClusterScope-review/nr-fixes/gauntlet-out/qa/evidence
+### 状态 B：已提交 7aaf0ab（工作树干净），harness 与 constraints 都是 HEAD 原文
+
+F1 PASS - 两次安装只动自己启动的进程；探针与既存实例全部存活（见 no-root-fixes-F1-install-agent-stop.txt）
+F2 PASS - 显式 -c 指向不存在的文件：非 0 退出且点名该文件、不回退默认值
+F3 PASS - 不带 -c 时：点名默认路径后仍按内置默认值启动
+F4 PASS - 干净 HOME（无 ~/.config）下也能建父目录并写下身份文件
+F5 PASS - 用户级 unit 名字/路径/真装真启/status 与还原
+F6 PASS - 系统级 unit 保留，且角色/前提写清楚
+F7 PASS - README 记录无 root、无 docker 下的两条 PG 路径与实测选择
+F8 PASS - 用户级部署的 linger 前提写进文档
+F9 PASS - 两种安装方式的分工与前提写进 README
+F10 PASS - 既有测试继续全绿，未删未跳
+F11 PASS - 约束只追加、不改既有条目
+F12 FAIL - 改动范围仅限本轮四项相关文件 + 两处已准入的工具修复 — 失败项: | 改动文件全部落在本轮允许集内
+
+PASS=11 FAIL=1  证据目录: /public/tianyuyang/code/ClusterScope-review/nr-fixes/gauntlet-out/qa/evidence
