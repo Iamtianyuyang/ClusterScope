@@ -1,0 +1,494 @@
+### m6-qa7-f28.txt -- 第 5 阶段 QA round 3（F-28 单点复验）的原始证据
+### 生成: Wed Oct  7 06:24:42 PM UTC 2026  主机: lyy-node03  uid=3000
+### worktree: /public/tianyuyang/code/ClusterScope-review/merge-m6
+### HEAD: 78008652b823fc3f308d35dd5c909dd98a924f5f  branch: gauntlet/merge-m6
+### 工作树: 3 个改动（0 = 干净）
+
+====================================================================
+## A. 闭合判据：cargo clippy --workspace --all-targets --offline -- -D warnings
+##    （round 2 在该口径下打印 9 条 'this MutexGuard is held across an await point'）
+====================================================================
+##### 1 clippy --workspace --all-targets --offline -- -D warnings #####
+    Checking common v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/common)
+   Compiling protocol v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/protocol)
+    Checking tui v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/tui)
+    Checking scheduler v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/scheduler)
+    Checking storage v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage)
+    Checking agent v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent)
+    Checking server v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/server)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.73s
+CLIPPY_RC=0
+
+
+====================================================================
+## B. 修复的 diff：git diff 5ceee91 7800865 -U0 -- crates/storage/tests/
+====================================================================
+diff --git a/crates/storage/tests/audit_queries_acceptance.rs b/crates/storage/tests/audit_queries_acceptance.rs
+index 0869186..b341cc7 100644
+--- a/crates/storage/tests/audit_queries_acceptance.rs
++++ b/crates/storage/tests/audit_queries_acceptance.rs
+@@ -20 +19,0 @@ use sqlx::postgres::PgPoolOptions;
+-use std::sync::Mutex;
+@@ -21,0 +21 @@ use storage::audit_queries::{insert_audit_log, list_audit_logs};
++use tokio::sync::{Mutex, MutexGuard};
+@@ -37 +37 @@ const ACTION_CREATE: &str = "m6-create";
+-static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
++static FIXTURE_LOCK: Mutex<()> = Mutex::const_new(());
+@@ -39,4 +39,5 @@ static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
+-fn lock_fixture() -> std::sync::MutexGuard<'static, ()> {
+-    FIXTURE_LOCK
+-        .lock()
+-        .unwrap_or_else(|poisoned| poisoned.into_inner())
++/// The guard has to span the whole test body -- the database awaits included --
++/// so the lock is the async-aware one: a `std::sync` guard held across an await
++/// point blocks the runtime thread the test runs on.
++async fn lock_fixture() -> MutexGuard<'static, ()> {
++    FIXTURE_LOCK.lock().await
+@@ -142 +143 @@ async fn audit_listing_filters_rows_and_returns_a_matching_total() {
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -165 +166 @@ async fn audit_listing_returns_zero_total_instead_of_an_error_when_nothing_match
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -179 +180 @@ async fn audit_listing_is_ordered_newest_first_and_pages_by_offset() {
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -223 +224 @@ async fn audit_listing_combines_user_action_and_time_filters() {
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+diff --git a/crates/storage/tests/user_queries_acceptance.rs b/crates/storage/tests/user_queries_acceptance.rs
+index cd73a50..4751e2d 100644
+--- a/crates/storage/tests/user_queries_acceptance.rs
++++ b/crates/storage/tests/user_queries_acceptance.rs
+@@ -17 +16,0 @@ use sqlx::postgres::PgPoolOptions;
+-use std::sync::Mutex;
+@@ -21,0 +21 @@ use storage::user_queries::{
++use tokio::sync::{Mutex, MutexGuard};
+@@ -47 +47 @@ const FIXTURE_USERS: [&str; 5] = [
+-static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
++static FIXTURE_LOCK: Mutex<()> = Mutex::const_new(());
+@@ -49,4 +49,5 @@ static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
+-fn lock_fixture() -> std::sync::MutexGuard<'static, ()> {
+-    FIXTURE_LOCK
+-        .lock()
+-        .unwrap_or_else(|poisoned| poisoned.into_inner())
++/// The guard has to span the whole test body -- the database awaits included --
++/// so the lock is the async-aware one: a `std::sync` guard held across an await
++/// point blocks the runtime thread the test runs on.
++async fn lock_fixture() -> MutexGuard<'static, ()> {
++    FIXTURE_LOCK.lock().await
+@@ -99 +100 @@ async fn revoking_all_sessions_invalidates_every_outstanding_refresh_token_of_th
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -145 +146 @@ async fn a_refresh_token_can_only_be_consumed_once() {
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -172 +173 @@ async fn refresh_tokens_are_stored_as_digests_so_the_raw_value_is_not_in_the_dat
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -215 +216 @@ async fn deleting_a_user_also_deletes_its_refresh_tokens() {
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -247 +248 @@ async fn demoting_or_deleting_an_administrator_that_is_not_the_last_one_succeeds
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+
+====================================================================
+## C. 静态对账（断言计数 / 测试名集合 / #[allow] / await_holding_lock 字样）
+====================================================================
+-- 断言计数（grep -c assert，pre=5ceee91 post=7800865）
+   audit_queries_acceptance: pre=19 post=19
+   user_queries_acceptance: pre=19 post=19
+   conversions_acceptance: pre=26 post=26
+-- 函数名集合（含 helper）pre vs post
+   --- audit_queries_acceptance (pre=9 post=9)
+5a6
+> async fn lock_fixture
+9d9
+< fn lock_fixture
+   --- user_queries_acceptance (pre=10 post=10)
+6a7
+> async fn lock_fixture
+10d10
+< fn lock_fixture
+   --- conversions_acceptance (pre=3 post=3)
+       IDENTICAL
+-- 每个测试文件里的计数（HEAD=7800865）
+   audit_queries_acceptance: #[allow]=0  await_holding_lock 字样=0  #[tokio::test]=4  lock_fixture 出现=5
+   user_queries_acceptance: #[allow]=0  await_holding_lock 字样=0  #[tokio::test]=5  lock_fixture 出现=6
+   conversions_acceptance: #[allow]=0  await_holding_lock 字样=0  #[tokio::test]=0  lock_fixture 出现=0
+-- 每个测试的 guard 调用形态（HEAD）
+   audit  42:async fn lock_fixture() -> MutexGuard<'static, ()> {
+   audit  143:    let _guard = lock_fixture().await;
+   audit  166:    let _guard = lock_fixture().await;
+   audit  180:    let _guard = lock_fixture().await;
+   audit  224:    let _guard = lock_fixture().await;
+   user   52:async fn lock_fixture() -> MutexGuard<'static, ()> {
+   user   100:    let _guard = lock_fixture().await;
+   user   146:    let _guard = lock_fixture().await;
+   user   173:    let _guard = lock_fixture().await;
+   user   216:    let _guard = lock_fixture().await;
+   user   248:    let _guard = lock_fixture().await;
+
+====================================================================
+## D. 全域抑制排查（确认是修掉了 lint，不是把 lint 关掉）
+====================================================================
+-- git grep -n await_holding_lock 7800865（工作树全域）
+7800865:qa/evidence/m6-f28-gates.txt:1:== F-28 re-run: the 9 clippy await_holding_lock warnings in crates/storage/tests ==
+7800865:qa/evidence/m6-f28-gates.txt:198:'await_holding_lock' under crates/storage/tests: crates/storage/tests/audit_queries_acceptance.rs:0 crates/storage/tests/conversions_acceptance.rs:0 crates/storage/tests/user_queries_acceptance.rs:0    (must be 0 = nothing suppressed)
+7800865:qa/qa-report.json:3313:   "rootCause": "合流新增的验收测试在 `#[tokio::test]` 里用 `let _guard = lock_fixture();` 把串行化用的 `MutexGuard` 持有到 await 之后（为了让 fixture 串行、避免共享库上的用例互相踩），这在 clippy 的 `await_holding_lock` 规则下是告警；测试文件的写法没有被任何闸门约束。",
+-- storage 测试目录里的 allow 属性
+   NO HITS
+-- lint 配置文件 / lints 表
+   无 clippy.toml / .cargo 配置
+   无 [lints] 表
+
+====================================================================
+## E. 四组独立实验的原始日志（gauntlet-out/qa7/probe.log）
+##    E4: 真实（async 锁）二进制 --test-threads=1/8；E2: 两个进程并发；E3: 收窄 guard 的对拍变体
+====================================================================
+
+##### identity #####
+Wed Oct  7 06:14:09 PM UTC 2026
+head=78008652b823fc3f308d35dd5c909dd98a924f5f branch=gauntlet/merge-m6
+status:
+real audit binary : target/debug/deps/audit_queries_acceptance-1cff6e0858ccf228
+real user  binary : target/debug/deps/user_queries_acceptance-e8744bc56c90935f
+-rwxr-xr-x 1 tianyuyang tianyuyang 92646920 Oct  8 01:40 target/debug/deps/audit_queries_acceptance-1cff6e0858ccf228
+-rwxr-xr-x 1 tianyuyang tianyuyang 92363712 Oct  8 01:40 target/debug/deps/user_queries_acceptance-e8744bc56c90935f
+
+##### E4a real binary, serial baseline --test-threads=1 #####
+rc=0 wall=0.11s
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+##### E4b real binary --test-threads=8, 5 repeats (mutual exclusion preserved?) #####
+run1 rc=0 wall=0.10s  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+run2 rc=0 wall=0.10s  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+run3 rc=0 wall=0.09s  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+run4 rc=0 wall=0.09s  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+run5 rc=0 wall=0.10s  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+##### E4c real audit+user binaries together, --test-threads=8 (2 procs = cross-process, expect pollution) #####
+audit alone rc=0 wall=0.10s  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+##### E2 two concurrent processes of the REAL binary (in-process locks cannot serialize across processes) #####
+rc1=101 rc2=101 wall=0.10s
+-- p1 --
+thread 'audit_listing_combines_user_action_and_time_filters' (4167156) panicked at crates/storage/tests/audit_queries_acceptance.rs:239:5:
+assertion `left == right` failed: only the two m6-login rows match
+  left: 4
+ right: 2
+thread 'audit_listing_is_ordered_newest_first_and_pages_by_offset' (4167158) panicked at crates/storage/tests/audit_queries_acceptance.rs:192:5:
+assertion `left == right` failed
+  left: "74a1a4af-4791-42bf-bc89-c53a997c3d02"
+ right: "29a549fc-4155-43fe-b173-07d0b9dfd249"
+thread 'audit_listing_filters_rows_and_returns_a_matching_total' (4167157) panicked at crates/storage/tests/audit_queries_acceptance.rs:150:5:
+assertion `left == right` failed: the three m6-audit rows must be returned
+  left: 6
+ right: 3
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+-- p2 --
+thread 'audit_listing_filters_rows_and_returns_a_matching_total' (4167161) panicked at crates/storage/tests/audit_queries_acceptance.rs:150:5:
+assertion `left == right` failed: the three m6-audit rows must be returned
+  left: 6
+ right: 3
+thread 'audit_listing_combines_user_action_and_time_filters' (4167160) panicked at crates/storage/tests/audit_queries_acceptance.rs:239:5:
+assertion `left == right` failed: only the two m6-login rows match
+  left: 0
+ right: 2
+thread 'audit_listing_is_ordered_newest_first_and_pages_by_offset' (4167162) panicked at crates/storage/tests/audit_queries_acceptance.rs:192:5:
+assertion `left == right` failed
+  left: "e6782610-f551-477f-be23-159eec618737"
+ right: "f910750b-8a69-4d8f-bb07-700cada137bd"
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+##### E3 counterfactual: same commit, guard narrowed to a synchronous block (no guard across await) #####
+PROBE-PATCH audit_queries_acceptance.rs: 1 x 'use tokio::sync::{Mutex, MutexGuard};'
+PROBE-PATCH audit_queries_acceptance.rs: 1 x 'static FIXTURE_LOCK: Mutex<()> = Mutex::const_ne'
+PROBE-PATCH audit_queries_acceptance.rs: 1 x '/// The guard has to span the whole test body --'
+PROBE-PATCH audit_queries_acceptance.rs: 1 x '/// so the lock is the async-aware one: a `std::'
+PROBE-PATCH audit_queries_acceptance.rs: 1 x '/// point blocks the runtime thread the test run'
+PROBE-PATCH audit_queries_acceptance.rs: 1 x "async fn lock_fixture() -> MutexGuard<'static, ("
+PROBE-PATCH audit_queries_acceptance.rs: 1 x '    FIXTURE_LOCK.lock().await'
+PROBE-PATCH audit_queries_acceptance.rs: 4 x '    let _guard = lock_fixture().await;'
+PROBE-PATCH user_queries_acceptance.rs: 1 x 'use tokio::sync::{Mutex, MutexGuard};'
+PROBE-PATCH user_queries_acceptance.rs: 1 x 'static FIXTURE_LOCK: Mutex<()> = Mutex::const_ne'
+PROBE-PATCH user_queries_acceptance.rs: 1 x '/// The guard has to span the whole test body --'
+PROBE-PATCH user_queries_acceptance.rs: 1 x '/// so the lock is the async-aware one: a `std::'
+PROBE-PATCH user_queries_acceptance.rs: 1 x '/// point blocks the runtime thread the test run'
+PROBE-PATCH user_queries_acceptance.rs: 1 x "async fn lock_fixture() -> MutexGuard<'static, ("
+PROBE-PATCH user_queries_acceptance.rs: 1 x '    FIXTURE_LOCK.lock().await'
+PROBE-PATCH user_queries_acceptance.rs: 5 x '    let _guard = lock_fixture().await;'
+PROBE-PATCH done
+
+##### E3a narrowed variant must be lint-clean (that is the whole point of narrowing) #####
+NARROW_CLIPPY_RC=0 wall=5.82s
+    Checking tui v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa7/probe-src/crates/tui)
+    Checking scheduler v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa7/probe-src/crates/scheduler)
+    Checking storage v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa7/probe-src/crates/storage)
+    Checking agent v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa7/probe-src/crates/agent)
+    Checking server v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa7/probe-src/crates/server)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.72s
+
+##### E3b build the narrowed test targets #####
+BUILD_RC=0
+PROBE-EXE audit_queries_acceptance /public/tianyuyang/code/ClusterScope-review/merge-m6/target/debug/deps/audit_queries_acceptance-99332d539bc45dcb
+PROBE-EXE user_queries_acceptance /public/tianyuyang/code/ClusterScope-review/merge-m6/target/debug/deps/user_queries_acceptance-8343047e86bf3b1e
+probe audit exe: /public/tianyuyang/code/ClusterScope-review/merge-m6/target/debug/deps/audit_queries_acceptance-99332d539bc45dcb
+
+##### E3c narrowed variant, serial baseline --test-threads=1 #####
+rc=0 wall=0.10s  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+##### E3d narrowed variant, --test-threads=8, 5 repeats (expect cross-test pollution) #####
+run1 rc=101 wall=0.03s  test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+thread 'audit_listing_filters_rows_and_returns_a_matching_total' (4168125) panicked at crates/storage/tests/audit_queries_acceptance.rs:150:5:
+assertion `left == right` failed: the three m6-audit rows must be returned
+  left: 12
+ right: 3
+thread 'audit_listing_is_ordered_newest_first_and_pages_by_offset' (4168126) panicked at crates/storage/tests/audit_queries_acceptance.rs:192:5:
+assertion `left == right` failed
+run2 rc=101 wall=0.04s  test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+thread 'audit_listing_is_ordered_newest_first_and_pages_by_offset' (4168149) panicked at crates/storage/tests/audit_queries_acceptance.rs:190:5:
+assertion `left == right` failed: the first page holds page_size rows
+  left: 0
+ right: 2
+thread 'audit_listing_combines_user_action_and_time_filters' (4168147) panicked at crates/storage/tests/audit_queries_acceptance.rs:239:5:
+assertion `left == right` failed: only the two m6-login rows match
+run3 rc=101 wall=0.03s  test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+thread 'audit_listing_combines_user_action_and_time_filters' (4168168) panicked at crates/storage/tests/audit_queries_acceptance.rs:239:5:
+assertion `left == right` failed: only the two m6-login rows match
+  left: 8
+ right: 2
+thread 'audit_listing_is_ordered_newest_first_and_pages_by_offset' (4168170) panicked at crates/storage/tests/audit_queries_acceptance.rs:191:5:
+assertion `left == right` failed: newest row comes first
+run4 rc=101 wall=0.03s  test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+thread 'audit_listing_is_ordered_newest_first_and_pages_by_offset' (4168191) panicked at crates/storage/tests/audit_queries_acceptance.rs:192:5:
+assertion `left == right` failed
+  left: "cd1b09ea-e1ad-4904-8ed7-42a5847a5a07"
+ right: "1bd893bf-0d2d-4c1d-9d1e-439aeedb7fd4"
+thread 'audit_listing_filters_rows_and_returns_a_matching_total' (4168190) panicked at crates/storage/tests/audit_queries_acceptance.rs:150:5:
+assertion `left == right` failed: the three m6-audit rows must be returned
+run5 rc=101 wall=0.04s  test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+thread 'audit_listing_filters_rows_and_returns_a_matching_total' (4168211) panicked at crates/storage/tests/audit_queries_acceptance.rs:150:5:
+assertion `left == right` failed: the three m6-audit rows must be returned
+  left: 12
+ right: 3
+thread 'audit_listing_is_ordered_newest_first_and_pages_by_offset' (4168212) panicked at crates/storage/tests/audit_queries_acceptance.rs:192:5:
+assertion `left == right` failed
+
+##### identity after #####
+Wed Oct  7 06:14:21 PM UTC 2026
+status:
+leftover server/agent of ours:
+<no pid files>
+resident agent 266643:
+ 266643 Wed Sep  2 12:59:26 2026 /public/tianyuyang/.local/bin/clusterscope-agent -c /public/tianyuyang/.config/clusterscope/agent.yaml
+PROBE DONE
+
+====================================================================
+## F. 对拍变体与 7800865 的差异（源码快照在 gauntlet-out/qa7/probe-src，已 gitignore）
+====================================================================
+--- audit_queries_acceptance
+--- /tmp/probe_base_audit_queries_acceptance.rs	2026-10-08 02:24:43.209569144 +0800
++++ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa7/probe-src/crates/storage/tests/audit_queries_acceptance.rs	2026-10-08 02:14:10.207075000 +0800
+@@ -18,7 +18,7 @@
+ use sqlx::PgPool;
+ use sqlx::postgres::PgPoolOptions;
+ use storage::audit_queries::{insert_audit_log, list_audit_logs};
+-use tokio::sync::{Mutex, MutexGuard};
++use std::sync::{Mutex, MutexGuard};
+ 
+ const DEFAULT_POSTGRES_URL: &str =
+     "postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope";
+@@ -34,13 +34,13 @@
+ 
+ /// All four scenarios share one fixture table, so they are serialized: a
+ /// parallel run would let one test's fixtures show up in another test's count.
+-static FIXTURE_LOCK: Mutex<()> = Mutex::const_new(());
++static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
+ 
+-/// The guard has to span the whole test body -- the database awaits included --
+-/// so the lock is the async-aware one: a `std::sync` guard held across an await
+-/// point blocks the runtime thread the test runs on.
+-async fn lock_fixture() -> MutexGuard<'static, ()> {
+-    FIXTURE_LOCK.lock().await
++/// PROBE (QA round 7 F-28 counterfactual): scope-narrowed variant --
++/// the guard is taken and dropped inside a synchronous block, so no guard is
++/// ever held across an await point.
++fn lock_fixture() -> MutexGuard<'static, ()> {
++    FIXTURE_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+ }
+ 
+ async fn accept_pool() -> PgPool {
+@@ -140,7 +140,7 @@
+ 
+ #[tokio::test]
+ async fn audit_listing_filters_rows_and_returns_a_matching_total() {
+-    let _guard = lock_fixture().await;
++    { let _guard = lock_fixture(); }
+     let fixture = seed_fixture().await;
+ 
+     let (rows, total) = list_audit_logs(&fixture.pool, Some(USER_AUDIT), None, None, None, 0, 50)
+@@ -163,7 +163,7 @@
+ 
+ #[tokio::test]
+ async fn audit_listing_returns_zero_total_instead_of_an_error_when_nothing_matches() {
+-    let _guard = lock_fixture().await;
++    { let _guard = lock_fixture(); }
+     let fixture = seed_fixture().await;
+ 
+     let result = list_audit_logs(&fixture.pool, Some(USER_ABSENT), None, None, None, 0, 50).await;
+@@ -177,7 +177,7 @@
+ 
+ #[tokio::test]
+ async fn audit_listing_is_ordered_newest_first_and_pages_by_offset() {
+-    let _guard = lock_fixture().await;
++    { let _guard = lock_fixture(); }
+     let fixture = seed_fixture().await;
+     let newest = &fixture.audit_ids[2];
+     let middle = &fixture.audit_ids[1];
+@@ -221,7 +221,7 @@
+ 
+--- user_queries_acceptance
+--- /tmp/probe_base_user_queries_acceptance.rs	2026-10-08 02:24:43.217569144 +0800
++++ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa7/probe-src/crates/storage/tests/user_queries_acceptance.rs	2026-10-08 02:14:10.208528000 +0800
+@@ -18,7 +18,7 @@
+     add_refresh_token, consume_refresh_token, create_user, delete_user_guarded,
+     revoke_all_refresh_tokens, update_user_guarded,
+ };
+-use tokio::sync::{Mutex, MutexGuard};
++use std::sync::{Mutex, MutexGuard};
+ 
+ const DEFAULT_POSTGRES_URL: &str =
+     "postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope";
+@@ -44,13 +44,13 @@
+ /// All scenarios share the `users` / `refresh_tokens` tables, so they run
+ /// serialized (a parallel run would let one test's admin demotion change the
+ /// enabled-admin count another test depends on).
+-static FIXTURE_LOCK: Mutex<()> = Mutex::const_new(());
++static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
+ 
+-/// The guard has to span the whole test body -- the database awaits included --
+-/// so the lock is the async-aware one: a `std::sync` guard held across an await
+-/// point blocks the runtime thread the test runs on.
+-async fn lock_fixture() -> MutexGuard<'static, ()> {
+-    FIXTURE_LOCK.lock().await
++/// PROBE (QA round 7 F-28 counterfactual): scope-narrowed variant --
++/// the guard is taken and dropped inside a synchronous block, so no guard is
++/// ever held across an await point.
++fn lock_fixture() -> MutexGuard<'static, ()> {
++    FIXTURE_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+ }
+ 
+ async fn accept_pool() -> PgPool {
+@@ -97,7 +97,7 @@
+ 
+ #[tokio::test]
+ async fn revoking_all_sessions_invalidates_every_outstanding_refresh_token_of_the_user() {
+-    let _guard = lock_fixture().await;
++    { let _guard = lock_fixture(); }
+     let pool = accept_pool().await;
+     cleanup(&pool).await;
+ 
+@@ -143,7 +143,7 @@
+ 
+ #[tokio::test]
+ async fn a_refresh_token_can_only_be_consumed_once() {
+-    let _guard = lock_fixture().await;
++    { let _guard = lock_fixture(); }
+     let pool = accept_pool().await;
+     cleanup(&pool).await;
+ 
+@@ -170,7 +170,7 @@
+ 
+ #[tokio::test]
+ async fn refresh_tokens_are_stored_as_digests_so_the_raw_value_is_not_in_the_database() {
+-    let _guard = lock_fixture().await;
++    { let _guard = lock_fixture(); }
+     let pool = accept_pool().await;
+     cleanup(&pool).await;
+ 
+@@ -213,7 +213,7 @@
+ 
+
+### 结论（本轮裁决）：
+### 1) 判据成立：clippy --workspace --all-targets --offline -- -D warnings -> rc=0、0 条告警（A 段）。
+### 2) 『不能收窄作用域』成立：E2（两个进程并发）与 E3（收窄变体 + 8 线程）都在同一个共享夹具上互相踩，
+###    4 条测试挂 3 条；E3 同时证明收窄确实能让 clippy 闭嘴（NARROW_CLIPPY_RC=0），即两者不可兼得。
+### 3) 『async 锁保留互斥语义』成立：E4 在 8 线程下 5/5 全绿，墙钟与 --test-threads=1 同级（0.09~0.10s vs 0.11s），
+###    而收窄变体同样并行度只要 0.03~0.04s 就挂了 —— 串行化确实还在。
+
+====================================================================
+## G. E2/E4 重跑：二进制由 cargo 从工作树解析（不按 mtime 猜），并钉住 sha256 身份
+##    起因：demo 驱动第一版用 ls -t 选二进制，选到了对拍变体的产物（同一个 deps/ 目录）——
+##    已修成 cargo 解析；下面这一遍就是修正后的结果。
+====================================================================
+worktree HEAD=78008652b823fc3f308d35dd5c909dd98a924f5f
+binary: /public/tianyuyang/code/ClusterScope-review/merge-m6/target/debug/deps/audit_queries_acceptance-99332d539bc45dcb
+sha256: 820f3aa079325e7dccedd211c0912a228a42e2b36f562d144f435e525f47619d
+
+-- G1 串行基线 --test-threads=1
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+rc=0 wall=0.10s
+
+-- G2 --test-threads=8 五次（互斥语义保留？）
+run1 rc=0 wall=0.10s  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+run2 rc=0 wall=0.09s  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+run3 rc=0 wall=0.10s  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+run4 rc=0 wall=0.10s  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+run5 rc=0 wall=0.09s  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+-- G3 两个进程并发（同一份工作树二进制，两个进程各自的进程内锁互不可见）
+rc1=101 rc2=101 wall=0.10s
+-- p1 --
+thread 'audit_listing_filters_rows_and_returns_a_matching_total' (4189803) panicked at crates/storage/tests/audit_queries_acceptance.rs:150:5:
+  left: 6
+ right: 3
+thread 'audit_listing_combines_user_action_and_time_filters' (4189802) panicked at crates/storage/tests/audit_queries_acceptance.rs:239:5:
+  left: 0
+ right: 2
+thread 'audit_listing_is_ordered_newest_first_and_pages_by_offset' (4189804) panicked at crates/storage/tests/audit_queries_acceptance.rs:192:5:
+  left: "fbe8896d-1fd9-43c6-8b71-d7c2dfedf4e7"
+ right: "d8a41cf3-ac49-4048-b2ef-23454ef2788c"
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+-- p2 --
+thread 'audit_listing_filters_rows_and_returns_a_matching_total' (4189799) panicked at crates/storage/tests/audit_queries_acceptance.rs:150:5:
+  left: 6
+ right: 3
+thread 'audit_listing_combines_user_action_and_time_filters' (4189798) panicked at crates/storage/tests/audit_queries_acceptance.rs:239:5:
+  left: 4
+ right: 2
+thread 'audit_listing_is_ordered_newest_first_and_pages_by_offset' (4189800) panicked at crates/storage/tests/audit_queries_acceptance.rs:191:5:
+  left: "d7cb05eb-a4c8-4eca-b464-7b15ae898eea"
+ right: "39af8798-2dd0-4769-ab4b-ae3ce2bfa191"
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+====================================================================
+## H. 环境诊断：工作树产物与对拍变体产物共用同一个 deps/ 文件名
+##    （cargo 的 -C metadata 对这个测试目标不区分两棵源码根；内容确实不同：sha256 820f3aa0… vs 0a965593…）
+##    结论：每次用 cargo 从某个根解析后，cargo 会把该文件重建成那个根的产物 —— demo 驱动改用 cargo 解析即可放心。
+====================================================================
+== 1) worktree build (cargo test --no-run from $REPO)
+W1: /public/tianyuyang/code/ClusterScope-review/merge-m6/target/debug/deps/audit_queries_acceptance-99332d539bc45dcb
+     mtime=2026-10-08 02:42:48.575651886 +0800  size=98367800
+     sha256=820f3aa079325e7dccedd211c0912a228a42e2b36f562d144f435e525f47619d
+== 2) same invocation again (is it rebuilt, same path?)
+W2: /public/tianyuyang/code/ClusterScope-review/merge-m6/target/debug/deps/audit_queries_acceptance-99332d539bc45dcb
+     mtime=2026-10-08 02:42:48.575651886 +0800  size=98367800
+     sha256=820f3aa079325e7dccedd211c0912a228a42e2b36f562d144f435e525f47619d
+== 3) counterfactual build (patched snapshot in probe-src)
+V1: /public/tianyuyang/code/ClusterScope-review/merge-m6/target/debug/deps/audit_queries_acceptance-99332d539bc45dcb
+     mtime=2026-10-08 02:43:08.936091407 +0800  size=98337208
+     sha256=0a9655938c4e40bade14f30c3d64eb38bcd90128a78315149161aee98f0dd97b
+== 4) worktree resolution again AFTER the variant build
+W3: /public/tianyuyang/code/ClusterScope-review/merge-m6/target/debug/deps/audit_queries_acceptance-99332d539bc45dcb
+     mtime=2026-10-08 02:43:13.663066192 +0800  size=98367800
+     sha256=820f3aa079325e7dccedd211c0912a228a42e2b36f562d144f435e525f47619d
+== 5) run W3 with 8 threads（若它仍是对拍变体的文件，应该会挂）
+   rc=0  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+== 6) 强制重建 worktree 产物（删除输出文件后重解析）
+W4: /public/tianyuyang/code/ClusterScope-review/merge-m6/target/debug/deps/audit_queries_acceptance-99332d539bc45dcb
+     mtime=2026-10-08 02:43:15.249299672 +0800  size=98367800
+     sha256=820f3aa079325e7dccedd211c0912a228a42e2b36f562d144f435e525f47619d
+   rc=0  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s

@@ -1,7 +1,7 @@
 {
  "verdict": "pass",
- "verdictRule": "verdict=pass 的语义是：qa/constraints.json 的全部 81 条约束都被真实执行过，并且每一条的实际结果都与清单的预期一致（finding 类约束的预期就是「审计预期它不成立」，因此它们 FAIL 才是 pass）。quality 三闸门 complexity / crap / coverage 仍然是 FAIL，已原样记录在 gates 与 findings 里，不是本次 QA 的失败项，也没有被修饰成 PASS。；增补（第 5 阶段，no-root 维度）：同一条规则适用于第 1 阶段新增的 23 条 NR-*/MRG-02（NR-01…NR-21、NR-06b、MRG-02），合计 104 条；23 条全部配对（Q300-Q322/Q330）。其中 1 条复现出的实际行为与清单预期不一致（NR-06：agent 在干净 HOME + 缺失 -c 文件时 exit 1，清单写的是静默回退不崩），按本规则记 verdict=violated 并新增 finding NF-01；原有 81 条一个字段都没改。；增补（第 5 阶段，M6 三线合流轮）：同一条规则适用于第 1 阶段新增的 22 条 MRG6-01…MRG6-22，合计 140 条。22 条全部在合流后的真实构建产物上重新执行并配对（Q501–Q522）；其中 **19 条与清单预期一致，3 条不一致** → 按本规则 top-level verdict=fail：① MRG6-02 的 expect 里「api-checks 的 PASS 数从 18 升到 19」不成立（实测 18，因为 DOC-GET-AUDIT-LOGS 翻转的同时 SEC-LOGIN-LOCKOUT 由 PASS 掉成 FAIL，被 M6-11 的 `PASS ≥ 18` 容差盖住）→ 新 finding F-23（1 行修复点）；② MRG6-17 的「README 补强默认口令提示」根本没落地（本分支自 8601ac9 起没有改过 README）；③ MRG6-22 的勘误说旧口径 F12 只失败一条，实测是两条（与 MRG6-10 原文一致）→ F-26。另有两条独立记录：F-25（合流新增质量欠账：warnings 0→2、duplication 0→0.4%、next 距离 409.505→603.873，M7 的「不变差」不成立）与 F-27（A 资产无产品调用点 + MRG6-07 路径写法不精确）。既有 132 条检查与既有 findings 一个字段都没改。；增补（第 5 阶段返工复验 round 2，HEAD=5ceee91）：同一规则适用于**追加后的 24 条 MRG6**（MRG6-01…MRG6-24，其中 MRG6-23/24 是本轮返工按勘误与处置记录追加的）。round 1 判 fail 的三条本轮全部复跑：**MRG6-02**（锁定账号 429 回归 F-23）与 **MRG6-17**（README 默认口令补强）已按现状转 PASS，顶层条目改为轮 2 结果、round 1 原文原样保留在各自的 `round1` 里；**MRG6-22** 的清单文本（旧口径 F12『失败项只有一条』）仍然是**被证伪**的，本轮按 `superseded-by-erratum` 记 —— 它的明文勘误 MRG6-23（『恰好两条』）经复跑逐字成立，脚本与断言集合一行未动（改的是勘误文字，不是取样口径），因此这一条既没有 pass 也不构成本轮的失败项：24 条里 23 条 holds、1 条 superseded-by-erratum，**没有 must-hold 约束被证伪**（本轮对受返工影响的条目、追加的 MRG6-23/24、以及 merge-m6-checks.sh 覆盖的 M6-01…M6-15 全部在同一棵树上复跑；MRG6-16 的『树上自解析』由本轮所有 harness 输出都指向 merge-m6 直接印证；MRG6-04 是提交序列的历史属性 —— `git log --merges` 仍为空、合流提交哈希未变）。另有两条独立记录不作为判据：F-28（`clippy --all-targets` 的 9 条 MutexGuard 告警不是基线既有，属本分支新增的测试文件，且不在任何闸门的度量范围内 —— 见 Q545 的独立判定）与 F-29（M7 欠账残差 592.706；M6 口径明确不还债）。既有 132 条检查、既有 findings、以及 round 1 的全部结论只增不改（本轮对 Q502/Q517/Q522 的改动是把 round 1 字段整段搬到 `round1` 键下、顶层写入轮 2 结果，信息零丢失）。",
- "summary": "81/81 条约束全部在真实构建产物上逐条复跑：76 条实测与清单预期一致，4 条 na（前端 / 容器部署 / 纯 CPU 降级 / 防火墙），1 条 unverifiable（合流方案 M1–M9 的答案属于第 6 阶段产出）。三条第 1 阶段声称的缺陷全部被独立复现：GET /api/audit-logs 恒 500、天级 90 天历史永不返回、jobs.pid 从不落库。另记 16 条产品问题（含一条被 500 掩盖的第二个缺陷：审计 COUNT 语句一个参数都没绑）与 9 条清单自身的不精确。产品本身不健康：硬阈值下 complexity 21/316、crap 45/316（maxCRAP 552）、行覆盖率 20.7%。增补（第 5 阶段 no-root 维度）：23 条 NR-* 约束在真实 release 二进制的干净状态上复跑并逐条独立复推；作者脚本的 23/23 PASS 可复现，但其中两条结论经不起对抗性检查——agent 在干净 HOME + 缺失 -c 文件时是 exit 1（不是「被 timeout 收掉」；harness 的 NR6 PASS 是假阳性，判据取的是 grep 的退出码），以及 NR-21 的证据量的是配置路径而非 env-only 那条（补齐后成立）。新增 finding：NF-01、NF-02（install-agent.sh:80 的 pkill）。核心结论不变：server/agent/TUI 确实能以 uid 3000、零 capability、零 HOME 外写入跑起来。；增补（第 5 阶段，M6 三线合流轮，HEAD=e8fd233）：22 条 MRG6 约束在合流后的真实产物上逐条独立复跑（Q501–Q531 + 新 findings F-23…F-27）。**成立的部分**：GATE coder PASS（build ✅、98 tests/0 failed、acceptance 29/29）· merge-m6-checks.sh 干净状态 15/15 FAIL=0 · no-root-fixes-checks.sh 12/12 · doc-claims 的 FAIL 由 9 降到 7（SIGKILL/force 两条如期翻 PASS）· job-e2e 15/0 · 11 张表/admin 1 行/迁移幂等 · 审计端点 F-01 真的从 500 变 200、F-16 的 COUNT 绑参经 6 组筛选矩阵验证 total=rows=SQL 计数全部一致 · F-05 的 SIGTERM→SIGKILL 与 ?force=true 两条路径都有 agent 日志佐证 · 最后管理员守卫的拒绝路径在专属库上真的拦住了（400/200/400）· 限速桶键 (源地址,用户名) 的跨账号隔离成立（同源其它账号 200，被爆账号自身 429）· 编码阶段声称的 3 个 B 代码 bug 全部被独立复现（PG 逐字拒绝 COUNT(*)…FOR UPDATE、/proc/<pid>/stat 下标 20=vsize 且随分配变化、180f416 启动时 panic `Overlapping method route. Handler for GET /audit-logs already exists` 退出码 101）。**不成立的三条**：MRG6-02 的 PASS 计数（18 不是 19，根因是新引入的锁账号 429→401 回归 F-23）· MRG6-17 的 README 补强（完全没做）· MRG6-22 的勘误数字（旧口径失败项是两条）。另记 F-24（cluster/info 无数据时不再返回 null，README:442 被破坏）与 F-25（warnings 闸门 PASS→FAIL、duplication 0→0.4%、距离 409.5→603.9）。所有原始输出在 qa/evidence/m6-qa5-*.txt；两个可回放演示 demo/13、demo/14 已实跑（exit 0）。；增补（第 5 阶段返工复验 round 2，HEAD=5ceee91，2026-10-07T16:54Z–17:25Z）：对 4 个返工提交（3230e8b/d26ada0/5ceee91 等）在真实构建产物上**独立复跑全部判据**，编码阶段的自述逐条核对（不采信）。**已闭合**：F-23（release 产物 + api-checks `PASS=19 FAIL=1` + `SEC-LOGIN-LOCKOUT PASS expected=429 actual=429` + 自写探针『5 次错口令后正确口令 = 429』+ 源码 `handlers.rs:346` 与 master 同分支逐行等价）· MRG6-17（README.md:271 新增 4 行默认口令提示、代码默认值未动、doc-claims 73 PASS/6 FAIL 与上一轮逐条同名）· F-24（ops-checks CLUSTER-INFO-NULL-IDLE-AND-AVG 由 FAIL 转 PASS；原始响应体：有数据 `{total_gpus:6, idle_gpus:6, avg:0.0}`、无数据 `{idle_gpus:null, avg_gpu_utilization:null}`；并证明这是恢复 master 的写法）· F-25 的两项（`warnings` 0、`duplication` 0.0%，gate --profile quality 原样输出）· F-26/MRG6-23（旧口径 `PASS=11 FAIL=1`，F12 失败项恰好两条）· F-27/MRG6-24（资产与测试都在、两处文档头逐字写明 no product consumer yet、返工没碰任何测试目录）。**回归网**：`GATE coder: PASS`（spec 29 场景、tests 98/0、acceptance 29/29 missing 0）· `merge-m6-checks.sh` 干净整跑 `PASS=15 FAIL=0` rc=0 · `no-root-fixes-checks.sh` 12/12（旧口径 11/12）· `job-e2e.sh` 15/0 · `api-checks.sh` 19/1 · `ops-checks.sh` 20 PASS/3 FAIL（三条全是既有 finding，较上一轮少一条）· `no-root-checks.sh` 21 条里 5 条 FAIL 与上一轮**逐条同名**（NR6/NR6b/NR8/NR13/NR15，基线属性）· 约束清单三个基线口径全部 `N/0`（零删行）· 冻结面零改动 · 无整体 merge、无 push、PID 266643 启动时间未变、Linger=yes。**未闭合（如实记录，不作为判据）**：`clippy --all-targets` 的 9 条 MutexGuard-across-await 告警**不在基线 8601ac9**（crates/storage/tests/** 是本分支新增，8100441/6b504be/4eee91e），按任务书口径属『本次新引入』而非编码阶段自述的『既有』；它们落在 gauntlet.config.json 的 exclude 内，任何闸门都不覆盖 → F-28。M7 欠账残差距离 592.706（117 项，master 409.505 / 97 项）→ F-29。三个演示在本轮树上重放 exit 0（demo/13 文案已按 F-23 闭合更新、新增 demo/15 覆盖 429 与 null 两条翻转判据）。",
+ "verdictRule": "verdict=pass 的语义是：qa/constraints.json 的全部 81 条约束都被真实执行过，并且每一条的实际结果都与清单的预期一致（finding 类约束的预期就是「审计预期它不成立」，因此它们 FAIL 才是 pass）。quality 三闸门 complexity / crap / coverage 仍然是 FAIL，已原样记录在 gates 与 findings 里，不是本次 QA 的失败项，也没有被修饰成 PASS。；增补（第 5 阶段，no-root 维度）：同一条规则适用于第 1 阶段新增的 23 条 NR-*/MRG-02（NR-01…NR-21、NR-06b、MRG-02），合计 104 条；23 条全部配对（Q300-Q322/Q330）。其中 1 条复现出的实际行为与清单预期不一致（NR-06：agent 在干净 HOME + 缺失 -c 文件时 exit 1，清单写的是静默回退不崩），按本规则记 verdict=violated 并新增 finding NF-01；原有 81 条一个字段都没改。；增补（第 5 阶段，M6 三线合流轮）：同一条规则适用于第 1 阶段新增的 22 条 MRG6-01…MRG6-22，合计 140 条。22 条全部在合流后的真实构建产物上重新执行并配对（Q501–Q522）；其中 **19 条与清单预期一致，3 条不一致** → 按本规则 top-level verdict=fail：① MRG6-02 的 expect 里「api-checks 的 PASS 数从 18 升到 19」不成立（实测 18，因为 DOC-GET-AUDIT-LOGS 翻转的同时 SEC-LOGIN-LOCKOUT 由 PASS 掉成 FAIL，被 M6-11 的 `PASS ≥ 18` 容差盖住）→ 新 finding F-23（1 行修复点）；② MRG6-17 的「README 补强默认口令提示」根本没落地（本分支自 8601ac9 起没有改过 README）；③ MRG6-22 的勘误说旧口径 F12 只失败一条，实测是两条（与 MRG6-10 原文一致）→ F-26。另有两条独立记录：F-25（合流新增质量欠账：warnings 0→2、duplication 0→0.4%、next 距离 409.505→603.873，M7 的「不变差」不成立）与 F-27（A 资产无产品调用点 + MRG6-07 路径写法不精确）。既有 132 条检查与既有 findings 一个字段都没改。；增补（第 5 阶段返工复验 round 2，HEAD=5ceee91）：同一规则适用于**追加后的 24 条 MRG6**（MRG6-01…MRG6-24，其中 MRG6-23/24 是本轮返工按勘误与处置记录追加的）。round 1 判 fail 的三条本轮全部复跑：**MRG6-02**（锁定账号 429 回归 F-23）与 **MRG6-17**（README 默认口令补强）已按现状转 PASS，顶层条目改为轮 2 结果、round 1 原文原样保留在各自的 `round1` 里；**MRG6-22** 的清单文本（旧口径 F12『失败项只有一条』）仍然是**被证伪**的，本轮按 `superseded-by-erratum` 记 —— 它的明文勘误 MRG6-23（『恰好两条』）经复跑逐字成立，脚本与断言集合一行未动（改的是勘误文字，不是取样口径），因此这一条既没有 pass 也不构成本轮的失败项：24 条里 23 条 holds、1 条 superseded-by-erratum，**没有 must-hold 约束被证伪**（本轮对受返工影响的条目、追加的 MRG6-23/24、以及 merge-m6-checks.sh 覆盖的 M6-01…M6-15 全部在同一棵树上复跑；MRG6-16 的『树上自解析』由本轮所有 harness 输出都指向 merge-m6 直接印证；MRG6-04 是提交序列的历史属性 —— `git log --merges` 仍为空、合流提交哈希未变）。另有两条独立记录不作为判据：F-28（`clippy --all-targets` 的 9 条 MutexGuard 告警不是基线既有，属本分支新增的测试文件，且不在任何闸门的度量范围内 —— 见 Q545 的独立判定）与 F-29（M7 欠账残差 592.706；M6 口径明确不还债）。既有 132 条检查、既有 findings、以及 round 1 的全部结论只增不改（本轮对 Q502/Q517/Q522 的改动是把 round 1 字段整段搬到 `round1` 键下、顶层写入轮 2 结果，信息零丢失）。；增补（第 5 阶段 round 3，HEAD=7800865，F-28 单点复验）：本轮**不新增约束**（qa/constraints.json 一字未动），只复验 round 2 如实记为『未闭合』的那一条 —— F-28 的修复判据（clippy --all-targets -D warnings → rc=0、0 条告警）成立，且方法偏离（std::sync → tokio::sync 的 async-aware 锁）经四组独立实验裁决为**成立**：收窄作用域在对拍实验里 5/5 次并行失败、变体对 clippy 确实干净（两者不可兼得），而 async 锁在同样并行度下 5/5 全绿且墙钟与串行同级。因此 **round 3 没有 must-hold 约束被证伪**，顶层 verdict 保持 pass；Q545 记录的『这 9 条不是基线既有』这一历史判断一字未改（它对 8601ac9 至今成立），被闭合的是它引出的 finding F-28（status → closed + 追加 round3）。既有 178 条检查（Q545 原文保留不动）与既有 findings 一个字段都没改；本轮的 Q547–Q553 是新增条目。",
+ "summary": "81/81 条约束全部在真实构建产物上逐条复跑：76 条实测与清单预期一致，4 条 na（前端 / 容器部署 / 纯 CPU 降级 / 防火墙），1 条 unverifiable（合流方案 M1–M9 的答案属于第 6 阶段产出）。三条第 1 阶段声称的缺陷全部被独立复现：GET /api/audit-logs 恒 500、天级 90 天历史永不返回、jobs.pid 从不落库。另记 16 条产品问题（含一条被 500 掩盖的第二个缺陷：审计 COUNT 语句一个参数都没绑）与 9 条清单自身的不精确。产品本身不健康：硬阈值下 complexity 21/316、crap 45/316（maxCRAP 552）、行覆盖率 20.7%。增补（第 5 阶段 no-root 维度）：23 条 NR-* 约束在真实 release 二进制的干净状态上复跑并逐条独立复推；作者脚本的 23/23 PASS 可复现，但其中两条结论经不起对抗性检查——agent 在干净 HOME + 缺失 -c 文件时是 exit 1（不是「被 timeout 收掉」；harness 的 NR6 PASS 是假阳性，判据取的是 grep 的退出码），以及 NR-21 的证据量的是配置路径而非 env-only 那条（补齐后成立）。新增 finding：NF-01、NF-02（install-agent.sh:80 的 pkill）。核心结论不变：server/agent/TUI 确实能以 uid 3000、零 capability、零 HOME 外写入跑起来。；增补（第 5 阶段，M6 三线合流轮，HEAD=e8fd233）：22 条 MRG6 约束在合流后的真实产物上逐条独立复跑（Q501–Q531 + 新 findings F-23…F-27）。**成立的部分**：GATE coder PASS（build ✅、98 tests/0 failed、acceptance 29/29）· merge-m6-checks.sh 干净状态 15/15 FAIL=0 · no-root-fixes-checks.sh 12/12 · doc-claims 的 FAIL 由 9 降到 7（SIGKILL/force 两条如期翻 PASS）· job-e2e 15/0 · 11 张表/admin 1 行/迁移幂等 · 审计端点 F-01 真的从 500 变 200、F-16 的 COUNT 绑参经 6 组筛选矩阵验证 total=rows=SQL 计数全部一致 · F-05 的 SIGTERM→SIGKILL 与 ?force=true 两条路径都有 agent 日志佐证 · 最后管理员守卫的拒绝路径在专属库上真的拦住了（400/200/400）· 限速桶键 (源地址,用户名) 的跨账号隔离成立（同源其它账号 200，被爆账号自身 429）· 编码阶段声称的 3 个 B 代码 bug 全部被独立复现（PG 逐字拒绝 COUNT(*)…FOR UPDATE、/proc/<pid>/stat 下标 20=vsize 且随分配变化、180f416 启动时 panic `Overlapping method route. Handler for GET /audit-logs already exists` 退出码 101）。**不成立的三条**：MRG6-02 的 PASS 计数（18 不是 19，根因是新引入的锁账号 429→401 回归 F-23）· MRG6-17 的 README 补强（完全没做）· MRG6-22 的勘误数字（旧口径失败项是两条）。另记 F-24（cluster/info 无数据时不再返回 null，README:442 被破坏）与 F-25（warnings 闸门 PASS→FAIL、duplication 0→0.4%、距离 409.5→603.9）。所有原始输出在 qa/evidence/m6-qa5-*.txt；两个可回放演示 demo/13、demo/14 已实跑（exit 0）。；增补（第 5 阶段返工复验 round 2，HEAD=5ceee91，2026-10-07T16:54Z–17:25Z）：对 4 个返工提交（3230e8b/d26ada0/5ceee91 等）在真实构建产物上**独立复跑全部判据**，编码阶段的自述逐条核对（不采信）。**已闭合**：F-23（release 产物 + api-checks `PASS=19 FAIL=1` + `SEC-LOGIN-LOCKOUT PASS expected=429 actual=429` + 自写探针『5 次错口令后正确口令 = 429』+ 源码 `handlers.rs:346` 与 master 同分支逐行等价）· MRG6-17（README.md:271 新增 4 行默认口令提示、代码默认值未动、doc-claims 73 PASS/6 FAIL 与上一轮逐条同名）· F-24（ops-checks CLUSTER-INFO-NULL-IDLE-AND-AVG 由 FAIL 转 PASS；原始响应体：有数据 `{total_gpus:6, idle_gpus:6, avg:0.0}`、无数据 `{idle_gpus:null, avg_gpu_utilization:null}`；并证明这是恢复 master 的写法）· F-25 的两项（`warnings` 0、`duplication` 0.0%，gate --profile quality 原样输出）· F-26/MRG6-23（旧口径 `PASS=11 FAIL=1`，F12 失败项恰好两条）· F-27/MRG6-24（资产与测试都在、两处文档头逐字写明 no product consumer yet、返工没碰任何测试目录）。**回归网**：`GATE coder: PASS`（spec 29 场景、tests 98/0、acceptance 29/29 missing 0）· `merge-m6-checks.sh` 干净整跑 `PASS=15 FAIL=0` rc=0 · `no-root-fixes-checks.sh` 12/12（旧口径 11/12）· `job-e2e.sh` 15/0 · `api-checks.sh` 19/1 · `ops-checks.sh` 20 PASS/3 FAIL（三条全是既有 finding，较上一轮少一条）· `no-root-checks.sh` 21 条里 5 条 FAIL 与上一轮**逐条同名**（NR6/NR6b/NR8/NR13/NR15，基线属性）· 约束清单三个基线口径全部 `N/0`（零删行）· 冻结面零改动 · 无整体 merge、无 push、PID 266643 启动时间未变、Linger=yes。**未闭合（如实记录，不作为判据）**：`clippy --all-targets` 的 9 条 MutexGuard-across-await 告警**不在基线 8601ac9**（crates/storage/tests/** 是本分支新增，8100441/6b504be/4eee91e），按任务书口径属『本次新引入』而非编码阶段自述的『既有』；它们落在 gauntlet.config.json 的 exclude 内，任何闸门都不覆盖 → F-28。M7 欠账残差距离 592.706（117 项，master 409.505 / 97 项）→ F-29。三个演示在本轮树上重放 exit 0（demo/13 文案已按 F-23 闭合更新、新增 demo/15 覆盖 429 与 null 两条翻转判据）。；增补（第 5 阶段 round 3，HEAD=7800865，F-28 单点复验，2026-10-07T18:05Z ~ 18:40Z）：对编码阶段的 F-28 修复（7800865：crates/storage/tests 的串行化锁从 std::sync::Mutex 换成 tokio::sync::Mutex）在真实构建产物上独立复跑，**判据成立** —— `cargo clippy --workspace --all-targets --offline -- -D warnings` → **rc=0、0 条告警**（round 2 同一口径下是 9 条『this MutexGuard is held across an await point』）。**方法偏离裁决：成立**（不是取巧）——① 改动面逐项未动：assert 计数 19/19/26 pre=post、函数名集合除 helper 由 fn 变 async fn 外逐字相同、#[allow] 0 处、await_holding_lock 字样 0 处、全域无 clippy.toml/[lints] 表/抑制属性；② 『不能收窄作用域』经**反证实验**成立：把 guard 收窄成同步块（std 锁下唯一能让 lint 闭嘴的写法）的对拍变体在同一提交、同一份源码上构建，它对 clippy 确实干净（rc=0），但 --test-threads=8 并行 5/5 次失败（4 条测试挂 3 条，left/right = 12vs3、8vs2、0vs2）——收窄与串行化不可兼得；③ 『async 锁保留互斥语义』成立：工作树二进制 8 线程并行 5/5 全绿、墙钟 0.09~0.10s 与 --test-threads=1 的 0.11s 同级（收窄变体同并行度只要 0.03~0.04s 就挂 = 它确实变快了、也就是真的没串行化）；另用两个进程并发的探针复现同一类污染（两进程各挂 3 条，left/right = 6vs3、0vs2）。**回归网**：GATE coder PASS（98 tests / 0 failed、acceptance 29/29、missing 0）· merge-m6-checks.sh 干净整跑 15 PASS / 0 FAIL（rc=0）· no-root-fixes-checks.sh --no-slow 12/12（F1/F5 按口径静态）· gate --profile quality：warnings 0、tidy 0、duplication ratio 0 / clones 0、scope 1.0（35 文件），complexity/crap/coverage 仍 ❌（M7 欠债 F-29，逐项未变）。**范围纪律**：qa/constraints.json 相对基线 244 增 /**0 删**；冻结面（.gauntlet/、gauntlet.config.json、gauntlet-baseline.json、web/、deploy/nginx.conf）零改动；features/ 只有 4 个新增文件（+222/-0）；分支 0 个 merge 提交；B 的活工作树（mtime=2026-08-12 06:45:37）与常驻 agent PID 266643（lstart=Wed Sep 2 12:59:26 2026）未被触碰；Linger=yes 未变；没有 push。**本轮新增**：检查 Q547–Q553、qa/evidence/m6-qa7-{f28,gates,blast-radius,demos}.txt、可回放演示 demo/16 + qa/harness/m6-demo-f28.sh；F-28 标为 closed（既有字段一字未动，仅 status 翻转 + 追加 round3），Q545 的 round 2 原文原样保留。另自曝并修掉本轮 QA 侧的一个 demo 驱动缺陷（按 mtime 选二进制会选到对拍变体的产物，已改为 cargo 解析 + sha256 钉身份）。",
  "vocabulary": {
   "status": "pass = 实际结果与清单预期一致；fail = 与清单预期不一致",
   "verdict": "holds = 约束文本（含 finding 类「X 是坏的」这种断言）被证实为真；violated = 约束文本被证伪；na = 本环境不适用；unverifiable = 本环境无法验证",
@@ -60,6 +60,27 @@
     "extra-checks.sh 自带 server/agent 起停（脚本 33-34/89/98-99 行），跑完栈是停的 —— 紧随其后的探针要先自己把栈起回来。",
     "ops-checks.sh:112 的 `delete from node_metrics;` 是已记录的夹具卫生问题（N9）；本轮两次探针也做过同样的清表，都是 QA 夹具行为。",
     "任务书说编码阶段的返工是『4 个提交』；分支实况是 3 个（`git rev-list --count 25f475a..5ceee91` = 3：3230e8b / d26ada0 / 5ceee91），reflog 无 amend / reset / rebase 痕迹，合流提交与 25f475a 的哈希都未变 ——『未重做合流』本身成立，提交计数不影响任何判据。见 qa/evidence/m6-qa6-rework-commit-audit.txt。"
+   ]
+  },
+  "m6F28Round": {
+   "stage": "第 5 阶段 QA round 3（F-28 单点复验：编码阶段在 7800865 的修复 + 主动标注的方法偏离）",
+   "worktree": "/public/tianyuyang/code/ClusterScope-review/merge-m6",
+   "branch": "gauntlet/merge-m6",
+   "commit": "78008652b823fc3f308d35dd5c909dd98a924f5f",
+   "commitShort": "7800865",
+   "reviewedCommit": "7800865 [merge] F-28: clear the 9 clippy await_holding_lock warnings in crates/storage/tests（相对 aa093d4 只改 2 个测试文件 + 1 个证据文件；分支相对 8601ac9 共 28 个提交、0 个 merge 提交）",
+   "previousRoundHeads": "round 1 = 25f475a（verdict=fail）· round 2 = 5ceee91（三处返工复验闭合；F-28/F-29 如实记为未闭合项）",
+   "mergeBase": "8601ac9",
+   "binaries": "本轮判据全部离线复跑：`cargo clippy --workspace --all-targets --offline -- -D warnings` rc=0（5.42s / 5.73s，复用缓存）；验收测试二进制由 **cargo 按工作树解析**（target/debug/deps/audit_queries_acceptance-1cff6e0858ccf228，sha256 见 qa/evidence/m6-qa7-f28.txt 的 G 段）—— 不再按 mtime 猜（见 notes 里的 demo 驱动缺陷）；端到端段由 harness 自己起停 server/agent",
+   "database": "PostgreSQL 16.4 postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope（storage 验收测试直连共享库，只动 m6- 前缀夹具行，从不 TRUNCATE / 全表 DELETE）",
+   "windowUtc": "2026-10-07T18:05Z ~ 2026-10-07T18:40Z（本地 +08:00 02:05 ~ 02:40）",
+   "qaEntry": "sh gauntlet-out/qa7/run-gates.sh（clippy -D warnings / gate --profile coder / merge-m6-checks.sh 全量 / no-root-fixes-checks.sh --no-slow / gate --profile quality）+ sh gauntlet-out/qa7/qa7-probe.sh（四组独立实验）+ sh qa/harness/m6-demo-f28.sh（可回放版本）；原始输出在 qa/evidence/m6-qa7-{f28,gates,blast-radius,demos}.txt",
+   "sharedHostPolicy": "只按 PID 文件停自己起的 server/agent（本轮 harness 跑完无 pid 文件残留，本机 clusterscope 进程只剩常驻 agent 与 PG）；全程无 pkill/killall；常驻 agent PID 266643（lstart=Wed Sep 2 12:59:26 2026）未被触碰；B 的活工作树 /public/tianyuyang/code/ClusterScope（mtime=2026-08-12 06:45:37 +0800）未被触碰；Linger=yes 未变；没有 push（本地无 origin/gauntlet/merge-m6 引用）、没有开 PR。",
+   "notes": [
+    "本轮只做追加、不改写历史：Q545（round 2 记的『未闭合项』原文）一字未动 —— 它对基线 8601ac9 的判断（这 9 条不是『既有』）至今成立，被闭合的是它引出的 finding F-28（只翻转 status 并追加 round3）。",
+    "summary 与 verdictRule 各追加一段（round 3），既有文本逐字节保留（追加后的值是原值的前缀，核对见 Q547/本轮追加段）。",
+    "F-28 的方法偏离（std::sync::Mutex → tokio::sync::Mutex）经四组独立实验裁决为**成立**：收窄作用域的对拍变体 5/5 次并行运行把 4 条测试打挂 3 条（而它对 clippy 确实是干净的），async 锁在同一并行度下 5/5 全绿且墙钟与串行同级。",
+    "自曝一条本轮 QA 侧缺陷并已修：demo 驱动 qa/harness/m6-demo-f28.sh 第一版用 `ls -t target/debug/deps/audit_queries_acceptance-*` 选二进制，而**对拍变体的产物躺在同一个 deps/ 目录且更晚构建**，于是 demo/16 的 serial/parallel 两步量到的是变体（录到 3 条测试失败、demo 退出 1）。已改成用 cargo 按工作树解析产物路径并在记录里打印 sha256，重放后 serial/parallel 指向工作树二进制（Q553）。机制诊断见 qa/evidence/m6-qa7-f28.txt 的 H 段：两棵源码根的这个测试目标共用同一个 deps/ 文件名（sha256 820f3aa0… 工作树 vs 0a965593… 变体），cargo 每次按根重建该文件，所以『用 cargo 解析』是可靠口径。变体产物只在 gitignore 的 target/ 里，不影响任何提交内容。"
    ]
   }
  },
@@ -2800,6 +2821,106 @@
     "m6-qa6-demo-15-m6-lockout-and-cluster-info.txt"
    ],
    "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q547",
+   "constraint": null,
+   "title": "F-28 闭合判据：7800865 上 cargo clippy --workspace --all-targets --offline -- -D warnings → rc=0、0 条告警（round 2 同一口径下是 9 条）",
+   "action": "cd /public/tianyuyang/code/ClusterScope-review/merge-m6；export PATH=$HOME/.cargo/bin:$PATH；cargo clippy --workspace --all-targets --offline -- -D warnings; echo rc=$?（完整输出见 qa/evidence/m6-qa7-f28.txt 的 A 段与 m6-qa7-gates.txt）",
+   "expected": "rc=0 且没有任何 warning: 行 —— 9 条『this MutexGuard is held across an await point』必须消失（Q545 在 round 2 记录的失败形态）",
+   "actual": "rc=0；输出只有 `Compiling protocol` + 5 行 `Checking <crate>`（common/protocol/tui/scheduler/storage/agent/server 里能复用的都跳过）+ `Finished dev profile [unoptimized + debuginfo] target(s) in 5.73s`（第二次跑 5.42s，缓存全命中时 0.34s），**0 条 warning 行**，-D warnings 也没有触发 deny。7800865 之后 --all-targets（含被 metrics exclude 的测试目标）也干净了。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa7-f28.txt",
+    "m6-qa7-gates.txt"
+   ],
+   "ts": "2026-10-07T18:10Z"
+  },
+  {
+   "id": "Q548",
+   "constraint": null,
+   "title": "F-28 改动面逐项对账：断言/测试名一字未动、#[allow] 0 处、全域没有 lint 抑制（不是靠关规则过闸）",
+   "action": "git diff 5ceee91 7800865 -U0 -- crates/storage/tests/；git show <rev>:crates/storage/tests/<f>.rs 里数 assert / #[allow / await_holding_lock / #[tokio::test] / lock_fixture 的出现次数与 ^fn|^async fn 名集合（pre=5ceee91 post=7800865）；git grep -n await_holding_lock 7800865；git grep -nE '#!?[allow' 7800865 -- crates/storage/tests/；git ls-tree -r --name-only 7800865 | grep -E 'clippy.toml|.clippy|.cargo/config|lints'",
+   "expected": "diff 只允许出现在锁的声明 / helper / 9 个调用点；断言计数与测试名集合 pre=post；源码里没有 await_holding_lock 抑制、没有 #[allow]、没有 clippy.toml / [lints] 表",
+   "actual": "① diff（-U0，两个文件 44 行改动）只有三类：`use std::sync::Mutex` → `use tokio::sync::{Mutex, MutexGuard}`、`Mutex::new(())` → `Mutex::const_new(())`、helper `fn lock_fixture()` → `async fn lock_fixture()`（连带 4 行注释重写），以及 9 处 `let _guard = lock_fixture();` → `let _guard = lock_fixture().await;`（audit 4 处、user 5 处 = 9 条告警一一对应）。② 断言计数 pre/post：audit 19→19、user 19→19、conversions 26→26。③ 函数名集合（含 helper）逐文件 diff：audit 9↔9、user 10↔10 只有 `fn lock_fixture` → `async fn lock_fixture` 一行差异，conversions 3↔3 IDENTICAL；4+5 个 #[tokio::test] 测试名逐字相同。④ 每个测试文件 `#[allow` 计数 0、`await_holding_lock` 字样 0。⑤ `git grep -n await_holding_lock 7800865` 只命中 qa/ 下的取证文字（qa/evidence/m6-f28-gates.txt 与本报告自己的叙述），源码零命中；全域没有 clippy.toml、没有 .cargo/config、没有 [lints] 表 —— 修的是代码，不是规则。⑥ 9 个 lock_fixture() 调用点对应 9 个测试，每个测试体的第一条语句都还是取锁，guard 仍覆盖整个测试体。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa7-f28.txt"
+   ],
+   "ts": "2026-10-07T18:12Z"
+  },
+  {
+   "id": "Q549",
+   "constraint": null,
+   "title": "裁决 A『guard 必须覆盖整个测试体、不能收窄作用域』—— 成立（反证实验：收窄变体 + 双进程并发）",
+   "action": "① 读测试：4 条 audit 用例共用同一批 m6- 夹具行（固定用户名 m6-audit / m6-other，DELETE→INSERT→按计数断言）；② 反证：git archive 7800865 导出源码快照，把 guard 收窄成 `{ let _guard = lock_fixture(); }`（std::sync::Mutex 下唯一不跨 await 的写法），用 CARGO_TARGET_DIR 复用 target/ 构建变体后 --test-threads=8 跑 5 次；③ 另用两个进程并发跑工作树二进制（进程内的 tokio 锁跨进程不可见）",
+   "expected": "若收窄可行，变体在并行下应与串行一样全绿；若理由成立，变体与双进程都会互相踩",
+   "actual": "① 收窄变体：`cargo clippy --workspace --all-targets -- -D warnings` **rc=0**（NARROW_CLIPPY_RC=0 —— 收窄确实能让 lint 闭嘴）；--test-threads=1 全绿，但 --test-threads=8 **5/5 次失败**：每次都是 `test result: FAILED. 1 passed; 3 failed`，断言 left/right = 12 vs 3、8 vs 2、0 vs 2、log_id 互不相等 —— 别的用例把夹具行删了/插了。② 两个进程并发（工作树二进制）：两边各 `1 passed; 3 failed`，left/right = 6 vs 3、0 vs 2。③ 结论：『收窄』不是可行的替代方案 —— 收窄到不跨 await 就等于取消串行化，而串行化正是这些断言成立的前提（固定用户名 + 固定计数期望）。收窄与『清掉告警』不可兼得，async-aware 锁是保住语义的那条路。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa7-f28.txt",
+    "m6-qa7-demos.txt"
+   ],
+   "ts": "2026-10-07T18:14Z"
+  },
+  {
+   "id": "Q550",
+   "constraint": null,
+   "title": "裁决 B『tokio::sync::Mutex 保留互斥语义』—— 成立（并行 5/5 全绿 + 墙钟与串行同级）",
+   "action": "工作树二进制（由 cargo 解析并打印 sha256）：--test-threads=1、--test-threads=8 × 5 次；再与收窄变体同口径对照墙钟",
+   "expected": "8 线程并行下 0 失败，且墙钟与串行同级（= 用例真的被串行化了）；收窄变体在同一并行度下应当明显更快且失败",
+   "actual": "工作树（async 锁）：--test-threads=1 → 4 passed / 0 failed / 0.11s；--test-threads=8 → **5/5 次全绿**（4 passed，0.09~0.10s）；同一条路径在 `gate --profile coder` 的 98 条测试里也是 4/4、5/5。收窄变体：--test-threads=8 → 0.03~0.04s（明显更快）且 3 条失败。『更快 + 失败』正好反证：快是因为没有串行化；工作树二进制既没变快也没失败 → 互斥还在。机制上：tokio 的 MutexGuard 是排他守卫，9 个测试各自从测试体第一条语句持有到函数结束（Q548 ⑥），与 std 的语义等价，只是等待时不阻塞 runtime 线程 —— 这也解释了修复的动机（clippy 的 await_holding_lock 正是针对「std guard 跨 await」这条通用风险）。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa7-f28.txt"
+   ],
+   "ts": "2026-10-07T18:15Z"
+  },
+  {
+   "id": "Q551",
+   "constraint": null,
+   "title": "回归网在 7800865 上整跑：gate coder（98/98、29/29）、merge-m6-checks 15/15、no-root-fixes --no-slow 12/12、quality warnings 0 / duplication 0",
+   "action": "sh gauntlet-out/qa7/run-gates.sh：顺序 cargo clippy -D warnings → node .gauntlet/gauntlet.mjs gate --profile coder → sh qa/harness/merge-m6-checks.sh → sh qa/harness/no-root-fixes-checks.sh --no-slow → node .gauntlet/gauntlet.mjs gate --profile quality（顺序执行，避免两条 kit 命令互相删 junit/lcov）",
+   "expected": "coder PASS（tests 98/0、acceptance 29/29 missing 0）· M6 判据 15 PASS 0 FAIL · no-root 12/12（F1/F5 按 --no-slow 只做静态）· quality 的 warnings / duplication / tidy / scope 达标，complexity / crap / coverage 仍 FAIL（M7 欠债，本轮范围外）",
+   "actual": "① clippy rc=0（Q547）。② `GATE coder: PASS` —— spec 29 场景、build ✅、tests 98 total / 0 failed、acceptance 29 passed / 0 failed / 0 missing；分套件 audit_queries_acceptance 4/4、user_queries_acceptance 5/5、integration_test 7/7、三个 bin 16/16+16/16+3/3、lib 23/23+12/12、其它 2/2+2/2+6/6。③ `M6-CHECKS: PASS=15 FAIL=0` rc=0（含 M6-02 cargo test 98/0、M6-07 no-root 12/0、M6-11 api-checks PASS=19、M6-12 审计 total=738、M6-14 job-e2e 15/0、M6-15 表 11 张 / admin 1 行）。④ `PASS=12 FAIL=0`（F1/F5 静态；F12 负例自检 5/5）。⑤ `gate --profile quality`：warnings 0 ✅、tidy findings 0 ✅、duplication ratio 0 / clones 0 ✅、scope 1.0（35 文件）✅；complexity offenders 34 / crap offenders 56（maxCrap 552）/ coverage 31.2% ❌ —— 与 round 2 逐项相同（F-29 的残差：没变差，也没还债）。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa7-gates.txt"
+   ],
+   "ts": "2026-10-07T18:10Z"
+  },
+  {
+   "id": "Q552",
+   "constraint": null,
+   "title": "范围与纪律复核：constraints 零删行、冻结面零改动、无整体 merge、B 的活工作树与常驻 PID 266643 未被触碰、没有 push",
+   "action": "git diff --numstat 8601ac9..HEAD -- qa/constraints.json；git diff --name-only 8601ac9..HEAD -- .gauntlet gauntlet.config.json gauntlet-baseline.json web deploy/nginx.conf；git diff --numstat 8601ac9..HEAD -- features/；git log --merges --oneline 8601ac9..HEAD；git diff --numstat aa093d4..HEAD；stat + git log B 线；ps -o pid=,lstart= -p 266643；loginctl show-user tianyuyang --property=Linger；git branch -r",
+   "expected": "constraints 只增不删；冻结面为空；features/ 只有新增；0 个 merge 提交；本轮的 F-28 提交只碰两个测试文件 + 证据；B 线 mtime/HEAD 不变；PID 266643 lstart 不变；Linger=yes；没有远端引用",
+   "actual": "① qa/constraints.json：`244 0`（244 增 / **0 删**，相对 8601ac9 的全分支累计）。② 冻结面 `.gauntlet/ gauntlet.config.json gauntlet-baseline.json web/ deploy/nginx.conf` → **空**（零改动）。③ features/：4 个新文件 `+222 / -0`（合流新增的 Gherkin 场景，没有修改既有场景文件）。④ `git log --merges 8601ac9..HEAD | wc -l` = **0**（没有整体 merge；M6 的合流是以普通提交落地的），全分支 28 个提交。⑤ F-28 提交（aa093d4..7800865）：audit `11/10`、user `12/11`、evidence `202/0` —— 只有这三个文件，第 4 个都没有。⑥ B 线 /public/tianyuyang/code/ClusterScope：mtime=2026-08-12 06:45:37 +0800、HEAD=19d8fbc（master），与开工时一致。⑦ ps -p 266643 → PID 266643 lstart 仍是 Wed Sep 2 12:59:26 2026（与 round 1/2 记录同一时刻）；本机 clusterscope 进程收尾后只剩常驻 agent 与 PG，gauntlet-out/qa/*.pid 无残留。⑧ Linger=yes 未变；git branch -r 里没有 merge-m6（没有 push 过）。⑨ 每步之后工作树都干净（只有本轮新增的待提交文件）。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa7-blast-radius.txt"
+   ],
+   "ts": "2026-10-07T18:24Z"
+  },
+  {
+   "id": "Q553",
+   "constraint": null,
+   "title": "演示脚本在本轮树上重放：13/14/15 照旧 exit 0，新增 16（F-28 的串行化实验）exit 0",
+   "action": "node .gauntlet/gauntlet.mjs demo demo/13-m6-audit-endpoint.json / 14-m6-force-cancel.json / 15-m6-lockout-and-cluster-info.json / 16-m6-f28-storage-tests-serialized.json",
+   "expected": "四个 demo 的每条命令退出码都等于 expectCode；跑完不留下自起的 server/agent",
+   "actual": "13 rc=0、14 rc=0、15 rc=0（沿用 round 2 的录制内容，逐条命令 exit 0，13 里的 api-checks 一步按已记录的 19 PASS/1 FAIL 仍是 expectCode=1 的预期失败）；新增 16 rc=0：clippy 步 exit 0（0 条告警）、serial 步 exit 0（4 passed，二进制路径 + sha256 已钉在录制里）、parallel 步 exit 0（--test-threads=8，3 次全绿）、narrowed 步 exit 0（对拍变体在 8 线程下 3 条失败 → 驱动打印『不能收窄』的裁决行）。收尾 ps：只剩常驻 agent 266643，工作树干净。**自曝**：16 的第一版录制曾失败（parallel 步 exit 1）——驱动用 ls -t 选二进制，选到了更晚构建的对拍变体产物；已改成 cargo 解析并打印 sha256，重放通过（缺陷记在 environment.m6F28Round.notes）。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa7-demos.txt"
+   ],
+   "ts": "2026-10-07T18:35Z"
   }
  ],
  "findings": [
@@ -3321,8 +3442,9 @@
     "m6-qa6-clippy-all-targets.txt",
     "m6-qa6-static-probes.txt"
    ],
-   "status": "open",
-   "round2": "本轮只记录，不判定为 M6 验收判据的失败项：9 条都落在配置的 exclude 内，`warnings` 闸门 0、`gate --profile coder/quality` 的判定与既有一致。需要 Leader 决定：改测试写法（把 guard 限制在同步作用域 / 用 `spawn_blocking` 之外的手段串行化），或由第 0 阶段把测试目录的度量口径写清楚。"
+   "status": "closed",
+   "round2": "本轮只记录，不判定为 M6 验收判据的失败项：9 条都落在配置的 exclude 内，`warnings` 闸门 0、`gate --profile coder/quality` 的判定与既有一致。需要 Leader 决定：改测试写法（把 guard 限制在同步作用域 / 用 `spawn_blocking` 之外的手段串行化），或由第 0 阶段把测试目录的度量口径写清楚。",
+   "round3": "**已闭合（QA round 3，2026-10-07T18:05Z ~ 18:40Z，HEAD=7800865）**。编码阶段在 7800865 把 `crates/storage/tests/{audit_queries,user_queries}_acceptance.rs` 的串行化锁从 `std::sync::Mutex` 换成 `tokio::sync::Mutex`（`Mutex::const_new` + `async fn lock_fixture()` + 9 处 `.await`），并主动标注这是『方法偏离（不是收窄作用域）』。独立复验（自述不采信）：① **判据成立** —— `cargo clippy --workspace --all-targets --offline -- -D warnings` → **rc=0、0 条告警**（Q547）。② **改动面干净** —— 断言计数 19/19/26 pre=post、测试名集合逐字相同（只有 helper 从 fn 变 async fn）、`#[allow]` 0 处、`await_holding_lock` 字样 0 处、全域无 lint 抑制（Q548）。③ **方法偏离裁决：成立** —— 『不能收窄』经反证实验成立（收窄变体对 clippy 干净，但 8 线程并行 5/5 次把 4 条测试打挂 3 条；双进程并发同样互相踩），『async 锁保留互斥语义』也成立（8 线程 5/5 全绿、墙钟 0.09~0.10s 与串行 0.11s 同级，而收窄变体 0.03~0.04s 就挂）（Q549/Q550）。④ **回归零差异** —— gate coder PASS（98/0、29/29）、merge-m6-checks 15/0、no-root --no-slow 12/0、quality warnings 0 / duplication 0（Q551）。⑤ 原记录的『这 9 条不是基线既有』仍然成立，只是问题本身已被消除；Q545 的 round 2 原文与本节其它字段（含 round2）一字未动。证据：qa/evidence/m6-qa7-f28.txt（四组实验 + 对拍变体 diff）、m6-qa7-gates.txt、m6-qa7-blast-radius.txt、m6-qa7-demos.txt、demo/16 与 qa/harness/m6-demo-f28.sh。"
   },
   {
    "id": "F-29",

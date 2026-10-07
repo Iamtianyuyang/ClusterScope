@@ -1,0 +1,49 @@
+### m6-qa7-demos.txt -- 演示脚本在 7800865 上的重放（node .gauntlet/gauntlet.mjs demo ...）
+### 生成: Wed Oct  7 06:35:25 PM UTC 2026  主机: lyy-node03  HEAD=7800865
+### 每个 demo 都是真跑（kit 的录制器会执行每条命令并记录真实退出码）
+
+===== demo/13-m6-audit-endpoint =====
+$ sh qa/harness/server-up.sh false  -> exit 0
+$ sh qa/harness/api-checks.sh  -> exit 1
+$ sh qa/harness/m6-demo-audit.sh  -> exit 0
+$ curl -s -o /dev/null -w 'start_time_ms=abc -> HTTP %{http_code}\n' 'http://127.0.0.1:8080/api/audit-logs?start_time_ms=abc'  -> exit 0
+$ sh qa/harness/server-down.sh  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/evidence/demos/13-m6-audit-endpoint.html
+DEMO_RC=0
+
+===== demo/14-m6-force-cancel =====
+$ sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01  -> exit 0
+$ sh qa/harness/m6-demo-cancel.sh  -> exit 0
+$ grep -E 'SIGTERM ignored|Forced cancellation' gauntlet-out/qa/agent.log | tail -2  -> exit 0
+$ sh qa/harness/m6-demo-terminal-409.sh  -> exit 0
+$ sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/evidence/demos/14-m6-force-cancel.html
+DEMO_RC=0
+
+===== demo/15-m6-lockout-and-cluster-info =====
+$ sh qa/harness/server-up.sh false  -> exit 0
+$ sh qa/harness/m6-demo-lockout-cluster.sh  -> exit 0
+$ sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/evidence/demos/15-m6-lockout-and-cluster-info.html
+DEMO_RC=0
+
+===== demo/16-m6-f28-storage-tests-serialized =====
+$ sh qa/harness/m6-demo-f28.sh clippy  -> exit 0
+$ sh qa/harness/m6-demo-f28.sh serial  -> exit 0
+$ sh qa/harness/m6-demo-f28.sh parallel  -> exit 0
+$ sh qa/harness/m6-demo-f28.sh narrowed  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/evidence/demos/16-m6-f28-storage-tests-serialized.html
+DEMO_RC=0
+
+===== 收尾：本机 clusterscope 进程 =====
+ 266643 Wed Sep  2 12:59:26 2026 /public/tianyuyang/.local/bin/clusterscope-agent -c /public/tianyuyang/.config/clusterscope/agent.yaml
+2213881 Sun Sep 13 18:59:05 2026 /tmp/clusterscope-live-1789276406/web/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.25.12 --ping
+4176115 Wed Oct  7 03:22:49 2026 /public/tianyuyang/code/ClusterScope-review/pg16/bin/postgres -D /public/tianyuyang/code/ClusterScope-review/pgdata -p 5432 -k /tmp -c listen_addresses=127.0.0.1
+4189355 Thu Oct  8 02:35:19 2026 bash -c cd /public/tianyuyang/code/ClusterScope-review/merge-m6 && chmod +x qa/harness/m6-demo-f28.sh gauntlet-out/qa7/qa7-probe2.sh && nohup sh -c "sh gauntlet-out/qa7/qa7-probe2.sh && sh gauntlet-out/qa7/qa7-demos.sh" >/dev/null 2>&1 & sleep 3; echo relaunched
+===== 收尾：工作树 =====
+?? demo/16-m6-f28-storage-tests-serialized.json
+?? qa/evidence/m6-qa7-blast-radius.txt
+?? qa/evidence/m6-qa7-demos.txt
+?? qa/evidence/m6-qa7-f28.txt
+?? qa/evidence/m6-qa7-gates.txt
+?? qa/harness/m6-demo-f28.sh

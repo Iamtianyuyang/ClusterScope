@@ -1,0 +1,71 @@
+### m6-qa7-blast-radius.txt -- 本轮的范围 / 冻结面 / 共享机器纪律（活体命令 + 原始输出）
+### 生成: Wed Oct  7 06:24:43 PM UTC 2026  主机: lyy-node03
+
+## 1) qa/constraints.json 相对基线只增不删（numstat 第二列 = 删行数）
+$ git diff --numstat 8601ac9..HEAD -- qa/constraints.json
+244	0	qa/constraints.json
+
+## 2) 冻结面零改动（相对 8601ac9）
+$ git diff --name-only 8601ac9..HEAD -- .gauntlet gauntlet.config.json gauntlet-baseline.json web deploy/nginx.conf
+   （空 = 零改动）
+
+## 3) features/ 相对基线只有新增（numstat：增行 / 删行）
+$ git diff --numstat 8601ac9..HEAD -- features/
+47	0	features/merge_m6_audit_queries.feature
+73	0	features/merge_m6_auth_hardening.feature
+55	0	features/merge_m6_job_safety.feature
+47	0	features/merge_m6_legacy_assets.feature
+
+## 4) 没有整体 merge（git log --merges 为空；合并都是普通提交）
+$ git log --merges --oneline 8601ac9..HEAD | wc -l
+0
+$ git rev-list --count 8601ac9..HEAD
+28
+
+## 5) F-28 这个提交本身改了哪些文件
+$ git diff --stat aa093d4..HEAD
+ crates/storage/tests/audit_queries_acceptance.rs |  21 +--
+ crates/storage/tests/user_queries_acceptance.rs  |  23 +--
+ qa/evidence/m6-f28-gates.txt                     | 202 +++++++++++++++++++++++
+ 3 files changed, 225 insertions(+), 21 deletions(-)
+$ git diff --numstat aa093d4..HEAD
+11	10	crates/storage/tests/audit_queries_acceptance.rs
+12	11	crates/storage/tests/user_queries_acceptance.rs
+202	0	qa/evidence/m6-f28-gates.txt
+
+## 6) B 的活工作树（/public/tianyuyang/code/ClusterScope）没有被本轮触碰
+$ stat -c '%n mtime=%y' /public/tianyuyang/code/ClusterScope
+/public/tianyuyang/code/ClusterScope mtime=2026-08-12 06:45:37.194918000 +0800
+$ git -C /public/tianyuyang/code/ClusterScope log -1 --format='%H %ci %s'
+19d8fbcf5a26b8b8247ccea8b7b3205a58b12c7a 2026-08-12 06:45:25 +0800 fix: web — refresh-token rotation on 401, read-only-mode probe, job args quoting
+
+## 7) 常驻 agent PID 266643 未被触碰（lstart 与更早几轮记录一致：Wed Sep 2 12:59:26 2026）
+$ ps -o pid=,lstart=,etime=,cmd= -p 266643
+ 266643 Wed Sep  2 12:59:26 2026 35-13:25:17 /public/tianyuyang/.local/bin/clusterscope-agent -c /public/tianyuyang/.config/clusterscope/agent.yaml
+
+## 8) Linger 保持 yes
+$ loginctl show-user tianyuyang --property=Linger
+Linger=yes
+
+## 9) 本机全部 clusterscope 进程（本轮收尾后只应有常驻 266643）
+$ ps -u tianyuyang -o pid=,lstart=,cmd= | grep -i clusterscope | grep -v grep
+ 266643 Wed Sep  2 12:59:26 2026 /public/tianyuyang/.local/bin/clusterscope-agent -c /public/tianyuyang/.config/clusterscope/agent.yaml
+2213881 Sun Sep 13 18:59:05 2026 /tmp/clusterscope-live-1789276406/web/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.25.12 --ping
+4176115 Wed Oct  7 03:22:49 2026 /public/tianyuyang/code/ClusterScope-review/pg16/bin/postgres -D /public/tianyuyang/code/ClusterScope-review/pgdata -p 5432 -k /tmp -c listen_addresses=127.0.0.1
+4177468 Thu Oct  8 02:24:42 2026 bash -c cd /public/tianyuyang/code/ClusterScope-review/merge-m6 && chmod +x qa/harness/m6-demo-f28.sh gauntlet-out/qa7/qa7-evidence.sh && sh gauntlet-out/qa7/qa7-evidence.sh 2>&1 | tail -8
+$ ls -la gauntlet-out/qa/*.pid 2>/dev/null
+   无 pid 文件残留（server/agent 已按 PID 文件停干净）
+
+## 10) 没有 push：本地分支没有对应的 origin 引用
+$ git branch -r | grep -c merge-m6
+0
+$ git config --get remote.origin.url
+   （未配置 origin）
+
+## 11) 工作树在收尾时仍然干净
+$ git status --porcelain
+?? demo/16-m6-f28-storage-tests-serialized.json
+?? qa/evidence/m6-qa7-blast-radius.txt
+?? qa/evidence/m6-qa7-f28.txt
+?? qa/evidence/m6-qa7-gates.txt
+?? qa/harness/m6-demo-f28.sh
