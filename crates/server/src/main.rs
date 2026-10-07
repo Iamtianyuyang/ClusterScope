@@ -259,7 +259,8 @@ fn build_http_router(state: Arc<AppState>) -> Router {
             "/alerts/rules/{rule_id}/ack",
             post(handlers::acknowledge_alert),
         )
-        .route_layer(axum::middleware::from_fn(
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
             auth_middleware::require_admin_middleware,
         ));
 
@@ -267,7 +268,8 @@ fn build_http_router(state: Arc<AppState>) -> Router {
     let operator_routes = Router::new()
         .route("/jobs", post(handlers::create_job))
         .route("/jobs/{job_id}", delete(handlers::stop_job))
-        .route_layer(axum::middleware::from_fn(
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
             auth_middleware::require_operator_middleware,
         ));
 
@@ -294,13 +296,13 @@ fn build_http_router(state: Arc<AppState>) -> Router {
 
     let authed_routes = if state.config.auth_required {
         authed_routes.route_layer(axum::middleware::from_fn_with_state(
-            std::sync::Arc::new(state.jwt_secret.clone()),
+            state.clone(),
             auth_middleware::auth_middleware,
         ))
     } else {
         // Read-only mode: allow GET without a token, still require auth for writes.
         authed_routes.route_layer(axum::middleware::from_fn_with_state(
-            std::sync::Arc::new(state.jwt_secret.clone()),
+            state.clone(),
             auth_middleware::readonly_middleware,
         ))
     };
