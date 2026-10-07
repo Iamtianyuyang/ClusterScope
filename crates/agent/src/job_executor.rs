@@ -1008,10 +1008,15 @@ mod cancel_acceptance_tests {
     const SIGTERM_SCENARIO_JOB: &str = "m6-cancel-sigterm";
 
     fn test_config(name: &str) -> AgentConfig {
-        let mut config = AgentConfig::default();
-        config.log_dir =
-            std::env::temp_dir().join(format!("cs-cancel-{}-{}", name, uuid::Uuid::new_v4()));
-        config.agent_token = String::new();
+        let config = AgentConfig {
+            log_dir: std::env::temp_dir().join(format!(
+                "cs-cancel-{}-{}",
+                name,
+                uuid::Uuid::new_v4()
+            )),
+            agent_token: String::new(),
+            ..AgentConfig::default()
+        };
         std::fs::create_dir_all(&config.log_dir).expect("temp log dir");
         config
     }

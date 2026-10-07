@@ -139,6 +139,21 @@ pub fn generate_refresh_token() -> String {
     Uuid::new_v4().to_string()
 }
 
+/// Minimum password length accepted by the API (user creation, password
+/// change). Kept short enough for lab setups, long enough to matter.
+pub const MIN_PASSWORD_LEN: usize = 8;
+
+/// Reject obviously weak passwords before they are hashed and stored.
+pub fn validate_password_strength(password: &str) -> Result<(), AppError> {
+    if password.len() < MIN_PASSWORD_LEN {
+        return Err(AppError::BadRequest(format!(
+            "password must be at least {} characters",
+            MIN_PASSWORD_LEN
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,19 +196,4 @@ mod tests {
         assert!(UserRole::Admin.can_manage_users());
         assert!(UserRole::Admin.can_manage_rules());
     }
-}
-
-/// Minimum password length accepted by the API (user creation, password
-/// change). Kept short enough for lab setups, long enough to matter.
-pub const MIN_PASSWORD_LEN: usize = 8;
-
-/// Reject obviously weak passwords before they are hashed and stored.
-pub fn validate_password_strength(password: &str) -> Result<(), AppError> {
-    if password.len() < MIN_PASSWORD_LEN {
-        return Err(AppError::BadRequest(format!(
-            "password must be at least {} characters",
-            MIN_PASSWORD_LEN
-        )));
-    }
-    Ok(())
 }

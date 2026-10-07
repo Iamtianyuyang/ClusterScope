@@ -1,3 +1,19 @@
+//! Metric types and `MetricsAggregation` — one of the three unique assets
+//! restored from branch A by the M6 merge (MRG6-07).
+//!
+//! **Status: asset in place, no product consumer yet (M6 rework round, F-27).**
+//! The types are an alternative model of the same data the agent already
+//! reports through `protocol::NodeMetricsReport`, and hourly/daily rollups are
+//! computed in SQL by `storage::aggregation` (with `percentile_cont`), not by
+//! [`MetricsAggregation`]. Wiring it into a live path would have meant either
+//! rewriting a tested SQL path in Rust or inventing a new endpoint — a
+//! behaviour change this round is not allowed to make. The tests and the four
+//! Gherkin scenarios stay green, and nothing was deleted: the asset is here
+//! for the round that gives it a real consumer (see qa/mrg6-errata3.json
+//! MRG6-24).
+//!
+//! Behaviour: `MetricsAggregation::new` computes avg / max / min / p95 / count
+//! over a sample slice; an empty slice yields all-zero values with count 0.
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

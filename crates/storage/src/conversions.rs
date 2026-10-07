@@ -1,4 +1,13 @@
 //! Proto <-> row conversions (A's module, adapted to this tree's report).
+//!
+//! **Status: asset in place, no product consumer yet (M6 rework round, F-27).**
+//! `node_metrics_to_proto` is the inverse of what `server::grpc` does when it
+//! stores an incoming `NodeMetricsReport`; no live path converts a stored row
+//! back into a report (the REST endpoints return the row's own JSON shape).
+//! Adding such a consumer would change a documented response shape, so this
+//! round keeps the conversion tested and documented instead of inventing a
+//! caller (see qa/mrg6-errata3.json MRG6-24).
+//! Proto <-> row conversions (A's module, adapted to this tree's report).
 use crate::models::NodeMetricsRow;
 use protocol::NodeMetricsReport;
 
