@@ -1,6 +1,6 @@
 # GAUNTLET.md — 项目档案
 
-commit: `669f995`（第 1 阶段补充见文末「审查清单（第 1 阶段产出）」）　base: `master`　更新：2026-10-07　适配器：commands　棘轮：**关**（硬阈值判定；基线 77 项保留但惰性）
+commit: `669f995`（第 1 阶段补充见文末「审查清单（第 1 阶段产出）」；**2026-10-07 增补见文末「第 1 阶段增补：no-root 维度」**）　base: `master`　更新：2026-10-07　适配器：commands　棘轮：**关**（硬阈值判定；基线 77 项保留但惰性）
 
 > 本档案记录的是**实际跑通过**的命令和真实测量值。未验证的内容一律标注「未验证」。
 > 闸门命令的运行位置：远端 node（Linux，`tianyuyang@172.19.133.164`），仓库
@@ -362,13 +362,15 @@ Rust workspace（Cargo，resolver 2，edition 2024），7 个成员 crate，`[wo
 | 文件 | 内容 | 规模 |
 |---|---|---|
 | `qa/README.md` | 审查清单总览、环境、一键复跑命令、三条硬规矩 | — |
-| `qa/constraints.json` | 可机器检查的约束（id / 断言 / 依据行号 / 检查命令 / 期望 / 判定） | **80 条**：46 `must-hold`、29 `finding`、3 `na`、2 `long` |
+| `qa/constraints.json` | 可机器检查的约束（id / 断言 / 依据行号 / 检查命令 / 期望 / 判定） | **104 条**：81 条原样（46 `must-hold`、29 `finding`、4 `na`、2 `long`）+ **23 条本次增补**（`NR-01`…`NR-21`、`NR-06b`、`MRG-02`） |
+| `qa/no-root.qa.md` | **NR1–NR21 + MRG-02**：无 root 维度的执行程序（第 5 阶段逐条真跑） | 21+1 条 |
+| `qa/harness/no-root-checks.sh` | 上表的自包含执行脚本（`sh qa/harness/no-root-checks.sh [--no-slow]`），证据落 `gauntlet-out/qa/evidence/` | 1 个脚本 |
 | `qa/build-gates.qa.md` | G1–G12 真实闸门复现 | 12 条 |
 | `qa/docs-consistency.qa.md` | D1–D22 文档 ↔ 实现 | 22 条 |
 | `qa/security.qa.md` | S1–S17 认证/鉴权/注入面/审计 | 17 条 |
 | `qa/concurrency.qa.md` | C1–C16 任务生命周期/调度/去重/保留/WS/迁移 | 16 条 |
 | `qa/deploy-ops.qa.md` | O1–O21 `deploy/` ↔ 代码、端口、TUI 冒烟、N/A 说明 | 21 条 |
-| `qa/merge-plan-requirements.md` | M1–M9 三棵树合流**必答问题**（第 6 阶段的输入） | 9 题 |
+| `qa/merge-plan-requirements.md` | M1–**M10** 三棵树合流**必答问题**（第 6 阶段的输入；M10 = no-root 不变量 NRM1–NRM8） | 10 题 |
 | `qa/harness/*.sh` `*.mjs` `*.py` `*.sql` | **已实测跑通**的执行脚本与夹具 | 9 个脚本 + 1 SQL |
 
 **第 1 阶段已实测确认的缺陷**（第 5 阶段只需复跑取证，不要重新发现）：
@@ -391,45 +393,44 @@ Rust workspace（Cargo，resolver 2，edition 2024），7 个成员 crate，`[wo
 **第 5 阶段注意**：`qa/harness/*.sh` 只按 PID 文件停进程（这台机器共享，禁止 `pkill -f clusterscope`）；
 证据落在 `gauntlet-out/qa/evidence/`；每条检查写进 `qa/qa-report.json` 时用 `"constraint": "<约束 id>"` 与约束配对。
 
+## 第 1 阶段增补：no-root 维度（2026-10-07）
 
+> **增补原因**：用户需求原文「**这个项目是要做一个不用 root 的程序**」。上一个阶段（同一第 1 阶段的审查清单）
+> 把「无 root」只当成一条**文档不符**记录（`DOC-21`：README 用 `systemctl --user`、unit 却是系统级），
+> **没有把它当成一等验收维度**——既没有「普通用户下能不能真跑」的可判定条目，也没有「合流后不得引入 root 依赖」的不变量。
+> 本次增补把这条需求拆成可复现、可判真假的约束与执行程序。**审查模式不变**（只跑 0→1→5→6，不改产品代码/测试/`deploy/`/README/docs）。
 
----
+**新增条数**：`qa/constraints.json` 追加 **23 条**（`NR-01`…`NR-21`、`NR-06b`、`MRG-02`），原 **81 条一字未改**（只追加；
+`gauntlet.config.json` 未动）。合计 **104 条**。`qa/merge-plan-requirements.md` 新增 **M10**（含 `NRM1`–`NRM8` 展开）。
 
-## 第 6 阶段补充（Reporter，2026-10-07）
-
-> 只加结论与入口，不改上面任何既有结论。
-
-**全量复验（本阶段实跑，数字与第 5 阶段逐项一致）**
-
-| 命令 | 结果 | 证据 |
+| 维度 | 新增约束 | 结论（2026-10-07 实测，uid 3000，无 sudo） |
 |---|---|---|
-| `node .gauntlet/gauntlet.mjs gate --profile full --title "…"` | **`❌ spec {"scenarios":0}` → `GATE full: FAIL`，exit 1**。kit 在 spec 失败时立即 `break`（`.gauntlet/gauntlet.mjs:212`），所以 full 档只跑到 spec 就结束——这是"审查模式不写 features/"的必然结果，不是新缺陷 | `qa/evidence/gate-full.log` |
-| `node .gauntlet/gauntlet.mjs gate --profile quality` | build ✅ / tests ✅ 44/44 / scope ✅ 33/33 / warnings ✅ 0 / tidy ✅ 0 / duplication ✅ 0.0% / **complexity ❌ 21/316 maxCC 23** / **crap ❌ 45/316 maxCRAP 552** / **coverage ❌ 20.7%** / arch ➖ skipped → `GATE quality: FAIL`，exit 1 | `qa/evidence/gate-quality-full-profile.log`、`qa/evidence/gate-quality.json` |
-| 8 个演示重录 | `demo/01`–`08` 全部 exit 0，退出码与各脚本的 `expectCode` 全部吻合 | `qa/evidence/demos-rerun.log`、`gauntlet-out/evidence/demos/` |
-| 架构图 | `diagram: PASS`（Archify v3.0.1，`browser-check: skipped (no browser)`） | `docs/architecture/clusterscope-runtime.architecture.json`、`gauntlet-out/evidence/diagrams/` |
+| 运行时全功能 | `NR-01` `NR-02` `NR-03` `NR-06` `NR-06b` `NR-18` `NR-20` `NR-21` | **成立**：server 起在 8080/50051（health=200）、agent 起得来、TUI 在 pty 渲染、NVML/sysfs 可读；端口 >1024 无需特权；零配置文件也行（env-only 路径 lsof 命中 0 处系统路径） |
+| 路径默认值 | `NR-03` `NR-04` `NR-06` `NR-06b` `NR-19` | 默认值全部落在 HOME（`dirs` 6.0.0/XDG：`~/.config/node_id`、`~/.local/state/clusterscope-agent`）；`/etc`、`/var/lib`、`/var/log`、`/usr/local/bin` 对本用户**一律不可写**；**HOME 只读时 agent 硬失败**（`Failed to create log directory`，SSH/HPC 共享节点上要当心） |
+| 安装/部署件 | `NR-05` `NR-13` `NR-14` `NR-15` `NR-16` | **两套并存且矛盾**：`deploy/*.service` 是系统级（`User=clusterscope`、`/usr/local/bin`、`/var/lib/clusterscope`、`multi-user.target`、还 `After=redis.service`）→ 非 root **装不上**；`install-agent.sh` 是用户级（`~/.local/bin`、`~/.config/clusterscope`、`systemd --user`/`nohup`）→ **可用且已在生产运行**（本机 2026-09-02 起 user unit active）。README:288-289 的 server 管理命令**仓库里没有对应 unit**（本机那份 `~/.config/systemd/user/clusterscope-server.service` 是 2026-08-10 **手写**的，非仓库产物） |
+| 持久化 | `NR-11` `NR-12` | 本机 `Linger=yes`（与上次交接的「未验证」不同）：user 服务断开 SSH 仍活；但 linger 是**每机**配置（要 root 才能 enable-linger），且 `nohup` 回退**没有** `Restart=always` → 文档「agent 常驻/60s 自动重注册」只在 systemd --user+linger 路径下成立 |
+| 外部依赖 | `NR-09` `NR-07` | README:87 的 `docker compose up` 在本集群**不成立**（无 docker/docker-compose、无外网）；可行路径「源码编译 PG 到 HOME」**未文档化**；另有隐性前置：裸启动 server 会因 `jwt_secret` 守卫**拒绝启动** |
+| 文档对账 | `NR-10` | README 11 处「无 root/systemctl --user」逐条判：`:15/:21/:56/:89/:211/:290/:291/:293/:321` **成立**；`:87`、`:288-289` **不成立**（后者的命令只在这台已手配过 unit 的机器上有效） |
+| 合流不变量 | `MRG-02`（=`M10`） | 合流不得引入新的 root 依赖；系统级 unit 必须修掉或明确区分；判据 `NRM1`–`NRM8` + 合流后重跑 `sh qa/harness/no-root-checks.sh` |
 
-**本阶段产物**
+**复跑入口（第 5 阶段）**：`cd /public/tianyuyang/code/ClusterScope-review/gh-line && sh qa/harness/no-root-checks.sh`
+（自包含，只按自己的 PID 停进程；`--no-slow` 跳过两条带 sleep 的检查；证据落 `gauntlet-out/qa/evidence/`）。
+本次实跑：**PASS=23 FAIL=0，退出码 0**（2026-10-07，uid 3000，node `lyy-node03`）。
+脚本会在自己的块里创建并**删除**一个专用 user unit（`nr-probe-unit.service` / `nr-persist-unit.service`），
+**不动**机器上既有的 `clusterscope-agent.service`（那个是 2026-09-02 起一直在跑的老实例，`NR16` 把它当证据而不是靶子）。
 
-| 路径 | 内容 |
-|---|---|
-| `report/review.html` | **单文件证据包**（kit 自动面板 + 中文「审查者简报」：16 条 findings 按 severity、闸门面板、1+6 条无法验证项、环境与复现、N1–N9、5 分钟审阅路线、合流速览） |
-| `report/merge-plan.md` | 三线合流方案，逐题回答 `qa/merge-plan-requirements.md` 的 M1–M9 |
-| `report/build-evidence.mjs`、`report/_brief.html` | 证据包的构建脚本与简报源（`node report/build-evidence.mjs <kit-index.html> report/_brief.html report/review.html`） |
-| `docs/review-howto.md` | 使用教程（三步上手、输入/输出规则表、五个坑） |
-| `qa/evidence/gate-full.log`、`gate-quality-full-profile.log`、`gate-quality.json`、`demos-rerun.log`、`line-fork-verify.{sh,txt}` | 本阶段新增的原始证据（最后那一对是 2026-10-07 返工时补的分叉探测脚本与输出，「勘误记录」E-1 的复现命令） |
+**本次增补中的四条重测提醒（与交接材料不同之处）**：
 
-**合流方案的关键事实**（完整版见 `report/merge-plan.md`）
+1. `Linger` **是 `yes` 不是 `no`**（`loginctl show-user tianyuyang` → `Linger=yes`，且本机自 2026-09-02 的 user 级 agent 一直在跑）——
+   「登出后服务存活」这条在本机成立；但别处可能是 no，故写成 `NR-11` 逐机复跑的检查，而不是一次性结论。
+2. **本机有一个手写的用户级 server unit**：`~/.config/systemd/user/clusterscope-server.service`
+   （`ExecStart=$HOME/.local/bin/clusterscope-server $HOME/.config/clusterscope/server.yaml`、`WantedBy=default.target`，
+   2026-08-10 建立、当前 disabled/inactive）。它证明「用户级跑 server」真的可行，也说明 README:288-289 的命令
+   **只在这台已手配过的机器上有效**——仓库里没有任何脚本生成它（`NR-13`），合流时这是 `NRM6` 要补的东西。
+3. **`agent -c /etc/clusterscope/agent.yaml` 在文件缺失时不会报错**（`config_loader.rs:9-11` 只看 `exists()`），
+   会静默改用 `~/.config` 默认值——照抄系统级 unit 的人会不知情地用错配置（`NR-06`）。与之相对，
+   `deploy/server.service` 里 server 的**位置参数**路径缺失时 server 会直接 `Config file not found` 退出（`DOC-03`）。
+4. **探针要 bind 8080/50051**：刚停掉的 server 会让端口短暂处于 `TIME_WAIT`，脚本用 `SO_REUSEADDR` + 重试 3 次；
+   `ss` 显示已被别人占用时，该端口记为「busy 未探测」而不是 FAIL（这台机器是共享的）。
 
-- **B 与 C 自 `f8ac726` 兄弟分叉、互不为祖先**（`git merge-base --is-ancestor b/master c/master` → **exit 1**，反向同样 **exit 1**）；共同前缀 7 个提交，B 独有 15 个提交、C 独有 33 个提交。
-  两线前 3 个提交内容相同（同 parent、同 tree，仅提交者/时间戳不同），此后 B 又做了 12 个、C 又做了 30 个，**两边互不包含**。
-  "B 领先裸仓库 12 且从未推送"指的是 **B 的本地裸仓库**（停在 `d1586b6`），**不是 GitHub**；相对 GitHub，B 不是"落后"而是**分叉**。
-  （初版这里误判为"B 的 HEAD 是 C 的祖先"；2026-10-07 返工已更正并保留勘误：`report/merge-plan.md` 顶端「勘误记录」E-1、原始输出 `qa/evidence/line-fork-verify.txt`。）
-- **B 的 12 个未提交文件 = 1784 insertions / 740 deletions**，不在任何提交里、也不在 bundle 里（只有工作树）。
-  已实测打包并**留档**：`ClusterScope-review/backup-b-wip/b-wip.tar.gz`（**12 个成员**，`sha256sum` = `8ef25e55af7cb612162cfc9887fd88dd52dba55260aa1c7508f984756fd9b4df`），
-  同目录另有 `list.txt`、`sha256-manifest.txt`、`PROVENANCE.txt`；**同输入重建可得同一哈希**（已复现，`cmp` 逐字节一致）——合流时只需引用，不要动这个目录。
-- **不要整体 `git merge 19d8fbc`**：实测 35 个文件冲突（含 `web/*`、`tests/`、`deploy/nginx.conf` 的 `modify/delete`）。
-  推荐 `git cherry-pick -n eac070e`（修 F-01 + F-16）：实测只有 **4 个文件、6 个冲突块、约 140 行**。
-- **M5（TUI-only / TUI+Web / 先 TUI-only 后 web）是产品决策**，方案里只给代价与依据，不替人拍板。
 
-**收尾状态**：远端 server/agent 已停（只按 PID 文件停；同机常驻 agent PID 266643 未干预）。
-本分支**未推送、未开 PR**——由 Leader 在用户审阅通过后处理。

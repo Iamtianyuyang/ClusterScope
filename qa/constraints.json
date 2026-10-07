@@ -808,5 +808,235 @@
     "verdict": "must-hold",
     "qa": "merge-plan-requirements.md",
     "severity": "blocker"
+  },
+  {
+    "id": "NR-01",
+    "text": "本程序（server / agent / TUI）必须能在**无 root** 的普通用户下运行：需求原文「这个项目是要做一个不用 root 的程序」。端口 8080（REST）与 50051（gRPC）均 >1024，绑定不需要 CAP_NET_BIND_SERVICE。",
+    "basis": "用户需求原文（本次增补起因）；README:15,56；crates/common/src/config.rs:97-98（http_addr 0.0.0.0:8080 / grpc_addr 0.0.0.0:50051）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && id -u && python3 -c \"import socket,os\nfor p in (8080,50051):\n s=socket.socket()\n s.bind(('0.0.0.0',p)); print('bind',p,'ok uid',os.getuid()); s.close()\"",
+    "expect": "uid=3000；两个 bind 都成功",
+    "verdict": "must-hold",
+    "qa": "no-root.qa.md#NR1",
+    "severity": "blocker"
+  },
+  {
+    "id": "NR-02",
+    "text": "README:84-86 文档化的 server 启动路径必须对普通用户成立：`cp deploy/server.yaml.example server.yaml` → 改 postgres_url 指向本机 → `clusterscope-server server.yaml`，监听 8080/50051 且 /api/health 返回 200；配置放在用户目录（如 ~/.config/clusterscope）即可，不需要 /etc/clusterscope。",
+    "basis": "README:80-87；deploy/server.yaml.example:1-8；crates/server/src/main.rs:183-186（argv[1] 为配置路径）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && sed 's#localhost:5432#127.0.0.1:5432#' deploy/server.yaml.example > /tmp/nr-server.yaml && ./target/release/clusterscope-server /tmp/nr-server.yaml > /tmp/nr-server.log 2>&1 & sleep 6; ss -ltn | grep -E ':8080|:50051'; curl -s -o /dev/null -w '%{http_code}\\n' http://127.0.0.1:8080/api/health; kill %1",
+    "expect": "8080 与 50051 都在监听、health=200、进程属主是 uid 3000",
+    "verdict": "must-hold",
+    "qa": "no-root.qa.md#NR2",
+    "severity": "blocker"
+  },
+  {
+    "id": "NR-03",
+    "text": "agent 的默认路径必须全部落在用户 HOME 内，不得依赖 /etc：`-c` 默认值虽是 /etc/clusterscope/agent.yaml（crates/agent/src/main.rs:15），但 `--config-dir` / `--server-addr` / `--node-id` / `--agent-token` 四个覆盖参数存在（main.rs:13-27），且 dirs 6.0.0 + XDG 解析出 ~/.config/node_id 与 ~/.local/state/clusterscope-agent（crates/common/src/config.rs:37-46）。",
+    "basis": "crates/agent/src/main.rs:13-27；crates/agent/src/config_loader.rs:33-40；crates/common/src/config.rs:37-46；deploy/agent.yaml.example:12,18",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && ./target/release/clusterscope-agent --help && rm -rf /tmp/nr-home && mkdir -p /tmp/nr-home && HOME=/tmp/nr-home timeout 6 ./target/release/clusterscope-agent --config-dir /tmp/nr-home/.config/clusterscope; find /tmp/nr-home -maxdepth 4 | sort",
+    "expect": "--help 里 5 个参数齐全；find 列出 /tmp/nr-home/.config/clusterscope/logs（HOME 内，无 /etc、无 /var）",
+    "verdict": "must-hold",
+    "qa": "no-root.qa.md#NR3",
+    "severity": "major"
+  },
+  {
+    "id": "NR-04",
+    "text": "所有系统级路径对普通用户不可写：/etc/clusterscope、/var/lib/clusterscope、/var/log/clusterscope-{server,agent} 都不存在且父目录 root:root 755，/usr/local/bin 是 root:root 755。",
+    "basis": "实测（2026-10-07，uid 3000）；deploy/server.service:7,12-13；deploy/agent.service:7,12-13",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && for p in /etc/clusterscope /var/lib/clusterscope /var/log/clusterscope-server /usr/local/bin; do mkdir -p \"$p\" 2>/dev/null && echo \"CREATED(!) $p\" || echo \"DENIED $p\"; done; stat -c '%U:%G %a' /usr/local/bin",
+    "expect": "四条 DENIED；/usr/local/bin = root:root 755（预期 FAIL 即结论：这些路径不可用）",
+    "verdict": "finding",
+    "qa": "no-root.qa.md#NR4",
+    "severity": "minor"
+  },
+  {
+    "id": "NR-05",
+    "text": "`systemctl --user` 在本集群可用：普通用户能在 ~/.config/systemd/user/ 下安装、启用、启动、查询、停用并删除一个 unit，全程不需要 sudo；`systemctl --user show-environment` exit 0，user manager 状态 running。",
+    "basis": "实测（2026-10-07）；deploy/install-agent.sh:60,76-77（用 `systemctl --user show-environment` 探测）",
+    "verify": "ssh tianyuyang@172.19.133.164 'systemctl --user show-environment >/dev/null; echo env_exit=$?; systemctl --user is-system-running; cat > ~/.config/systemd/user/nr-probe-unit.service <<EOF\n[Unit]\nDescription=nr probe\n[Service]\nType=oneshot\nExecStart=/bin/true\nRemainAfterExit=yes\n[Install]\nWantedBy=default.target\nEOF\nsystemctl --user daemon-reload && systemctl --user enable --now nr-probe-unit.service && systemctl --user is-active nr-probe-unit.service && systemctl --user show nr-probe-unit.service -p FragmentPath --value; systemctl --user disable --now nr-probe-unit.service; rm -f ~/.config/systemd/user/nr-probe-unit.service; systemctl --user daemon-reload'",
+    "expect": "env_exit=0、running、active、FragmentPath=$HOME/.config/systemd/user/nr-probe-unit.service",
+    "verdict": "must-hold",
+    "qa": "no-root.qa.md#NR5",
+    "severity": "blocker"
+  },
+  {
+    "id": "NR-06",
+    "text": "`-c` 指向的配置文件**不存在**时 agent 不得崩溃：config_loader.rs:9-11 只做 `config_path.exists()` 判断，缺失即静默用默认值继续启动（这是隐患而非崩溃：系统级 unit 照抄时会在不知情的情况下跑默认配置）。",
+    "basis": "crates/agent/src/config_loader.rs:9-11；crates/agent/src/main.rs:14-15（默认值 /etc/clusterscope/agent.yaml）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && rm -rf /tmp/nr-home-noconf && mkdir -p /tmp/nr-home-noconf && env HOME=/tmp/nr-home-noconf timeout 8 ./target/release/clusterscope-agent -c /etc/clusterscope/agent.yaml; echo exit=$?",
+    "expect": "日志有 `ClusterScope Agent starting`，exit=124（被 timeout 收掉，说明一直在跑）；不出现 Failed to read config",
+    "verdict": "finding",
+    "qa": "no-root.qa.md#NR6",
+    "severity": "major"
+  },
+  {
+    "id": "NR-06b",
+    "text": "agent 的日志目录默认值必须落在 HOME 内且可创建：`dirs::state_dir()` → ~/.local/state/clusterscope-agent（crates/common/src/config.rs:44-46；dirs 6.0.0 + dirs-sys 0.5.0 走 XDG，不存在 /var/log 兜底的实际触发路径）。",
+    "basis": "crates/common/src/config.rs:44-46；Cargo.lock:723-735（dirs 6.0.0 / dirs-sys 0.5.0）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && rm -rf /tmp/nr-home-noconf && mkdir -p /tmp/nr-home-noconf && env HOME=/tmp/nr-home-noconf timeout 8 ./target/release/clusterscope-agent -c /etc/clusterscope/agent.yaml >/dev/null 2>&1; ls -ld /tmp/nr-home-noconf/.local/state/clusterscope-agent",
+    "expect": "目录存在，属主是当前用户（如 drwxr-xr-x … .local/state/clusterscope-agent）",
+    "verdict": "must-hold",
+    "qa": "no-root.qa.md#NR6",
+    "severity": "major"
+  },
+  {
+    "id": "NR-07",
+    "text": "server **裸启动**（不给配置、不给环境变量）必须拒绝而不是带着弱密钥起来：`jwt_secret` 为默认值时入口守卫直接 bail。README 没有写这条前置条件，属隐性要求（只能靠 config 模板里的 jwt_secret 或 JWT_SECRET 环境变量满足）。",
+    "basis": "crates/server/src/main.rs:221-232（refusing to start: jwt_secret is missing/too weak）；README:80-87（未提该守卫）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && timeout 15 ./target/release/clusterscope-server; echo exit=$?",
+    "expect": "stderr 含 `refusing to start: jwt_secret is missing/too weak with auth_required: true`，exit=1（预期 FAIL 即结论：文档化的启动方式必须显式给密钥）",
+    "verdict": "finding",
+    "qa": "no-root.qa.md#NR7",
+    "severity": "major"
+  },
+  {
+    "id": "NR-08",
+    "text": "显式传参/环境变量必须能完全绕开所有 root 路径：server 认 6 个环境键（POSTGRES_URL / JWT_SECRET / HTTP_ADDR / GRPC_ADDR / AUTH_REQUIRED / AGENT_TOKEN，且都支持 CLUSTERSCOPE_ 前缀），agent 有 `--config` / `--config-dir` / `--server-addr` / `--node-id` / `--agent-token`。",
+    "basis": "crates/server/src/main.rs:174-219；crates/agent/src/main.rs:13-27",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -n '\"POSTGRES_URL\"\\|\"JWT_SECRET\"\\|\"HTTP_ADDR\"\\|\"GRPC_ADDR\"\\|\"AUTH_REQUIRED\"\\|\"AGENT_TOKEN\"' crates/server/src/main.rs && ./target/release/clusterscope-agent --help",
+    "expect": "server 命中 6 个键；agent --help 列出 5 个覆盖参数",
+    "verdict": "must-hold",
+    "qa": "no-root.qa.md#NR8",
+    "severity": "major"
+  },
+  {
+    "id": "NR-09",
+    "text": "server 需要的 PostgreSQL 必须有一条**无 root、无 docker、无外网**也能落地的路径：本机可行路径是「源码编译到 HOME」（/public/tianyuyang/code/ClusterScope-review/pg16 + pgdata，uid 3000 自己跑），但 **README:87 只给了 `docker compose up`**，而本机无 docker/docker-compose、无外网——这条承诺在本环境不成立，可行的替代路径未文档化。",
+    "basis": "README:87；deploy/docker-compose.yml；GAUNTLET.md「PostgreSQL 16.4（第 5 阶段 QA 的前置，已就绪）」",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && /public/tianyuyang/code/ClusterScope-review/pg16/bin/pg_ctl -D /public/tianyuyang/code/ClusterScope-review/pgdata status; echo pg_exit=$?; /public/tianyuyang/code/ClusterScope-review/pg16/bin/psql 'postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope' -tAc 'select version();'; grep -n 'docker compose up' README.md; command -v docker || echo docker-absent; command -v docker-compose || echo docker-compose-absent",
+    "expect": "pg_exit=0 且返回 PostgreSQL 16.4…（uid 3000 实例可连）；README 命中 1 行 compose 承诺；docker-absent + docker-compose-absent → 该承诺不成立",
+    "verdict": "finding",
+    "qa": "no-root.qa.md#NR9",
+    "severity": "major"
+  },
+  {
+    "id": "NR-10",
+    "text": "README 里每一处「无需 root / no root / root-not required / systemctl --user」都要逐条与实物对账，判「成立 / 不成立 / 无法验证」：共 11 处 —— :15(平台承诺)、:21(徽章)、:56(权限表)、:89(agent 免密 ssh)、:211(数据采集)、:290/:291(agent 管理)、:293(journalctl)、:321(排障) **成立**；:87（`docker compose up`）与 :288/:289（`systemctl --user … clusterscope-server`）**不成立**。",
+    "basis": "README:15,21,56,87,89,211,288,289,290,291,293,321",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -n '无需 root\\|无 root\\|root-not\\|systemctl --user' README.md; cat gauntlet-out/qa/evidence/no-root-readme-claims.txt",
+    "expect": "命中 11 处提及（见分类表）：9 处 PASS、2 处 FAIL（:87 docker compose、:288-289 手写 unit）",
+    "verdict": "finding",
+    "qa": "no-root.qa.md#NR10",
+    "severity": "major"
+  },
+  {
+    "id": "NR-11",
+    "text": "用户级服务能否活过登录会话结束，取决于 logind 的 linger：本机 `Linger=yes`（user manager State=active），因此 `systemd --user` 起的 agent 在断开 SSH 后仍在（本机自 2026-09-02 的运行实例即证据）。但 linger 是**每机**配置（`loginctl enable-linger` 需要 root），别处可能为 no → 必须逐机复跑。",
+    "basis": "实测（2026-10-07）：`loginctl show-user tianyuyang` → Linger=yes；deploy/install-agent.sh:60,76-77",
+    "verify": "ssh tianyuyang@172.19.133.164 'loginctl show-user $(id -un) | grep -E \"^(Linger|State)=\"; cat > ~/.config/systemd/user/nr-persist-unit.service <<EOF\n[Unit]\nDescription=nr persist probe\n[Service]\nType=simple\nExecStart=/bin/sleep 120\n[Install]\nWantedBy=default.target\nEOF\nsystemctl --user daemon-reload; systemctl --user enable --now nr-persist-unit.service; P=$(systemctl --user show nr-persist-unit.service -p MainPID --value); ssh -o BatchMode=yes localhost \"exit 0\"; sleep 5; kill -0 $P && echo SURVIVES; systemctl --user disable --now nr-persist-unit.service; rm -f ~/.config/systemd/user/nr-persist-unit.service; systemctl --user daemon-reload'",
+    "expect": "Linger=yes、State=active；另一个 ssh 会话结束后 MainPID 仍存活（SURVIVES）",
+    "verdict": "must-hold",
+    "qa": "no-root.qa.md#NR11",
+    "severity": "major"
+  },
+  {
+    "id": "NR-12",
+    "text": "`nohup` 回退只能「把 agent 跑起来」，**不能**满足「agent 常驻」：install-agent.sh 只在 systemd --user 分支写 `Restart=always`（:70），nohup 分支（:81-83）没有守护，进程被杀后不会重启，而 linger=no 的机器上它还会随会话结束而死。README 承诺的「Server 重启后 Agent 每 60s 自动重新注册 / 节点状态自动切换」因此只在 systemd --user（+linger）路径下成立。",
+    "basis": "deploy/install-agent.sh:57-84（:70 Restart=always，:79-83 nohup）；README:296（60s 自动重注册）、README:299",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && mkdir -p /tmp/nr-nohup/logs && printf 'server_addr: \"http://127.0.0.1:50051\"\\nnode_id: \"nr-nohup-probe\"\\nlog_dir: /tmp/nr-nohup/logs\\n' > /tmp/nr-nohup/agent.yaml && nohup ./target/release/clusterscope-agent -c /tmp/nr-nohup/agent.yaml >> /tmp/nr-nohup/agent.log 2>&1 & P=$!; sleep 5; kill -0 $P && echo ALIVE; grep -c 'ClusterScope Agent starting' /tmp/nr-nohup/agent.log; kill $P; sleep 3; kill -0 $P 2>/dev/null || echo GONE; grep -n 'Restart=always\\|nohup' deploy/install-agent.sh",
+    "expect": "ALIVE + 日志 1 行 + 手动 kill 后 GONE；`Restart=always` 只出现在 systemd --user 分支 → 回退路径无自动重启（预期 FAIL 即结论）",
+    "verdict": "finding",
+    "qa": "no-root.qa.md#NR12",
+    "severity": "major"
+  },
+  {
+    "id": "NR-13",
+    "text": "README:288-289 的 `systemctl --user status/restart clusterscope-server` 只写了命令、没写怎么产生这个 unit，而仓库里 0 个用户级 server unit（三棵树发的都是系统级 `deploy/server.service`）——用户级启动 server 的可复制步骤（写 server.yaml + 建 unit/nohup）在 README 与 docs/ 里都不存在。本机确实有一个**手写的** `~/.config/systemd/user/clusterscope-server.service`（`ExecStart=$HOME/.local/bin/clusterscope-server $HOME/.config/clusterscope/server.yaml`、`WantedBy=default.target`，2026-08-10 建立、当前 disabled/inactive），正说明这条路可行但**不是文档/仓库给出的**；install-agent.sh 也只覆盖 agent。",
+    "basis": "README:285-291；deploy/server.service:1-17；`find . -name 'clusterscope-server.service'` = 0；`$HOME/.config/systemd/user/clusterscope-server.service`（手写，非仓库产物）；install-agent.sh 只装 agent",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -n 'systemctl --user' README.md; find . -name 'clusterscope-server.service' -not -path './target/*' | wc -l; grep -n 'ExecStart\\|WantedBy' \"$HOME/.config/systemd/user/clusterscope-server.service\" 2>&1; grep -rn 'systemctl --user\\|\\.config/systemd' docs/ | wc -l",
+    "expect": "README 命中 4 行 systemctl --user；仓库 0 个用户级 server unit；本机那份 unit 的 ExecStart 指向 $HOME/.local/bin（手写）；docs/ 0 处 → 该管理命令在干净机器上必然失败",
+    "verdict": "finding",
+    "qa": "no-root.qa.md#NR13",
+    "severity": "major"
+  },
+  {
+    "id": "NR-14",
+    "text": "`deploy/install-agent.sh` 是**用户级**安装器：路径全部是 ~/.local/bin、~/.config/clusterscope、~/.config/systemd/user（注释以外的行不出现 /usr/local/bin、/etc、/var）；先探测 `systemctl --user show-environment`，不可用则回退 `nohup`；语法检查通过。",
+    "basis": "deploy/install-agent.sh:11-12,30-33,40-53,57-85",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && bash -n deploy/install-agent.sh && echo SYNTAX-OK; grep -n '\\.local/bin\\|\\.config/clusterscope\\|\\.config/systemd/user' deploy/install-agent.sh | wc -l; grep -vE '^[[:space:]]*#' deploy/install-agent.sh | grep -c '/usr/local/bin\\|/etc/clusterscope\\|/var/lib/clusterscope\\|/var/log/clusterscope'; grep -n 'nohup\\|systemctl --user' deploy/install-agent.sh",
+    "expect": "SYNTAX-OK；用户路径引用 ≥3；非注释行的系统路径引用 = 0；nohup 与 systemctl --user 两个分支都在",
+    "verdict": "must-hold",
+    "qa": "no-root.qa.md#NR14",
+    "severity": "major"
+  },
+  {
+    "id": "NR-15",
+    "text": "随仓库发的两个 unit 是**系统级**，普通用户装不上：`User=clusterscope`/`Group=clusterscope`（本机无此用户）、`ExecStart=/usr/local/bin/…`、`WorkingDirectory=/var/lib/clusterscope`、`LogsDirectory=/var/log/clusterscope-*`、`WantedBy=multi-user.target`；server.service 还 `After=postgresql.service redis.service`（redis 在代码里未被使用）。这些路径全部不可写 → 非 root 下不可安装。",
+    "basis": "deploy/server.service:3,7,10-13,17；deploy/agent.service:7,10-13,16；README:15,56；crates/common/src/config.rs:66,75（redis_url 未被读取）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -n 'User=\\|Group=\\|ExecStart=\\|WorkingDirectory=\\|LogsDirectory=\\|WantedBy=\\|After=' deploy/*.service; id clusterscope 2>&1 | head -1; test -w /usr/local/bin && echo WRITABLE || echo read-only; test -d /var/lib/clusterscope || echo var-lib-absent",
+    "expect": "两个 unit 都是 multi-user.target + User=clusterscope；`id: 'clusterscope': no such user`；/usr/local/bin read-only；/var/lib/clusterscope 不存在 → 预期 FAIL 即结论",
+    "verdict": "finding",
+    "qa": "no-root.qa.md#NR15",
+    "severity": "major"
+  },
+  {
+    "id": "NR-16",
+    "text": "用户级路径已经在生产运行（本机最强证据）：~/.config/systemd/user/clusterscope-agent.service 存在且 active (running)，可执行文件在 ~/.local/bin/clusterscope-agent，配置在 ~/.config/clusterscope/agent.yaml（与 install-agent.sh 写出的路径一致）。",
+    "basis": "实测（2026-10-07）：`systemctl --user status clusterscope-agent` → active (running) since 2026-09-02；deploy/install-agent.sh:30-33,61-69",
+    "verify": "ssh tianyuyang@172.19.133.164 'systemctl --user is-active clusterscope-agent.service; systemctl --user show clusterscope-agent.service -p FragmentPath --value; ls -l ~/.local/bin/clusterscope-agent ~/.config/clusterscope/agent.yaml; ps -u $(id -un) -o pid,lstart,cmd | grep clusterscope-agent | grep -v grep'",
+    "expect": "is-active=active；FragmentPath=$HOME/.config/systemd/user/clusterscope-agent.service；二进制与配置都在 HOME 下；进程在跑",
+    "verdict": "must-hold",
+    "qa": "no-root.qa.md#NR16",
+    "severity": "minor"
+  },
+  {
+    "id": "NR-17",
+    "text": "前端维度的 no-root 复检在本线不适用（N/A）：gh-line 无 web/、0 个 package.json（前端只在 A/B 两棵树）；合流后若接入 web，必须在 M10 的判据里复跑。",
+    "basis": "FE-01；README:356「Web 前端已移除」；`ls web` 报 No such file",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && ls web 2>&1; find . -maxdepth 3 -name package.json -not -path './target/*' | wc -l",
+    "expect": "No such file or directory；0 个 package.json → N/A",
+    "verdict": "na",
+    "qa": "no-root.qa.md#NR17",
+    "severity": "info"
+  },
+  {
+    "id": "NR-18",
+    "text": "TUI 在无 root 的普通用户下、在 pty 中能正常渲染（不是只支持 stdout 重定向）：`-s http://127.0.0.1:8080` 连接本机 server，pty 输出非空且无 panic。",
+    "basis": "README:104-105；crates/tui/src/main.rs:21-37；OPS-08 的总断言",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && TERM=xterm script -q -c \"timeout 8 ./target/release/clusterscope-tui -s http://127.0.0.1:8080\" /tmp/nr-tui.pty >/dev/null 2>&1; echo exit=$?; wc -c /tmp/nr-tui.pty; grep -ci panic /tmp/nr-tui.pty",
+    "expect": "pty 文件非空（本次 319 字节），panic 计数 0",
+    "verdict": "must-hold",
+    "qa": "no-root.qa.md#NR18",
+    "severity": "major"
+  },
+  {
+    "id": "NR-19",
+    "text": "「无 root」的实际前提是 **HOME 可写**：HOME 不可写时 agent 在启动阶段硬失败（`Failed to create log directory: … Permission denied`，exit 1），没有降级路径，也没有可绕开的环境变量（config_loader.rs:39-42 是必需步骤）。不写 HOME 的 server 不受影响（日志走 stderr，无 LogsDirectory）。",
+    "basis": "crates/agent/src/config_loader.rs:39-42；实测（2026-10-07，HOME=/tmp/nr-ro chmod 500）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && mkdir -p /tmp/nr-ro && chmod 500 /tmp/nr-ro && HOME=/tmp/nr-ro timeout 10 ./target/release/clusterscope-agent; echo exit=$?; chmod 700 /tmp/nr-ro; rm -rf /tmp/nr-ro",
+    "expect": "exit=1 且 stderr 含 Failed to create log directory（预期 FAIL 即结论：只读 HOME 的共享节点上 agent 起不来）",
+    "verdict": "finding",
+    "qa": "no-root.qa.md#NR19",
+    "severity": "major"
+  },
+  {
+    "id": "NR-20",
+    "text": "GPU/磁盘指标采集不需要 root：`nvidia-smi -L` 可用、`/sys/class/drm/card0/device/power/runtime_status` 与 `/sys/block/nvme0n1/device/model` 普通用户可读；（`/proc/<pid>` 的降级路径已由 DOC-20 覆盖，此处不重复）。",
+    "basis": "README:211-215；实测（2026-10-07，uid 3000）：active / IEIT NS6500G2U384",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && nvidia-smi -L; cat /sys/class/drm/card0/device/power/runtime_status; cat /sys/block/nvme0n1/device/model",
+    "expect": "三条都成功输出（本机 6×L20）",
+    "verdict": "must-hold",
+    "qa": "no-root.qa.md#NR20",
+    "severity": "minor"
+  },
+  {
+    "id": "NR-21",
+    "text": "同一个二进制在「零配置文件」下也能起来：server 可以只靠环境变量启动（POSTGRES_URL + JWT_SECRET + AUTH_REQUIRED=false，无 argv[1]），且启动后不打开 /etc/clusterscope、/var/lib/clusterscope、/var/log/clusterscope 下的任何文件。",
+    "basis": "crates/server/src/main.rs:183-197（无参数走 defaults + 环境变量）、:174-219（6 个环境键）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && env POSTGRES_URL='postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope' JWT_SECRET='nr-checks-secret-0123456789abcdef' AUTH_REQUIRED=false ./target/release/clusterscope-server > /tmp/nr-server-env.log 2>&1 & P=$!; sleep 6; curl -s -o /dev/null -w '%{http_code}\\n' http://127.0.0.1:8080/api/health; lsof -p $P 2>/dev/null | grep -cE '/etc/clusterscope|/var/(lib|log)/clusterscope'; kill $P",
+    "expect": "health=200；lsof 命中 0 行",
+    "verdict": "must-hold",
+    "qa": "no-root.qa.md#NR21",
+    "severity": "major"
+  },
+  {
+    "id": "MRG-02",
+    "text": "合流必须满足 M10 不变量：B 的 12 个未提交改动 + B 的 12 个独有提交 + A 的独有资产合流后**不得引入新的 root 依赖**，且系统级 unit 必须修掉或明确区分；判据 NRM1–NRM6 与「合流后证明仍然无 root 可用」的可复跑清单见 qa/merge-plan-requirements.md 的 M10。",
+    "basis": "qa/merge-plan-requirements.md M10（本次增补）；三棵树 deploy/*.service 均为系统级（实测）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/gh-line && grep -n '^| M10 ' qa/merge-plan-requirements.md; grep -c '^| NRM' qa/merge-plan-requirements.md; grep -c '\"NR-' qa/constraints.json; sh qa/harness/no-root-checks.sh --no-slow",
+    "expect": "M10 一节存在且 NRM 行 ≥6；NR- 约束已入库；no-root 检查脚本跑出 PASS，无新增 FAIL",
+    "verdict": "must-hold",
+    "qa": "merge-plan-requirements.md#M10",
+    "severity": "blocker"
   }
 ]
