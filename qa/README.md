@@ -124,3 +124,21 @@ node .gauntlet/gauntlet.mjs demo demo/12-no-root-fixes-user-units-and-config-err
 第 5 阶段记录的两条偏差（见 `qa/qa-report.json#findings` 的 `F-17`/`F-18`）：
 F5 的 agent unit「真装真启」在**同名服务已在跑**的机器上是 no-op（只能证明 MainPID 不变，不能证明新起成功）；
 `NR-06` 的旧文案（「`-c` 缺失应静默回退继续跑」）与本轮修复后的硬错误语义字面相反——两者都未修，等 Leader/用户裁决。
+
+### 一条要请 Leader 裁决的范围口径缺口（第 5 阶段结尾记录）
+
+在本分支的干净 HEAD 上跑 `sh qa/harness/no-root-fixes-checks.sh`，结果是 **F1–F11 PASS、F12 FAIL**
+（`PASS=11 FAIL=1`）。F12 的失败项是第 5 阶段按任务书第 6 项新增的两个演示脚本
+（`demo/11-no-root-fixes-install-agent-safety.json`、`demo/12-no-root-fixes-user-units-and-config-errors.json`）——
+F12 的允许集（`in_scope()`）写于第 1 阶段，里面没有 `demo/`。**这不是四处修复的缺陷**：本阶段开工时的干净状态
+是 `PASS=12 FAIL=0`，`demo/` 之外的一切判定都没变。
+
+两个候选修法（都需要批准，本轮没有自己动手，见 `qa/qa-report.json#findings` 的 `F-20` 与检查 `Q432`）：
+
+1. 在 `qa/harness/no-root-fixes-checks.sh` 的 `in_scope()` 里加 `demo/*`（1 行；5 条负例自检与反向控制仍是 5/5），
+   **并把该修订以追加一条约束的形式记录到 `qa/constraints.json`** —— 注意追加会动到数组末条（补逗号），
+   会命中 F11 的『零删行』口径，所以要走明确裁决而不是由阶段子 agent 自行落笔；
+2. 接受 F12 的这个 FAIL 作为解释性结论，由第 6 阶段在证据包里写明「新交付物 vs 旧范围清单」。
+
+证据：`qa/evidence/no-root-fixes-FIX15-scope-amendment.txt`（三种状态 A/B/C 的原始输出）、
+`qa/evidence/no-root-fixes-checks-rerun-raw.txt`（干净状态 F12 PASS 的原文）。
