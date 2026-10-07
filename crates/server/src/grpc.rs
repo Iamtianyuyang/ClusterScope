@@ -654,9 +654,10 @@ async fn evaluate_alerts(state: &AppState, report: &NodeMetricsReport) {
                 "load_1" => report.load_1,
                 _ => continue,
             };
-            if let Some(event) = state
-                .alert_engine
-                .evaluate(rule, &report.node_id, "", value, Utc::now())
+            if let Some(event) =
+                state
+                    .alert_engine
+                    .evaluate(rule, &report.node_id, "", value, Utc::now())
             {
                 persist_alert_event(state, &event).await;
             }

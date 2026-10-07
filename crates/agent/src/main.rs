@@ -123,6 +123,13 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    // Recover from an unclean shutdown before anything is dispatched: kill
+    // process groups a previous agent instance left behind (their pid markers
+    // live in the job log dir) and drop job log dirs past the 7-day retention
+    // window the server uses for job_logs.
+    crate::job_executor::cleanup_orphaned_process_groups(&config.log_dir).await;
+    crate::job_executor::cleanup_old_job_dirs(&config.log_dir, chrono::Duration::days(7)).await;
+
     // Start reporting loop
     let report_interval = std::time::Duration::from_secs(config.report_interval_secs);
     let collector_handle = {
@@ -171,10 +178,15 @@ async fn main() -> anyhow::Result<()> {
 
                 // Re-register every ~60s so node info survives server restarts
                 // (the server keeps node state in memory + upserts on register).
-                if beats.is_multiple_of(12)
-                    && let Err(e) = client.lock().await.register().await
-                {
-                    warn!(error = %e, "Failed to re-register with server");
+                if beats.is_multiple_of(12) {
+                    let mut guard = client.lock().await;
+                    if let Err(e) = guard.register().await {
+                        warn!(error = %e, "Failed to re-register with server");
+                    }
+                    // Cancellation markers of jobs that are neither running
+                    // nor holding a process group are never checked again;
+                    // prune them so a long-lived agent's set stays bounded.
+                    guard.job_runtime.prune().await;
                 }
             }
         })

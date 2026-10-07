@@ -642,12 +642,18 @@ pub async fn create_alert_rule(
     // Parse duration as i64 first and range-check before narrowing: `as i32`
     // on an oversized value truncates (e.g. 2^40 -> 0), which would silently
     // turn a long duration into an instant-firing rule.
-    let duration_secs: i64 = req.get("duration_seconds").and_then(|v| v.as_i64()).unwrap_or(30);
+    let duration_secs: i64 = req
+        .get("duration_seconds")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(30);
     let duration: i32 = i32::try_from(duration_secs)
         .ok()
         .filter(|d| *d >= 0)
         .ok_or(StatusCode::BAD_REQUEST)?;
-    let severity = req.get("severity").and_then(|v| v.as_str()).unwrap_or("warning");
+    let severity = req
+        .get("severity")
+        .and_then(|v| v.as_str())
+        .unwrap_or("warning");
     let node_id = req.get("node_id").and_then(|v| v.as_str()).unwrap_or("");
     let gpu_uuids = req
         .get("gpu_uuids")
@@ -672,13 +678,15 @@ pub async fn create_alert_rule(
         return Err(StatusCode::BAD_REQUEST);
     }
     if let Some(arr) = gpu_uuids.as_array()
-        && arr.len() > 256 {
-            return Err(StatusCode::BAD_REQUEST);
-        }
+        && arr.len() > 256
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     if let Some(obj) = labels.as_object()
-        && obj.len() > 64 {
-            return Err(StatusCode::BAD_REQUEST);
-        }
+        && obj.len() > 64
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     if !matches!(operator, "gt" | "gte" | "lt" | "lte" | "eq" | "neq") {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -689,14 +697,20 @@ pub async fn create_alert_rule(
         return Err(StatusCode::BAD_REQUEST);
     }
     if let Some(arr) = gpu_uuids.as_array()
-        && arr.iter().any(|v| v.as_str().map(|s| s.len() > 255).unwrap_or(false)) {
-            return Err(StatusCode::BAD_REQUEST);
-        }
+        && arr
+            .iter()
+            .any(|v| v.as_str().map(|s| s.len() > 255).unwrap_or(false))
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     if let Some(obj) = labels.as_object()
         && (obj.keys().any(|k| k.len() > 255)
-            || obj.values().any(|v| v.as_str().map(|s| s.len() > 4096).unwrap_or(false))) {
-            return Err(StatusCode::BAD_REQUEST);
-        }
+            || obj
+                .values()
+                .any(|v| v.as_str().map(|s| s.len() > 4096).unwrap_or(false)))
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     if !matches!(severity, "info" | "warning" | "critical") {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -1049,4 +1063,3 @@ pub async fn get_prometheus_metrics(
 }
 
 // ===== Helpers =====
-
