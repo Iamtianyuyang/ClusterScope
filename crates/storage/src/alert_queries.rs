@@ -190,12 +190,21 @@ pub async fn get_active_alert_events(pool: &PgPool) -> Result<Vec<AlertEventRow>
 /// Self-heal: alert instances whose latest event is still pending/firing but
 /// older than `cutoff` get a synthetic `resolved` event (e.g. after a server
 /// restart the in-memory engine lost their state).
+/// Expire alerts whose latest event is still pending/firing but older than
+/// `cutoff`: a `resolved` event is appended for each. Returns the
+/// `(rule_id, node_id, gpu_uuid)` keys that were expired so the caller can
+/// reset the matching in-memory alert state.
 pub async fn expire_stale_alerts(
     pool: &PgPool,
     cutoff: chrono::DateTime<chrono::Utc>,
-) -> Result<usize> {
-    let result = sqlx::query(
+) -> Result<Vec<(String, String, String)>> {
+    let rows: Vec<(String, String, String)> = sqlx::query_as(
         r#"
+        WITH stale AS (
+            SELECT DISTINCT ON (rule_id, node_id, gpu_uuid) *
+            FROM alert_events
+            ORDER BY rule_id, node_id, gpu_uuid, timestamp DESC
+        )
         INSERT INTO alert_events (
             event_id, rule_id, node_id, gpu_uuid, old_state, new_state,
             current_value, threshold, timestamp
@@ -203,19 +212,16 @@ pub async fn expire_stale_alerts(
         SELECT md5(random()::text || clock_timestamp()::text),
                t.rule_id, t.node_id, t.gpu_uuid, t.new_state, 'resolved',
                t.current_value, t.threshold, NOW()
-        FROM (
-            SELECT DISTINCT ON (rule_id, node_id, gpu_uuid) *
-            FROM alert_events
-            ORDER BY rule_id, node_id, gpu_uuid, timestamp DESC
-        ) t
+        FROM stale t
         WHERE t.new_state IN ('pending', 'firing') AND t.timestamp < $1
+        RETURNING rule_id, node_id, gpu_uuid
         "#,
     )
     .bind(cutoff)
-    .execute(pool)
+    .fetch_all(pool)
     .await
     .context("Failed to expire stale alerts")?;
-    Ok(result.rows_affected() as usize)
+    Ok(rows)
 }
 
 /// Number of targets whose latest alert event is still pending/firing.
@@ -255,4 +261,15 @@ pub async fn get_alert_events_by_rule(
     .fetch_all(pool)
     .await
     .context("Failed to get alert events")
+}
+
+/// Drop alert events older than the 30-day retention window.
+pub async fn prune_old_alert_events(pool: &PgPool) -> Result<()> {
+    let cutoff = chrono::Utc::now() - chrono::Duration::days(30);
+    sqlx::query("DELETE FROM alert_events WHERE timestamp < $1")
+        .bind(cutoff)
+        .execute(pool)
+        .await
+        .context("Failed to prune alert events")?;
+    Ok(())
 }

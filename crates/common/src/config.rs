@@ -89,6 +89,11 @@ pub struct ServerConfig {
     /// Shared secret agents must present on every gRPC call.
     /// Empty = gRPC accepts any caller (insecure; trusted network only).
     pub agent_token: String,
+    /// Trust `X-Forwarded-For` when resolving the client address used by the
+    /// login/refresh rate limiter. Only enable this when the server is
+    /// reachable *exclusively* through a proxy that overwrites the header:
+    /// otherwise a client can spoof the header and bypass the per-IP budget.
+    pub trust_proxy_headers: bool,
 }
 
 impl Default for ServerConfig {
@@ -120,6 +125,7 @@ impl Default for ServerConfig {
             default_admin_password: "admin".to_string(),
             auth_required: true,
             agent_token: String::new(),
+            trust_proxy_headers: false,
         }
     }
 }
