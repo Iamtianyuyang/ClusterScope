@@ -1,0 +1,29 @@
+== README 里 postgres 相关行 ==
+25:- **Server**:聚合所有节点,提供 REST API 与任务调度,持久化到 PostgreSQL
+41:                        │PostgreSQL│
+57:| PostgreSQL | v16+(server 必需;无需 root 的两条落地路径见[快速开始](#quickstart)第 2 步;`deploy/docker-compose.yml` 需要本机有 docker) |
+79:### 2. 启动 Server(需要 PostgreSQL)
+83:# 编辑:postgres_url 指向你的库;auth_required: false 开启只读免密(推荐内网)
+87:#### 无 root 准备 PostgreSQL(两条可行路径)
+89:**路径 A —— 已经有 PostgreSQL 实例:直接把它填进 `postgres_url`,什么都不用装**
+92:postgres_url: "postgresql://<用户>:<口令>@<主机>:5432/clusterscope"
+99:**路径 B —— 把 PostgreSQL 装到自己的 HOME(无 root、无 docker、无外网时用这条)**
+101:本集群实测走的就是这条:源码编译到 `~/pg16`,数据目录 `~/pgdata`,用普通账号起停。
+105:./configure --prefix="$HOME/pg16" && make -j"$(nproc)" && make install
+108:"$HOME/pg16/bin/initdb" -D "$HOME/pgdata" -U clusterscope --auth=trust
+111:"$HOME/pg16/bin/pg_ctl" -D "$HOME/pgdata" -l "$HOME/pgdata/server.log" -o "-p 5432 -k /tmp" start
+112:"$HOME/pg16/bin/createdb" -h 127.0.0.1 -p 5432 -U clusterscope clusterscope
+115:"$HOME/pg16/bin/pg_ctl" -D "$HOME/pgdata" stop
+118:`postgres_url` 填 `postgresql://clusterscope:<口令>@127.0.0.1:5432/clusterscope`;
+119:`initdb` / `pg_ctl` / `psql` 不在 PATH 时用 `$HOME/pg16/bin/` 下的完整路径。
+121:> `docker compose up`(`deploy/docker-compose.yml`,只含 postgres + server)**需要本机有 docker**:
+263:postgres_url: "postgresql://user:pass@localhost:5432/clusterscope"
+332:cp deploy/server.yaml.example ~/.config/clusterscope/server.yaml   # 改 postgres_url
+416:├── storage/     # PostgreSQL 访问层
+443:- 生产建议:PostgreSQL 独立账号、`auth_required: true`、设置 `agent_token` 并定期轮换 JWT secret
+  ok   README 给出「已有实例直接填 postgres_url」这条路径
+  ok   README 给出「把 PostgreSQL 装到 HOME」这条路径（initdb）
+  ok   同上（pg_ctl 启停）
+  ok   README 说明我们实测走的是哪条（点名 pg16 / 装到 HOME）
+  ok   docker 那条路写明了前提（需要 docker / 本集群不可用）
+  ok   本机确实没有 docker（证明前提必须写明）

@@ -1,0 +1,33 @@
+== 静态：脚本里按名字整机匹配的杀进程调用（pkill/killall）==
+<none>
+  ok   脚本里有注释说明它按 PID/进程做事（停止逻辑有交代）
+  ok   探针进程已起来（PID 2774629，模拟同机上别人的 agent）
+== 探针 ==
+pid=2774629  log=/tmp/nr-fixes-checks/probe/probe.log
+== 安装前本机其它 clusterscope-agent 进程 ==
+266643 
+== install #1 rc=0（script HOME=/tmp/nr-fixes-checks/home-a）==
+==> testing passwordless ssh to qa@fake-host
+==> uploading agent binary
+==> writing config (node_id=qa-fix-node, server=http://127.0.0.1:59999)
+==> starting agent on qa@fake-host
+started via nohup (pid 2774805)
+==> done. Check the dashboard: node 'qa-fix-node' should appear within ~10s.
+== install #2 rc=0 ==
+==> uploading agent binary
+==> writing config (node_id=qa-fix-node, server=http://127.0.0.1:59999)
+==> starting agent on qa@fake-host
+stopping previous agent (pid 2774805)
+started via nohup (pid 2774976)
+==> done. Check the dashboard: node 'qa-fix-node' should appear within ~10s.
+== scratch HOME 下的 agent PID：第一次=2774805  第二次=2774976  ==
+== stub systemctl 调用 ==
+stub-systemctl --user show-environment
+stub-systemctl --user show-environment
+  ok   第一次安装 rc=0（实际 0）
+  ok   第二次安装 rc=0（实际 0）
+  ok   探针进程在两次安装后仍然存活
+  ok   安装前就存在的其它 clusterscope-agent 进程全部存活（快照: 266643 ）
+  ok   第一次安装后 scratch HOME 下有 1 个 agent（实际 1）
+  ok   第二次安装后 scratch HOME 下仍有且仅有 1 个 agent（实际 1）
+  ok   停止/替换只作用在本次安装启动的进程（旧 PID 2774805  → 新 2774976 ；仍在跑的旧 PID:无）

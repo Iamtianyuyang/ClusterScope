@@ -1,0 +1,9 @@
+== 被删/被改的行（必须为空）==
+<none>
+== 约束统计 ==
+{"total":118,"missingFix":[],"missingNr":22,"dup":[]}
+  ok   qa/constraints.json 只有新增（diff 里没有被删/被改的行）
+  ok   FIX-01..FIX-14 都在
+  ok   约束 id 唯一
+  ok   约束总条数 ≥118（104 既有 + 14 本轮）
+  ok   既有 NR-* 约束仍在（≥22 条）

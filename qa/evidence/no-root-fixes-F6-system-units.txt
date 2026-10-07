@@ -1,0 +1,40 @@
+== deploy/agent.service ==
+# System-wide unit -- OPTIONAL, requires root: install into /etc/systemd/system/
+# and `systemctl enable --now clusterscope-agent`. It runs as User=clusterscope and
+# reads /etc/clusterscope/agent.yaml. The no-root default is the user-level unit
+# deploy/clusterscope-agent.service (systemctl --user).
+== deploy/server.service ==
+# System-wide unit -- OPTIONAL, requires root: install into /etc/systemd/system/
+# and `systemctl enable --now clusterscope-server`. It runs as User=clusterscope and
+# reads /etc/clusterscope/server.yaml. The no-root default is the user-level unit
+# deploy/clusterscope-server.service (systemctl --user).
+== README 里提到 root 的行 ==
+15:**ClusterScope** — 轻量级 Linux GPU 集群监控平台。终端仪表盘(TUI)+ 分布式采集,普通用户即可运行,**无需 root**。
+21:  <img alt="No root" src="https://img.shields.io/badge/root-not%20required-success">
+56:| 权限 | 普通用户即可,**无需 root** |
+57:| PostgreSQL | v16+(server 必需;无需 root 的两条落地路径见[快速开始](#quickstart)第 2 步;`deploy/docker-compose.yml` 需要本机有 docker) |
+87:#### 无 root 准备 PostgreSQL(两条可行路径)
+99:**路径 B —— 把 PostgreSQL 装到自己的 HOME(无 root、无 docker、无外网时用这条)**
+107:# 2) 初始化数据目录(HOME 内,不需要 root)
+124:### 3. 部署 Agent(免密 ssh,无需 root)
+246:## 数据采集(无 root) {#collection}
+322:| 方式 | 需要 root? | 二进制 / 配置 | unit 文件(仓库里现成的) |
+325:| 系统级(可选) | **需要 root** | `/usr/local/bin/` + `/etc/clusterscope/` | `deploy/server.service`、`deploy/agent.service`(`User=clusterscope`、`WantedBy=multi-user.target`) |
+327:### 用户级安装(无需 root)
+340:远程节点的 agent 也可以用 `./deploy/install-agent.sh user@host http://SERVER_IP:50051` 装(免密 ssh,同样无需 root)。
+348:loginctl enable-linger "$USER"                 # 需要管理员/root 代办(普通用户通常没权限)
+354:### 系统级安装(可选,需要 root)
+357:sudo install -m755 target/release/clusterscope-server target/release/clusterscope-agent /usr/local/bin/
+358:sudo mkdir -p /etc/clusterscope /var/lib/clusterscope
+359:sudo cp deploy/server.yaml.example /etc/clusterscope/server.yaml
+360:sudo cp deploy/agent.yaml.example  /etc/clusterscope/agent.yaml
+361:sudo useradd --system --home /var/lib/clusterscope --shell /usr/sbin/nologin clusterscope   # unit 里的 User=clusterscope
+362:sudo cp deploy/server.service deploy/agent.service /etc/systemd/system/
+363:sudo systemctl daemon-reload
+364:sudo systemctl enable --now clusterscope-server clusterscope-agent
+367:没有 root 就只用用户级那套;两套不要混装(同名服务会互相顶掉)。
+  ok   系统级 agent unit 仍在（multi-user.target）
+  ok   系统级 server unit 仍在（User=clusterscope）
+  ok   agent.service 文件头注明它是系统级（需 root）
+  ok   server.service 文件头注明它是系统级（需 root）
+  ok   README 说明系统级安装需要 root（可选路径）

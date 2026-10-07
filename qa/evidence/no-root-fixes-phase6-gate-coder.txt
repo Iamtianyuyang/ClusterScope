@@ -1,0 +1,27 @@
+spec: 1 feature(s), 6 scenario(s)（commands 适配器：场景与测试按名称对应）
+$ sh -c "export PATH=$HOME/.cargo/bin:$PATH; cargo build --workspace --all-targets --offline"
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.39s
+$ sh -c "export PATH=$HOME/.cargo/bin:$PATH; node gauntlet-tools/rust-gate.mjs --out gauntlet-out"
+$ cargo test --workspace --offline --no-run   (CARGO_TARGET_DIR=/public/tianyuyang/code/ClusterScope-review/nr-fixes/gauntlet-out/cov-target)
+  build+link of test targets: 0.3s, 8 test binaries (+1 product binary/binaries, built for CARGO_BIN_EXE_*, not run)
+$ /public/tianyuyang/code/ClusterScope-review/nr-fixes/gauntlet-out/cov-target/debug/deps/clusterscope_agent-9954b24536f7516d
+$ /public/tianyuyang/code/ClusterScope-review/nr-fixes/gauntlet-out/cov-target/debug/deps/clusterscope_server-38095c0d17b01acc
+$ /public/tianyuyang/code/ClusterScope-review/nr-fixes/gauntlet-out/cov-target/debug/deps/clusterscope_tui-4d25be27e9617823
+$ /public/tianyuyang/code/ClusterScope-review/nr-fixes/gauntlet-out/cov-target/debug/deps/common-f590d5465b21e6ba
+$ /public/tianyuyang/code/ClusterScope-review/nr-fixes/gauntlet-out/cov-target/debug/deps/no_root_agent_config-2ab4438f205510c3
+$ /public/tianyuyang/code/ClusterScope-review/nr-fixes/gauntlet-out/cov-target/debug/deps/protocol-efef23328e23c403
+$ /public/tianyuyang/code/ClusterScope-review/nr-fixes/gauntlet-out/cov-target/debug/deps/scheduler-46d5b0853d6a9ce3
+$ /public/tianyuyang/code/ClusterScope-review/nr-fixes/gauntlet-out/cov-target/debug/deps/storage-253875246e48ce46
+tests: 59 total, 0 failed, 0 ignored -> /public/tianyuyang/code/ClusterScope-review/nr-fixes/gauntlet-out/junit.xml
+  clusterscope-agent (bin): 11/11, clusterscope-server (bin): 6/6, clusterscope-tui (bin): 3/3, common (lib): 21/21, no_root_agent_config (test): 6/6, protocol (lib): 0/0, scheduler (lib): 12/12, storage (lib): 0/0, Doc-tests common: 0/0, Doc-tests protocol: 0/0, Doc-tests scheduler: 0/0, Doc-tests storage: 0/0
+coverage: 30 instrumented file(s) in lcov.info
+
+══ GATE (coder) ══
+  ✅ spec         {"scenarios":6,"undefinedSteps":0,"ambiguous":0}
+  ✅ build        {}
+  ✅ tests        {"total":59,"failed":0}
+  ✅ acceptance   {"scenarios":6,"passed":6,"failed":0,"missing":0,"failedScenarios":[],"missingScenarios":[]}
+
+GATE coder: PASS
+exit=0
+end 2026-10-07 10:16:21 UTC

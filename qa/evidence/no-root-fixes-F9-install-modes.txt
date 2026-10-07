@@ -1,0 +1,17 @@
+== README 里的 unit 文件名与 systemctl --user ==
+324:| **用户级(默认,推荐)** | **不需要** | `~/.local/bin/` + `~/.config/clusterscope/` | `deploy/clusterscope-server.service`、`deploy/clusterscope-agent.service`(`WantedBy=default.target`,路径全走 `%h`) |
+325:| 系统级(可选) | **需要 root** | `/usr/local/bin/` + `/etc/clusterscope/` | `deploy/server.service`、`deploy/agent.service`(`User=clusterscope`、`WantedBy=multi-user.target`) |
+334:cp deploy/clusterscope-server.service deploy/clusterscope-agent.service ~/.config/systemd/user/
+335:systemctl --user daemon-reload
+336:systemctl --user enable --now clusterscope-server clusterscope-agent
+337:systemctl --user status clusterscope-agent
+362:sudo cp deploy/server.service deploy/agent.service /etc/systemd/system/
+372:systemctl --user status  clusterscope-server    # 中央服务
+373:systemctl --user restart clusterscope-server
+374:systemctl --user restart clusterscope-agent     # 本机 agent
+375:ssh node-01 'systemctl --user restart clusterscope-agent'
+405:- **节点迟迟不出现**:`systemctl --user status clusterscope-agent` 是否运行、`journalctl --user -u clusterscope-agent` 有无报错、server 的 50051 端口是否可达、`agent_token` 是否与 server 一致
+  ok   README 提到用户级 agent unit 文件
+  ok   README 提到用户级 server unit 文件
+  ok   README 提到系统级 unit（可选、需 root 时用）
+  ok   README 的 systemctl --user 命令仍在（且有仓库里的 unit 对应）

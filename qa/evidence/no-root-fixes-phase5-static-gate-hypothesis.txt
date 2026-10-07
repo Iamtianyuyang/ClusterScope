@@ -1,0 +1,42 @@
+### 1) real deploy/install-agent.sh (must PASS)
+grep hits:
+<none>
+STATIC-GATE: PASS (no literal-name match)
+/tmp/gate-probe.sh: line 9: $'\r': command not found
+
+### 2) variant with literal-name pkill (must FAIL/fire)
+grep hits:
+1:    pkill -f clusterscope-agent
+STATIC-GATE: FAIL (fired)
+/tmp/gate-probe.sh: line 9: $'\r': command not found
+
+### 3) variant with PID-file kill (must PASS)
+grep hits:
+<none>
+STATIC-GATE: PASS (no literal-name match)
+/tmp/gate-probe.sh: line 9: $'\r': command not found
+
+### 4) variant with pkill -F pidfile (must PASS)
+grep hits:
+1:    pkill -F /run/x.pid -f clusterscope-agent
+STATIC-GATE: PASS (no literal-name match)
+/tmp/gate-probe.sh: line 9: $'\r': command not found
+
+### probe script (static gate logic, extracted from the harness F1) ###
+     1	#!/bin/bash
+     2	F=${1:-/tmp/fake-install.sh}
+     3	scope="$(grep -nE '(^|[[:space:]])(pkill|killall)([[:space:]]|$)' "$F" 2>/dev/null || true)"
+     4	echo "grep hits:"
+     5	echo "${scope:-<none>}"
+     6	bad="$(printf '%s\n' "$scope" | grep -v ' -F' | grep -v 'DOL' | grep -v '^$' || true)"
+     7	bad="${bad//DOL/$}"
+     8	if [ -n "$bad" ]; then echo 'STATIC-GATE: FAIL (fired)'; else echo 'STATIC-GATE: PASS (no literal-name match)'; fi
+     9	
+
+### input variants ###
+-- fake-install-1.sh (literal pkill):
+    pkill -f clusterscope-agent
+-- fake-install-2.sh (PID file kill):
+    kill $(cat $PIDFILE)   # PID file based
+-- fake-install-3.sh (pkill -F pidfile):
+    pkill -F /run/x.pid -f clusterscope-agent

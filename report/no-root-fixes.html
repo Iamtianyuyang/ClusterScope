@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="blueprint" data-mode="auto">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>无 root 修复 · 证据包（ClusterScope · 2026-10-07）</title>
+<style>
+:root{--font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",Roboto,Arial,sans-serif;
+--font-mono:ui-monospace,SFMono-Regular,"JetBrains Mono","Cascadia Mono",Menlo,Consolas,"Liberation Mono",monospace;
+--radius:0px;--bw:1.5px;--bg:#f5f5f1;--paper:#fdfdfb;--ink:#16181d;--ink-2:#4b5260;--ink-3:#8b929e;--line:#1d2026;--line-2:#d6dae1;--fill:#f2f4f7;
+--accent:#1d5fbf;--accent-bg:#e4ecf8;--ok:#1f7a4d;--ok-bg:#e3f3ea;--err:#c62828;--err-bg:#fbeaea;--warn:#a8620a;--warn-bg:#fdf3e2;--head-bg:#16181d;--head-fg:#fdfdfb}
+*,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-sans);font-size:14px;line-height:1.62;-webkit-font-smoothing:antialiased}
+code,pre,kbd{font-family:var(--font-mono)}a{color:var(--accent)}
+.sheet{max-width:1180px;margin:0 auto;padding:30px 24px 64px}
+.head{border:var(--bw) solid var(--line);background:var(--paper);padding:20px 22px}
+.eyebrow{font:12px/1.4 var(--font-mono);color:var(--ink-3);letter-spacing:.04em}
+h1{margin:4px 0 0;font-size:25px;line-height:1.3;letter-spacing:-.01em}
+.verdict{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:4px 10px;font-weight:600;border:var(--bw) solid currentColor}
+.is-ok{color:var(--ok);background:var(--ok-bg)}.is-err{color:var(--err);background:var(--err-bg)}.is-warn{color:var(--warn);background:var(--warn-bg)}
+.meta{display:flex;flex-wrap:wrap;gap:4px 18px;margin-top:12px;font-size:12px;color:var(--ink-2)}
+.meta b{font-family:var(--font-mono);font-weight:400;color:var(--ink-3);margin-right:6px}
+h2{margin:34px 0 10px;font-size:19px;border-bottom:var(--bw) solid var(--line);padding-bottom:6px}
+h3{margin:20px 0 6px;font-size:15px}
+p{margin:8px 0;max-width:82ch}
+ul,ol{margin:8px 0;padding-left:22px}li+li{margin-top:4px}
+.card{border:var(--bw) solid var(--line);background:var(--paper);margin:14px 0}
+.card>.h{display:flex;align-items:center;gap:10px;border-bottom:var(--bw) solid var(--line);background:var(--head-bg);color:var(--head-fg);padding:7px 12px}
+.card>.h .id{font:600 13px/1 var(--font-mono)}
+.card>.h .t{font-weight:600}.card>.h .x{margin-left:auto;font:11px/1.3 var(--font-mono);opacity:.85}
+.card>.b{padding:12px 14px}
+.card.res>.h{background:#efe9d8;color:var(--ink);border-bottom-color:var(--line)}
+pre{margin:0;padding:10px 12px;background:var(--fill);border:1px solid var(--line-2);overflow-x:auto;font-size:12.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+pre.diff .mi{color:var(--err)}pre.diff .pl{color:var(--ok)}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0}
+th,td{border:1px solid var(--line-2);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--fill);font-weight:600}
+td.num{font-family:var(--font-mono);white-space:nowrap}
+.ok{color:var(--ok);font-weight:600}.err{color:var(--err);font-weight:600}.warn{color:var(--warn);font-weight:600}.mut{color:var(--ink-2)}
+.tag{display:inline-block;padding:1px 7px;border:1px solid currentColor;font:600 11px/1.6 var(--font-mono)}
+.tag.ok{color:var(--ok);background:var(--ok-bg)}.tag.err{color:var(--err);background:var(--err-bg)}.tag.warn{color:var(--warn);background:var(--warn-bg)}.tag.mut{color:var(--ink-2);background:var(--fill)}
+.q{border-left:3px solid var(--line-2);padding:2px 12px;color:var(--ink-2);margin:8px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:860px){.grid2{grid-template-columns:1fr}.sheet{padding:16px 12px 48px}}
+.step{display:flex;gap:10px;margin:8px 0}.step .n{flex:0 0 22px;height:22px;border:1px solid var(--line);background:var(--fill);display:flex;align-items:center;justify-content:center;font:600 12px/1 var(--font-mono)}
+.toc a{text-decoration:none;border-bottom:1px dotted var(--ink-3)}
+.small{font-size:12.5px;color:var(--ink-2)}
+.kv{font-family:var(--font-mono);font-size:12.5px}
+.diagram{font-family:var(--font-mono);font-size:12.5px;line-height:1.5;background:var(--fill);border:1px solid var(--line-2);padding:12px;overflow-x:auto;white-space:pre}
+.diagram .n{font-weight:600}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<!-- ================================================================ head -->
+<div class="head">
+  <div class="eyebrow">GAUNTLET · 第 6 阶段证据包 · 需求原文「这个项目是要做一个不用 root 的程序」</div>
+  <h1>无 root 修复：安装脚本不再误杀、配置缺失不再静默、用户级 unit 与无 root 文档补齐</h1>
+  <div><span class="verdict is-ok">✅ 本轮交付物通过：coder 闸门 PASS · 59/59 测试 · 6/6 场景 · harness 12/12 · 14/14 FIX-* 约束 met</span>
+  <span class="verdict is-warn">⚠️ full profile 仍会亮 ❌：complexity / crap / coverage / mutation（既有债务，本轮不重算）</span></div>
+  <div class="meta">
+    <span><b>分支</b>gauntlet/no-root-fixes @ 1279b48</span>
+    <span><b>PR 目标</b>gauntlet/audit-gh-line（栈式 PR，本 PR 只含修复）</span>
+    <span><b>机器</b>lyy-node03 · uid 3000 · 无 sudo</span>
+    <span><b>复验时间</b>2026-10-07 10:16–10:29 UTC</span>
+    <span><b>证据</b>qa/evidence/ 与 gauntlet-out/</span>
+  </div>
+  <p class="small" style="margin-top:12px">一句话结论：<b>四项「无 root」缺陷</b>（安装脚本整机误杀 / 显式 <span class="kv">-c</span> 缺失静默回退 / 缺用户级 unit / 无 root 的 PG 与 linger 路径没文档）<b>已被修掉并用真实产物验过</b>；
+  配套还修复了两处让闸门本身失真的流水线缺陷。本轮<b>不重跑</b> clean/harden 阶段的重型质量闸门（complexity / CRAP / coverage / mutation），它们的 ❌ 是既有审查结论，原样保留在第 3 节。</p>
+</div>
+
+<!-- ================================================================ 0 -->
+<h2 id="s0">0 · 先看结论（30 秒）</h2>
+<div class="grid2">
+  <div class="card"><div class="h"><span class="id">A</span><span class="t">这次修了什么</span></div><div class="b">
+    <ol>
+      <li><b>NF-02</b> <span class="kv">deploy/install-agent.sh</span>：不再 <span class="kv">pkill -f clusterscope-agent</span> 整机扫名字，改为「自己的 PID 文件 + <span class="kv">/proc/&lt;pid&gt;/cmdline</span> 核对」。</li>
+      <li><b>NF-01</b> agent 配置语义：显式 <span class="kv">-c</span> 指向不存在的文件 → <b>非 0 退出 + 逐字点名该路径 + 点名用户级路径</b>，不再静默用默认值。</li>
+      <li><b>用户级 systemd unit</b>：新增 <span class="kv">deploy/clusterscope-{agent,server}.service</span>（<span class="kv">%h</span> / <span class="kv">WantedBy=default.target</span>），uid 3000 真装真启。</li>
+      <li><b>文档</b>：README 补无 root / 无 docker 的两条 PG 路径与 linger 前提、用户级 vs 系统级分工。</li>
+      <li><b>工具（2 处）</b>：<span class="kv">gauntlet-tools/rust-gate.mjs</span> 只启动真正的测试产物；<span class="kv">qa/harness/*</span> 的 F5 自带 server 配置。</li>
+    </ol>
+  </div></div>
+  <div class="card"><div class="h"><span class="id">B</span><span class="t">怎么知道的（数字）</span></div><div class="b">
+    <table>
+      <tr><th>证据</th><th>结果</th></tr>
+      <tr><td><span class="kv">gate --profile coder</span></td><td class="num"><span class="ok">PASS</span>（spec 6 场景 / build / tests 59 / acceptance 6）</td></tr>
+      <tr><td><span class="kv">sh qa/harness/no-root-fixes-checks.sh</span></td><td class="num"><span class="ok">PASS=12 FAIL=0</span></td></tr>
+      <tr><td>FIX-* 约束（14 条）</td><td class="num"><span class="ok">met 14/14</span></td></tr>
+      <tr><td>常驻 agent（PID 266643）</td><td class="num"><span class="ok">全程未被打扰</span>（is-active=active）</td></tr>
+      <tr><td>被 F5 触碰的 4 个文件</td><td class="num"><span class="ok">cmp 逐字节一致</span>（跑前后 md5 相同）</td></tr>
+      <tr><td>演示 <span class="kv">demo/11</span>、<span class="kv">demo/12</span></td><td class="num"><span class="ok">rc=0</span>（本轮重录）</td></tr>
+    </table>
+    <p class="small">指向：<span class="kv">qa/evidence/no-root-fixes-phase6-gate-coder.txt</span>、<span class="kv">…-harness.txt</span>、<span class="kv">…-restore-verification.txt</span>、<span class="kv">…-demos-rerun.txt</span>。</p>
+  </div></div>
+</div>
+
+<!-- ================================================================ 1 -->
+<h2 id="s1">1 · 这次修了什么（四项修复 + 两项工具修复）</h2>
+<p class="small">每项给出：一句话结论 → 修复前 vs 修复后的可判定差异（可复制粘贴的最小验证） → 证据文件。</p>
+
+<div class="card">
+  <div class="h"><span class="id">FIX-01</span><span class="t">NF-02：安装脚本停止 agent 时不再误杀同机其它 agent</span><span class="x">deploy/install-agent.sh</span></div>
+  <div class="b">
+    <p><b>结论</b>：nohup 回退分支不再按名字整机匹配；只停「自己上一次起的那个进程」，并且停之前用 <span class="kv">/proc/&lt;pid&gt;/cmdline</span> 核对 PID 没被复用。</p>
+    <p class="q">为什么这算「无 root 缺陷」：这台机器上用户自己的 <span class="kv">systemctl --user</span> agent（PID 266643）与脚本启的 agent 同名同用户。旧的 <span class="kv">pkill -f clusterscope-agent</span> 会把别人的、以及生产实例一起杀掉——一次安装事故，且在被杀方看来毫无线索。</p>
+    <div class="grid2">
+      <div><div class="small"><b>修复前</b>（7ca587a）</div><pre class="diff"><span class="mi">-    pkill -f clusterscope-agent 2&gt;/dev/null || true</span>
+<span class="mi">-    nohup "$HOME/.local/bin/clusterscope-agent" -c "$HOME/.config/clusterscope/agent.yaml" \</span>
+<span class="mi">-        &gt;&gt; "$HOME/.config/clusterscope/logs/agent.log" 2&gt;&amp;1 &amp;</span></pre></div>
+      <div><div class="small"><b>修复后</b>（1279b48）</div><pre class="diff"><span class="pl">+    stop_previous_agent            # 读自己的 pidfile；cmdline 不匹配就 "leaving it alone"</span>
+<span class="pl">+    nohup "$BIN" -c "$CONF" &gt;&gt; "$HOME/.config/clusterscope/logs/agent.log" 2&gt;&amp;1 &amp;</span>
+<span class="pl">+    echo "$!" &gt; "$PIDFILE"         # ~/.config/clusterscope/agent.pid</span></pre></div>
+    </div>
+    <p><b>最小验证</b>（可复制；在一台有同名 agent 的机器上跑）：</p>
+    <pre>grep -cE '(^|[[:space:]])(pkill|killall)([[:space:]]|$)' deploy/install-agent.sh   # 期望 0
+
+# 动态：起一个"别人的"探针 agent，再连跑两次安装，看它是否还活着
+sh qa/harness/no-root-fixes-checks.sh | head -2        # F1 PASS
+# 手工版：见 demo 11 的 5 步（探针 pid 存活=yes、常驻 266643 存活=yes、探针日志 0 条被杀痕迹）</pre>
+    <p class="small"><b>证据</b>：<span class="kv">qa/evidence/no-root-fixes-F1-install-agent-stop.txt</span>（两次安装：<span class="kv">stopping previous agent (pid 2774805)</span> → 新 2774976；探针与 266643 全程存活）、<span class="kv">qa/evidence/no-root-fixes-phase6-demos-rerun.txt</span> + demo 11 转录。</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="h"><span class="id">FIX-02/03</span><span class="t">NF-01：显式 -c 缺失 = 硬错误；默认缺失 = 点名告警后继续</span><span class="x">crates/agent/src/config_loader.rs</span></div>
+  <div class="b">
+    <p><b>结论</b>：显式给了 <span class="kv">-c/--config</span> 而文件不存在时，agent 立即以非 0 退出，错误里<b>逐字点名那个路径</b>并给出用户级位置；不再回退到内置默认值（即不再出现 <span class="kv">http://localhost:50051</span>）。不带 <span class="kv">-c</span> 且默认 <span class="kv">/etc/clusterscope/agent.yaml</span> 缺失时，仍然「告警 + 继续跑」（守住 NR-06：不崩）。</p>
+    <p class="q">为什么算「无 root 缺陷」：照抄系统级 unit（<span class="kv">ExecStart=… --config /etc/clusterscope/agent.yaml</span>）的人，在用户级安装下必然没有 <span class="kv">/etc/…</span> 这个文件。旧行为是<b>静默</b>用默认值继续跑，节点连到 localhost:50051，表现为「agent 起来了但永远不上线」，报错完全指不到配置文件。</p>
+    <div class="grid2">
+      <div><div class="small"><b>修复前</b>（7ca587a）</div><pre class="diff"><span class="mi">-    // Try to load from file</span>
+<span class="mi">-    if config_path.exists() { …config = parsed; }</span>
+<span class="mi">-    // 文件不存在 → 一路静默用 AgentConfig::default()</span>
+<span class="mi">-    // 输出里没有提到 config_path 的任何一行</span></pre></div>
+      <div><div class="small"><b>修复后</b>（1279b48）</div><pre class="diff"><span class="pl">+    Some(path) =&gt; required_config_file(path),          // 缺失即 bail!
++    None if default_path.exists() =&gt; read_config_file(default_path),
++    None =&gt; { warn!("{default_config_missing_message}"); Ok(AgentConfig::default()) }</span></pre></div>
+    </div>
+    <p><b>最小验证</b>：</p>
+    <pre>target/release/clusterscope-agent -c /tmp/nonexistent/agent.yaml; echo "exit=$?"
+# 期望 exit=1，错误里出现 /tmp/nonexistent/agent.yaml 与 $HOME/.config/clusterscope/agent.yaml
+# 期望这次输出中 http://localhost:50051 出现 0 次</pre>
+    <p class="small"><b>证据</b>：<span class="kv">qa/evidence/no-root-fixes-F2-explicit-missing-config.txt</span>（exit=1、点名路径、5 条断言全 ok）、<span class="kv">…-F3-default-missing.txt</span>（exit=124 = 仍在跑、点名 /etc/clusterscope/agent.yaml）。</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="h"><span class="id">FIX-04/05</span><span class="t">干净 HOME 下身份文件的父目录也会被创建</span><span class="x">crates/agent/src/node_identity.rs</span></div>
+  <div class="b">
+    <p><b>结论</b>：写 node identity 之前先 <span class="kv">create_dir_all</span> 父目录；干净 HOME（连 <span class="kv">~/.config</span> 都不存在）也能落盘，不需要 root 预建目录。</p>
+    <div class="grid2">
+      <div><div class="small"><b>修复前</b></div><pre class="diff"><span class="mi">-        fs::write(path, &amp;new_id)</span>
+<span class="mi">-            .with_context(|| format!("Failed to write node identity to {:?}", path))?;</span></pre></div>
+      <div><div class="small"><b>修复后</b></div><pre class="diff"><span class="pl">+        if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }</span>
+<span class="pl">+        fs::write(path, &amp;new_id)…</span></pre></div>
+    </div>
+    <p><b>最小验证</b>：</p>
+    <pre>H=$(mktemp -d); HOME=$H timeout 6 target/release/clusterscope-agent; ls -l $H/.config/node_id
+# 期望：不存在 -&gt; 被创建且非空，进程没有被 "Failed to write node identity" 打死</pre>
+    <p class="small"><b>证据</b>：<span class="kv">qa/evidence/no-root-fixes-F4-identity-parent.txt</span>（<span class="kv">.config/node_id</span> 被创建、log_dir 也被创建、4 条断言全 ok）。</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="h"><span class="id">FIX-06</span><span class="t">随仓库发用户级 systemd unit（不需要 root），系统级 unit 保留并注明需 root</span><span class="x">deploy/clusterscope-*.service</span></div>
+  <div class="b">
+    <p><b>结论</b>：仓库里现在有两个用户级 unit，路径全走 <span class="kv">%h</span>、不写 <span class="kv">User=/Group=</span>、不挂 <span class="kv">multi-user.target</span>、不走 <span class="kv">/usr/local/bin</span>；uid 3000 下真装真启（server unit 真起、<span class="kv">/api/health=200</span>）。原有的系统级 unit 保留，文件头与 README 都注明「可选 / 需 root」。</p>
+    <div class="grid2">
+      <div><div class="small"><b>修复前</b>：仓库只有系统级 unit</div><pre class="diff"><span class="mi">deploy/agent.service    User=clusterscope … /usr/local/bin … multi-user.target</span>
+<span class="mi">deploy/server.service   同上；用户级安装没有任何 unit 可用</span></pre></div>
+      <div><div class="small"><b>修复后</b>：新增两份用户级 unit</div><pre class="diff"><span class="pl">+deploy/clusterscope-agent.service   ExecStart=%h/.local/bin/clusterscope-agent -c %h/.config/clusterscope/agent.yaml</span>
+<span class="pl">+deploy/clusterscope-server.service  ExecStart=%h/.local/bin/clusterscope-server %h/.config/clusterscope/server.yaml</span>
+<span class="pl">+                                     WantedBy=default.target（两份），不含 User=/Group=</span></pre></div>
+    </div>
+    <p><b>最小验证</b>：</p>
+    <pre>cp deploy/clusterscope-agent.service deploy/clusterscope-server.service ~/.config/systemd/user/
+systemctl --user daemon-reload &amp;&amp; systemctl --user enable --now clusterscope-server
+systemctl --user is-active clusterscope-server    # active
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/api/health   # 200
+# 不打扰已在跑的常驻 agent：systemctl --user show clusterscope-agent -p MainPID --value 不变</pre>
+    <p class="small"><b>证据</b>：<span class="kv">qa/evidence/no-root-fixes-F5-user-units.txt</span>（30 条断言全 ok，含「MainPID 266643 → 266643」与「还原：…逐字节一致」）、<span class="kv">…-F6-system-units.txt</span>（系统级 unit 仍在、注明需 root）。</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="h"><span class="id">FIX-07…09</span><span class="t">README：无 root / 无 docker 的两条 PG 路径 + linger 前提 + 两种安装方式分工</span><span class="x">README.md</span></div>
+  <div class="b">
+    <p><b>结论</b>：不需要 root、也不需要 docker 就能把 PostgreSQL 跑起来的两条路都写进 README（含本轮实测的「源码编译到 <span class="kv">~/pg16</span>」）；<span class="kv">systemctl --user</span> 要在登出后存活需要 linger，文档写明 <span class="kv">loginctl show-user $USER</span> / <span class="kv">enable-linger</span>（后者需管理员）；用户级（默认、无需 root）与系统级（可选、需 root）的分工用一张表说清。</p>
+    <p class="q">为什么算「无 root 缺陷」：修复前的 README 只给 <span class="kv">sudo</span> + docker 的路径，非 root 用户照着做完不成一件事——文档层面的交付缺口。</p>
+    <p><b>最小验证</b>：</p>
+    <pre>grep -nE 'pg16|enable-linger|用户级\(默认,推荐\)|系统级\(可选\)' README.md   # 三条都在
+sh qa/harness/no-root-fixes-checks.sh | sed -n '8,10p'                     # F7/F8/F9 PASS</pre>
+    <p class="small"><b>证据</b>：<span class="kv">qa/evidence/no-root-fixes-F7-postgres-paths.txt</span>、<span class="kv">…-F8-linger.txt</span>、<span class="kv">…-F9-install-modes.txt</span>。</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="h"><span class="id">FIX-14a</span><span class="t">流水线工具修复 1：闸门不再把「产品二进制」当测试目标启动</span><span class="x">gauntlet-tools/rust-gate.mjs</span></div>
+  <div class="b">
+    <p><b>结论</b>：<span class="kv">cargo test</span> 会把集成测试用 <span class="kv">env!("CARGO_BIN_EXE_&lt;name&gt;")</span> 引用的<b>产品二进制</b>一起构建出来（<span class="kv">profile.test === false</span>）。旧代码把它们也加进「要执行的测试产物」列表——agent 是常驻守护进程，<b>永不返回</b>，闸门就此挂死（本机实测挂 31 分钟）。现在只执行 <span class="kv">profile.test === true</span> 的产物，产品二进制仍留在列表里供覆盖率导出使用。</p>
+    <div class="grid2">
+      <div><div class="small"><b>修复前</b></div><pre class="diff"><span class="mi">-  artifacts.push({exe, name, kind});</span>
+<span class="mi">-  for (const a of [...artifacts].sort(…)) { spawn(a.exe) }</span></pre></div>
+      <div><div class="small"><b>修复后</b></div><pre class="diff"><span class="pl">+  artifacts.push({exe, name, kind, isTest: m.profile?.test === true});</span>
+<span class="pl">+  for (const a of [...artifacts].filter((x) =&gt; x.isTest).sort(…)) { spawn(a.exe) }</span></pre></div>
+    </div>
+    <p><b>可判定差异</b>：闸门日志从「N test binaries」变成「8 test binaries (+1 product binary/binaries, built for CARGO_BIN_EXE_*, not run)」，跑到结束而不是挂死；<b>测试数与断言集合零变化</b>（59 个测试照跑，没有任何断言被弱化）。</p>
+    <p class="small"><b>证据</b>：<span class="kv">qa/evidence/no-root-fixes-FIX14-tool-fix-recheck.txt</span>、<span class="kv">qa/evidence/no-root-fixes-phase6-gate-coder.txt</span>（第 4 行即该文案）。</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="h"><span class="id">FIX-14b</span><span class="t">流水线工具修复 2：F5 不再复用机器上指向死端口的 server 配置</span><span class="x">qa/harness/no-root-fixes-checks.sh</span></div>
+  <div class="b">
+    <p><b>结论</b>：F5 现在<b>自带</b>一份 server 配置（由 <span class="kv">deploy/server.yaml.example</span> 用 sed 生成，指向本机 PG 5432 与本地二进制），不再复用 <span class="kv">~/.config/clusterscope/server.yaml</span>——那份文件在本机指向 5433，那里没有实例在听，server 会卡在连库超时，<span class="kv">/api/health=200</span> 这条断言在<b>任何正确实现</b>下都不可能过（假红）。备份/还原逻辑照旧，安装前那份文件最后逐字节还原。</p>
+    <p><b>可判定差异</b>：F5 的 <span class="kv">/api/health</span> 由「不可达」变成实测 <span class="kv">200</span>；断言集合 30 条<b>零差异</b>（既没删也没弱化）。</p>
+    <p class="small"><b>证据</b>：<span class="kv">qa/evidence/no-root-fixes-FIX14-tool-fix-recheck.txt</span>（cluster 3：两种数法的集合 diff = 0）、<span class="kv">qa/evidence/no-root-fixes-F5-user-units.txt:112</span>（<span class="kv">curl /api/health -&gt; 200</span>）。</p>
+  </div>
+</div>
+
+<!-- ================================================================ 2 -->
+<h2 id="s2">2 · 闸门面板（本轮跑了什么、没跑什么）</h2>
+
+<h3>2.1 本轮真实重跑</h3>
+<table>
+  <tr><th>闸门</th><th>命令</th><th>结果</th><th>证据</th></tr>
+  <tr><td>coder profile（spec / build / tests / acceptance）</td><td class="kv">node .gauntlet/gauntlet.mjs gate --profile coder</td><td class="num"><span class="ok">PASS</span> · 6 场景 · 59/59 测试 · acceptance 6/6</td><td class="kv">qa/evidence/no-root-fixes-phase6-gate-coder.txt</td></tr>
+  <tr><td>QA harness F1–F12</td><td class="kv">sh qa/harness/no-root-fixes-checks.sh</td><td class="num"><span class="ok">PASS=12 FAIL=0</span></td><td class="kv">qa/evidence/no-root-fixes-phase6-harness.txt</td></tr>
+  <tr><td>负例 / 正例自检（范围口径）</td><td class="kv">F12 内建</td><td class="num"><span class="ok">负例 5/5 判越界 · 正例 demo/* 判允许</span></td><td class="kv">qa/evidence/no-root-fixes-F12-scope.txt</td></tr>
+  <tr><td>FIX-* 约束（14 条，kit 自己的 constraintsGate 复算）</td><td class="kv">.gauntlet/lib/checks.mjs</td><td class="num"><span class="ok">met 14/14</span></td><td class="kv">qa/evidence/no-root-fixes-phase6-assembled-gates.json</td></tr>
+  <tr><td>演示重录</td><td class="kv">node .gauntlet/gauntlet.mjs demo demo/11…json</td><td class="num"><span class="ok">rc=0 / rc=0</span></td><td class="kv">qa/evidence/no-root-fixes-phase6-demos-rerun.txt</td></tr>
+  <tr><td>共享机器复原</td><td class="kv">cmp 4 文件 + MainPID</td><td class="num"><span class="ok">4/4 逐字节一致 · MainPID 266643 不变</span></td><td class="kv">qa/evidence/no-root-fixes-phase6-restore-verification.txt</td></tr>
+</table>
+
+<h3>2.2 本轮未跑、且如实标注为「既有审查结论」的闸门</h3>
+<p class="small">clean（第 3 阶段）与 harden（第 4 阶段）<b>本轮没有执行</b>——按本次任务书，这三项指标属于上一轮审查已记录的结论，本轮不修、也不重算。它们在 <span class="kv">gate --profile full</span> 里仍然会亮 ❌，这是<b>预期</b>，不是本轮修复的回归。</p>
+<table>
+  <tr><th>闸门</th><th>本轮状态</th><th>本次运行观测到的数字（full profile 跑完该闸门后再被停掉）</th><th>历史记录（审查分支）</th></tr>
+  <tr><td>scope（测量范围）</td><td><span class="tag ok">PASS</span></td><td class="num">files=33 TUs=33 scope=100.0%</td><td class="num">同</td></tr>
+  <tr><td>warnings / tidy</td><td><span class="tag ok">PASS</span></td><td class="num">warnings=0 · tidy findings=0</td><td class="num">同</td></tr>
+  <tr><td>duplication</td><td><span class="tag ok">PASS</span></td><td class="num">0.0%（7161 行里 0 处克隆）</td><td class="num">同</td></tr>
+  <tr><td>complexity（复杂度）</td><td><span class="tag err">FAIL（既有债务，本轮不修）</span></td><td class="num">335 函数 / 21 个超标 / maxCC 23</td><td class="num">316 函数 / 21 超标 / maxCC 23（无变化）</td></tr>
+  <tr><td>crap（复杂度×未测试）</td><td><span class="tag err">FAIL（既有债务，本轮不修）</span></td><td class="num">43 个超标 / maxCRAP 552 / 行覆盖 22.9%</td><td class="num">45 超标 / maxCRAP 552 / 20.7%</td></tr>
+  <tr><td>coverage（覆盖率）</td><td><span class="tag err">FAIL（既有债务，本轮不修）</span></td><td class="num">lineCoverage 22.9%（阈值 90%）</td><td class="num">20.7%</td></tr>
+  <tr><td>mutation（变异测试）</td><td><span class="tag mut">本轮未完成</span></td><td class="num">启动后 736 个变异体、跑到 [22/736] 时被人工停止（前 12 个无覆盖、其后全部存活 → 得分必然 &lt; 100%）</td><td class="num">第 4 阶段未执行</td></tr>
+  <tr><td>sanitize</td><td><span class="tag mut">commands 适配器未配置该项</span></td><td class="num">—</td><td class="num">—</td></tr>
+  <tr><td>arch</td><td><span class="tag mut">skipped（未配置 commands.arch）</span></td><td class="num">记录为「需要人确认」</td><td class="num">同</td></tr>
+  <tr><td>qa / constraints</td><td><span class="tag err">FAIL（既有缺口，见下）</span></td><td class="num">qa 132 检查 / 5 非 pass；constraints 113/118 met</td><td class="num">同上，未因本轮改动变差</td></tr>
+</table>
+<pre class="small">qaGate 明细（kit 只统计 status === "pass"）：na 4 条（OPS-05 docker 路径不可验证 / OPS-09 纯 CPU 降级 / OPS-10 防火墙策略 / FE-01 前端维度 N/A）+ unverifiable 1 条（MRG-01 合流方案必答问题，属父 PR #2）
+constraintsGate 的 5 条非 met 恰好就是上面这 5 条：OPS-05 / OPS-09 / OPS-10 / FE-01 / MRG-01 —— 都是上一轮审查已记录的「环境不可验证 / 不适用 / 属父 PR」的项，**14 条 FIX-* 全部 met**。</pre>
+<p class="small"><b>为什么 mutation 被停掉</b>：full profile 跑到变异阶段时代码已处于被逐行改写 + 逐变异体重跑测试的状态，线程钉在本轮任务书划定的范围之外；且 complexity/crap/coverage 三个 ❌ 早已定局，变异得分不可能翻转结论。为了让证据包按时交付并避免长占用共享机器，运行在 [22/736] 处被人工终止（<span class="kv">exit=130</span>），完整日志原样留在 <span class="kv">qa/evidence/no-root-fixes-phase6-gate-full-interrupted.txt</span>。</p>
+
+<!-- ================================================================ 3 -->
+<h2 id="s3">3 · 残余与已知局限（不美化，逐条给出复现）</h2>
+
+<div class="card res"><div class="h"><span class="id">F-17</span><span class="t">同名常驻 unit 已在跑时，agent 侧「真装真启」只是 no-op</span><span class="tag warn">open</span></div><div class="b">
+  <p>F5 的两次断言在这台机器上无法同时被观测到：常驻实例用的就是<b>同名</b> unit（<span class="kv">clusterscope-agent.service</span>）且已在 running，装上仓库版 unit 后 <span class="kv">enable --now</span> 生效的是「已 active」这一侧——主进程仍是 266643。<b>MainPID 不变正是 FIX-06 要求的「不打扰」</b>，所以那条断言是 <i>trivially</i> 成立，不是被证明；真正被观测到的「真装真启」是 server unit（真起、<span class="kv">/api/health=200</span>）。</p>
+  <p class="small">复现：<span class="kv">qa/evidence/no-root-fixes-F5-user-units.txt:86</span>（MainPID 266643 → 266643）对照 <span class="kv">:98-113</span>（server unit 真起）。要在干净环境补这一步，需要一台没有同名常驻服务的机器，或让 F5 用不冲突的 unit 名做一次真正的冷启。</p>
+</div></div>
+
+<div class="card res"><div class="h"><span class="id">F-22</span><span class="t">F5 会临时替换操作者自己的 ~/.config/systemd/user/clusterscope-agent.service（必须逐字节还原）</span><span class="tag warn">closed（但列入纪律）</span></div><div class="b">
+  <p>F5 的机制是「备份现有同名 unit → 拷入仓库版 → enable --now → 还原」。第 5 阶段曾出现一次<b>「看起来一样」被留下</b>的事故：两次 harness 之间有个手工复跑脚本把仓库版 unit 写进了同一路径，随后那次 F5 把「被覆盖后的版本」当成原样备份并还原，收尾审计才发现机器上的是 809 字节的仓库版（应为本机原本那份 269 字节）。已用事先抓的副本逐字节还原，MainPID 全程未变。</p>
+  <p class="small">本轮（第 6 阶段）复跑前把 4 个文件做了逐字节副本并记了 md5；跑完 <span class="kv">cmp</span> 全一致、<span class="kv">MainPID 266643 → 266643</span>、<span class="kv">is-active=active</span>、<span class="kv">Linger=yes</span>、8080/50051 已释放。原始记录：<span class="kv">qa/evidence/no-root-fixes-phase6-restore-verification.txt</span>。</p>
+</div></div>
+
+<div class="card res"><div class="h"><span class="id">F-18</span><span class="t">审计里「静默回退」的表述已被本轮修复取代（属历史记录）</span><span class="tag warn">open（文本冲突，待 Leader 裁决）</span></div><div class="b">
+  <p><span class="kv">qa/constraints.json</span> 的 <span class="kv">NR-06</span> 原文写的是上一轮（未修复代码上）观测到的行为：「-c 指向的配置文件不存在时 agent 不得崩溃：缺失即静默用默认值继续启动」。本轮按任务书把它改成<b>显式 -c 缺失 = 硬错误</b>——这正是 NF-01 要修的缺陷，但与这句约束的字面相反。按「不得改动既有 104 条约束任何字段」的口径，约束文本一字未动，差异记录在案。</p>
+  <p class="small">成立的部分：<b>不带</b> -c 而默认 <span class="kv">/etc/clusterscope/agent.yaml</span> 缺失时仍是「告警 + 继续跑」（exit=124），NR-06 的题面「不得崩溃」在默认路径这条分支上完全成立（见 <span class="kv">no-root-fixes-F3-default-missing.txt</span>）。</p>
+</div></div>
+
+<div class="card res"><div class="h"><span class="id">F-20</span><span class="t">F12 的范围口径曾因新交付物（demo/*）判越界——已在 1279b48 由 Leader 裁决修订</span><span class="tag ok">closed</span></div><div class="b">
+  <p>第 5 阶段新增 <span class="kv">demo/11-*.json</span>、<span class="kv">demo/12-*.json</span> 后，F12 的允许集（写于第 1 阶段）不含 <span class="kv">demo/</span>，于是判 FAIL——不是四处修复的缺陷，而是「新交付物 vs 旧范围清单」的口径缺口。Leader 2026-10-07 裁决把 <span class="kv">demo/*</span> 加进允许集；负例自检仍 5/5，另加 1 条正例自检。本轮 F12 PASS。</p>
+  <p class="small">证据：<span class="kv">qa/evidence/no-root-fixes-F12-scope.txt</span>、<span class="kv">qa/evidence/no-root-fixes-FIX15-scope-amendment.txt</span>。</p>
+</div></div>
+
+<div class="card res"><div class="h"><span class="id">纪律</span><span class="t">harness 只按 PID 停自己起的进程，绝不 pkill</span><span class="tag ok">已执行</span></div><div class="b">
+  <p>这台机器是共享的：<span class="kv">qa/README.md</span> 的硬规矩 1 与 <span class="kv">no-root-fixes-checks.sh</span> 的 F1 静态闸门都要求——脚本里出现「没有 <span class="kv">-F</span>、也不含 <span class="kv">$</span> 变量」的 <span class="kv">pkill/killall</span> 即判 FAIL 且<b>不执行</b>动态探针。本轮实测：脚本中字面量整机匹配调用 <b>0 处</b>；停进程一律走自己的 PID 记录/自己的筛选结果；常驻实例（PID 266643）与它的 unit/配置全程未被碰。</p>
+  <p class="small">证据：<span class="kv">demo/11</span> 第 1 步（<span class="kv">grep -cE '(^|[[:space:]])(pkill|killall)'</span> → 0）与 <span class="kv">qa/evidence/no-root-fixes-F1-install-agent-stop.txt</span>。</p>
+</div></div>
+
+<!-- ================================================================ 4 -->
+<h2 id="s4">4 · 5 分钟人类审阅路线</h2>
+<ol>
+  <li><b>0:00–0:30</b> 本页第 0 节的两张卡片（这次修了什么 / 数字）。</li>
+  <li><b>0:30–2:00</b> 第 1 节 <span class="kv">FIX-01</span> 与 <span class="kv">FIX-02/03</span> 两个卡片：只看「修复前 vs 修复后」两栏与一句话结论——这两处是本轮唯二会「伤人/误导人」的缺陷。</li>
+  <li><b>2:00–2:45</b> 第 2 节两张表：先看 2.1（全绿），再看 2.2 的 ❌ 三行，确认它们是<b>既有债务</b>而不是本轮引入；顺便确认「mutation 未完成」是被标注的，不是被藏起来的。</li>
+  <li><b>2:45–3:30</b> 第 3 节四条残余（F-17 / F-22 / F-18 / F-20）——尤其 F-17：agent 侧「真装真启」在这台机器上只是 no-op。</li>
+  <li><b>3:30–5:00</b> 点两个演示（终端回放）：
+    <ul>
+      <li><span class="kv">demo/11-no-root-fixes-install-agent-safety.json</span> → 静态复查 + 探针存活 + 两次安装只动自己那一个进程（在线：<span class="kv">gauntlet-out/evidence/demos/11-…html</span>；离线转录：<span class="kv">qa/evidence/11-no-root-fixes-install-agent-safety.txt</span>）</li>
+      <li><span class="kv">demo/12-no-root-fixes-user-units-and-config-errors.json</span> → 用户级 server unit 真起 + <span class="kv">/api/health=200</span> + 显式 -c 缺失的报错文案 + 默认缺失仍继续跑（同上，转录 <span class="kv">…12-…txt</span>）</li>
+    </ul>
+  </li>
+</ol>
+<p class="small">原文证据地图：<span class="kv">qa/evidence/</span>（本轮新增 20 个文件，见 <span class="kv">qa/evidence/no-root-fixes-phase6-assembled-gates.json</span> 的 <span class="kv">files</span>）、<span class="kv">qa/qa-report.json</span>（132 条检查 + 24 条 findings）、<span class="kv">qa/constraints.json</span>（118 条约束）、<span class="kv">gauntlet-out/gate.json</span>（coder profile 的机器可读结果）。</p>
+
+<!-- ================================================================ 5 -->
+<h2 id="s5">5 · 可复现性</h2>
+<h3>5.1 分支与提交</h3>
+<pre>分支：gauntlet/no-root-fixes @ 1279b48（基于 gauntlet/audit-gh-line 的 tip 7ca587a）
+栈式 PR：目标分支 gauntlet/audit-gh-line —— 本 PR 的 diff 只有修复与配套规格/证据，不含审查产物（那些在父 PR #2）
+文本 diff 范围：crates/agent(+tests) · deploy/install-agent.sh · deploy/clusterscope-*.service · deploy/*.service · README.md · features/ · qa/ · gauntlet-tools/rust-gate.mjs · demo/</pre>
+
+<h3>5.2 复跑命令（远端 node，离线）</h3>
+<pre>export PATH=$HOME/.cargo/bin:$PATH
+cd /public/tianyuyang/code/ClusterScope-review/nr-fixes
+
+# 1) 阶段闸门（约 11 秒，本页数字出自这一次）
+node .gauntlet/gauntlet.mjs gate --profile coder
+
+# 2) QA 执行程序（全量，约 1–2 分钟；含 release 构建与 systemd 真装真启）
+sh qa/harness/no-root-fixes-checks.sh          # 期望：PASS=12 FAIL=0，退出码 0
+
+# 3) 演示（可回放）
+node .gauntlet/gauntlet.mjs demo demo/11-no-root-fixes-install-agent-safety.json
+node .gauntlet/gauntlet.mjs demo demo/12-no-root-fixes-user-units-and-config-errors.json
+
+# 4) 重型闸门（本轮未重算，若要看 ❌ 的全貌）
+node .gauntlet/gauntlet.mjs gate --profile full   # complexity/crap/coverage/mutation 会 FAIL（既有债务）</pre>
+
+<h3>5.3 共享机器安全前提（跑第 2 步之前先做）</h3>
+<ol>
+  <li>给这 <b>4 个文件</b>留逐字节副本（F5 会临时替换其中两个，另两个在本机常驻实例的依赖链上）：
+    <pre>BK=/tmp/nr-fixes-backup; mkdir -p $BK
+cp -a ~/.config/systemd/user/clusterscope-agent.service $BK/
+cp -a ~/.config/clusterscope/agent.yaml $BK/
+cp -a ~/.config/clusterscope/server.yaml $BK/
+cp -a ~/.config/clusterscope/node_id $BK/
+md5sum $BK/* &gt; $BK/hashes-before.txt
+systemctl --user show clusterscope-agent.service -p MainPID --value   # 记下（本机 = 266643）</pre>
+  </li>
+  <li>跑完用 <b>cmp</b> 复验 4 个文件、再核对 <span class="kv">MainPID</span> 与 <span class="kv">is-active</span>、<span class="kv">Linger=yes</span>：
+    <pre>for f in clusterscope-agent.service; do cmp -s $BK/$f ~/.config/systemd/user/$f &amp;&amp; echo "IDENTICAL $f"; done
+for f in agent.yaml server.yaml node_id; do cmp -s $BK/$f ~/.config/clusterscope/$f &amp;&amp; echo "IDENTICAL $f"; done
+systemctl --user show clusterscope-agent.service -p MainPID --value; loginctl show-user $USER -p Linger</pre>
+  </li>
+  <li>不要 <span class="kv">pkill</span>/<span class="kv">killall</span> 按名字扫进程；linger 保持 <span class="kv">yes</span>；不要动集群级配置；不要改 <span class="kv">.gauntlet/</span>、<span class="kv">gauntlet.config.json</span>、既有 104 条审计约束与 FIX-01…FIX-14 的口径。</li>
+  <li>本轮实测结果（可作为复跑期望值）：4/4 文件 <span class="ok">IDENTICAL</span>、MainPID <span class="ok">266643 → 266643</span>、<span class="ok">is-active=active</span>、<span class="ok">Linger=yes</span>、8080/50051 无监听、<span class="kv">~/.config/systemd/user/clusterscope-server.service</span> 已移除。</li>
+</ol>
+
+<h3>5.4 本页数字的出处</h3>
+<table>
+  <tr><th>数字</th><th>文件</th></tr>
+  <tr><td>coder PASS / 6 场景 / 59 测试</td><td class="kv">qa/evidence/no-root-fixes-phase6-gate-coder.txt · …-gate-coder.json</td></tr>
+  <tr><td>harness 12/12</td><td class="kv">qa/evidence/no-root-fixes-phase6-harness.txt · no-root-fixes-checks.txt</td></tr>
+  <tr><td>FIX-* 14/14 met、qa/constraints 明细</td><td class="kv">qa/evidence/no-root-fixes-phase6-assembled-gates.json</td></tr>
+  <tr><td>full profile 的 ❌ 与 mutation [22/736]</td><td class="kv">qa/evidence/no-root-fixes-phase6-gate-full-interrupted.txt</td></tr>
+  <tr><td>4 文件逐字节复原</td><td class="kv">qa/evidence/no-root-fixes-phase6-restore-verification.txt</td></tr>
+  <tr><td>演示重录 rc=0 + 两份转录</td><td class="kv">qa/evidence/no-root-fixes-phase6-demos-rerun.txt · 11-…txt · 12-…txt</td></tr>
+</table>
+
+<h3 id="s56">5.6 架构图（Archify）与模块依赖草图</h3>
+<p><b>Archify 架构图：本轮拿不到（环境限制，已如实记录）。</b>远端无外网，<span class="kv">node .gauntlet/gauntlet.mjs diagram</span> 需要克隆 Archify 工具本体（<span class="kv">git clone --depth 1 --branch v3.0.1 https://github.com/tt-a1i/archify.git</span> 超时），因此无法校验/渲染新的架构图。仓库里已有一份来自上一轮审查的候选文件 <span class="kv">docs/architecture/clusterscope-runtime.architecture.json</span>（其 <span class="kv">meta.repository.revision</span> 还指向旧线 <span class="kv">f9c080b</span>，属父 PR 的产物，本 PR 不动它）。<b>「没有 Archify 架构图」列为需要人确认的项。</b></p>
+<p>作为替代，下面是从 <span class="kv">crates/*/Cargo.toml</span> 与 <span class="kv">Cargo.toml</span> 里<b>逐个</b>读出来的真实 crate 依赖（本轮修复集中在 <span class="kv">agent</span> 与 <span class="kv">deploy/</span>，不新增跨 crate 依赖）：</p>
+<div class="diagram"><span class="n">clusterscope-server (bin, crates/server)</span>  ──▶ common · protocol · storage · scheduler
+<span class="n">clusterscope-agent  (bin, crates/agent) </span>  ──▶ common · protocol
+<span class="n">clusterscope-tui    (bin, crates/tui)   </span>  ──▶ （无内部 crate 依赖：reqwest 走 server 的 HTTP/WS 接口）
+<span class="n">scheduler</span> ──▶ common          <span class="n">storage</span> ──▶ common          <span class="n">protocol</span> ──▶ （无内部依赖，只有 prost/tonic）
+<span class="n">common</span>（叶节点，无内部依赖）
+
+运行时连线（QA 实测）：tui ──HTTP/WS──▶ server ──gRPC:50051──▶ agent ──▶ NVML/6×L20 ──┐
+                                   server ──sqlx──▶ PostgreSQL 16.4（127.0.0.1:5432） ◀─┘
+
+本轮改动落点：deploy/install-agent.sh（安装脚本）· crates/agent/src/{config_loader,node_identity,main}.rs
+              deploy/clusterscope-{agent,server}.service（新增用户级 unit）· README.md</div>
+<p class="small">出处：<span class="kv">Cargo.toml</span> 的 workspace members（7 个 crate）与各 <span class="kv">crates/*/Cargo.toml</span> 的 <span class="kv">[dependencies]</span>（<span class="kv">tui</span> 的源码里没有任何工作区 crate 的 <span class="kv">use</span>，实测贪心 grep 为空）。</p>
+
+<p class="small" style="margin-top:26px">生成：第 6 阶段（Reporter）· 2026-10-07 · 本页为单文件、离线可看；所有引用路径相对仓库根目录。</p>
+</div>
+</body>
+</html>

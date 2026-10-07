@@ -1,0 +1,140 @@
+== 环境 ==
+3000
+lyy-node03
+Linger=yes
+== /etc/clusterscope 是否存在 ==
+ls: cannot access '/etc/clusterscope': No such file or directory
+
+== NR-06 新语义：显式 -c 缺失 / 默认 -c 缺失 ==
+-- A. agent -c /etc/clusterscope/agent.yaml（该文件不存在）exit=1
+Error: config file not found: /etc/clusterscope/agent.yaml does not exist. It was requested explicitly with -c/--config, so the agent stops here instead of quietly using built-in defaults. User-level installs keep this file at $HOME/.config/clusterscope/agent.yaml; system-wide installs use /etc/clusterscope/agent.yaml.
+-- B. 不带 -c（默认 /etc/clusterscope/agent.yaml 不存在）exit=124（124=被 timeout 收掉，仍在跑）
+[2m2026-10-07T08:53:07.806940Z[0m [33m WARN[0m default config file not found: /etc/clusterscope/agent.yaml does not exist, continuing with built-in defaults (user-level installs keep this file at $HOME/.config/clusterscope/agent.yaml).
+[2m2026-10-07T08:53:07.807073Z[0m [32m INFO[0m ClusterScope Agent starting [3mserver_addr[0m[2m=[0mhttp://localhost:50051 [3mnode_id[0m[2m=[0mNone
+[2m2026-10-07T08:53:07.807143Z[0m [32m INFO[0m Node identity resolved [3mnode_id[0m[2m=[0mlyy-node03
+[2m2026-10-07T08:53:07.807709Z[0m [33m WARN[0m Failed to connect to server, retrying [3merror[0m[2m=[0mFailed to connect to server at http://localhost:50051: transport error [3mdelay_secs[0m[2m=[0m1
+[2m2026-10-07T08:53:08.809197Z[0m [33m WARN[0m Failed to connect to server, retrying [3merror[0m[2m=[0mFailed to connect to server at http://localhost:50051: transport error [3mdelay_secs[0m[2m=[0m2
+[2m2026-10-07T08:53:10.812666Z[0m [33m WARN[0m Failed to connect to server, retrying [3merror[0m[2m=[0mFailed to connect to server at http://localhost:50051: transport error [3mdelay_secs[0m[2m=[0m4
+[2m2026-10-07T08:53:14.814202Z[0m [33m WARN[0m Failed to connect to server, retrying [3merror[0m[2m=[0mFailed to connect to server at http://localhost:50051: transport error [3mdelay_secs[0m[2m=[0m8
+
+== NR-06b：默认日志目录 ~/.local/state/clusterscope-agent ==
+drwxr-xr-x 2 tianyuyang tianyuyang 6 Oct  7 16:53 /tmp/qa-verify/nr06b/.local/state/clusterscope-agent
+/tmp/qa-verify/nr06b
+/tmp/qa-verify/nr06b/.config
+/tmp/qa-verify/nr06b/.config/node_id
+/tmp/qa-verify/nr06b/.local
+/tmp/qa-verify/nr06b/.local/state
+/tmp/qa-verify/nr06b/.local/state/clusterscope-agent
+
+== NR-12：nohup 回退（有守护？）与 install-agent.sh 的停止逻辑 ==
+ALIVE pid=2485019
+greeting lines: 1
+GONE after manual kill
+-- install-agent.sh 里的 Restart=always / nohup / pkill：
+12:# remote host and started via systemd --user (or nohup as a fallback).
+16:# started itself. The nohup fallback records that child PID in
+17:# ~/.config/clusterscope/agent.pid and re-checks /proc/<pid>/cmdline before
+71:PIDFILE="$HOME/.config/clusterscope/agent.pid"
+74:# stopped. The pid comes from our own pidfile, and /proc/<pid>/cmdline must
+79:    [ -f "$PIDFILE" ] || return 0
+80:    pid="$(cat "$PIDFILE" 2>/dev/null || true)"
+81:    rm -f "$PIDFILE"
+85:    if [ ! -r "/proc/$pid/cmdline" ]; then
+89:    cmdline="$(tr '\0' ' ' < "/proc/$pid/cmdline" || true)"
+117:Restart=always
+128:    nohup "$BIN" -c "$CONF" >> "$HOME/.config/clusterscope/logs/agent.log" 2>&1 &
+129:    echo "$!" > "$PIDFILE"
+130:    echo "started via nohup (pid $(cat "$PIDFILE"))"
+
+== NR-13：仓库里的用户级 server unit 现在存在了 ==
+./deploy/clusterscope-server.service
+324:| **用户级(默认,推荐)** | **不需要** | `~/.local/bin/` + `~/.config/clusterscope/` | `deploy/clusterscope-server.service`、`deploy/clusterscope-agent.service`(`WantedBy=default.target`,路径全走 `%h`) |
+334:cp deploy/clusterscope-server.service deploy/clusterscope-agent.service ~/.config/systemd/user/
+-- README 里 systemctl --user 行数：8
+
+== NR-14：install-agent.sh 仍是用户级安装器 ==
+SYNTAX-OK
+用户路径引用数: 15
+非注释行的系统路径引用数: 0
+-- 停止逻辑全文（第 60-110 行）：
+disk_mounts:
+  - /
+EOF
+REMOTE
+
+echo "==> starting agent on $TARGET"
+ssh "$TARGET" 'bash -s' <<'EOF'
+set -eu
+mkdir -p ~/.config/clusterscope/logs
+BIN="$HOME/.local/bin/clusterscope-agent"
+CONF="$HOME/.config/clusterscope/agent.yaml"
+PIDFILE="$HOME/.config/clusterscope/agent.pid"
+
+# PID-based stop: only the agent this script started in an earlier run is ever
+# stopped. The pid comes from our own pidfile, and /proc/<pid>/cmdline must
+# still show this exact binary+config pair before we signal it -- a stale or
+# reused pid is left alone. (Name-based process matching would hit every agent
+# of this user on a shared machine, so it is not used here.)
+stop_previous_agent() {
+    [ -f "$PIDFILE" ] || return 0
+    pid="$(cat "$PIDFILE" 2>/dev/null || true)"
+    rm -f "$PIDFILE"
+    case "$pid" in
+        '' | *[!0-9]*) return 0 ;;
+    esac
+    if [ ! -r "/proc/$pid/cmdline" ]; then
+        echo "previous agent (pid $pid) is already gone"
+        return 0
+    fi
+    cmdline="$(tr '\0' ' ' < "/proc/$pid/cmdline" || true)"
+    case "$cmdline" in
+        *"$BIN"*"$CONF"*)
+            echo "stopping previous agent (pid $pid)"
+            kill "$pid" 2>/dev/null || true
+            waited=0
+            while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 20 ]; do
+                sleep 0.5
+                waited=$((waited + 1))
+            done
+            ;;
+        *)
+            echo "pidfile points at an unrelated process (pid $pid) -- leaving it alone"
+            ;;
+    esac
+}
+
+if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+    stop_previous_agent
+    mkdir -p ~/.config/systemd/user
+    cat > ~/.config/systemd/user/clusterscope-agent.service <<SVC
+[Unit]
+
+== NR-19：只读 HOME 仍硬失败（既有 finding 保持）==
+exit=1
+[2m2026-10-07T08:53:30.953271Z[0m [33m WARN[0m default config file not found: /etc/clusterscope/agent.yaml does not exist, continuing with built-in defaults (user-level installs keep this file at $HOME/.config/clusterscope/agent.yaml).
+Error: Failed to create log directory: "/tmp/qa-verify/nr19/.local/state/clusterscope-agent"
+
+Caused by:
+    Permission denied (os error 13)
+
+=== 5b normal path ===
+server pid=2485359 health=200
+agent pid=2485507
+[2m2026-10-07T08:53:32.025537Z[0m [32m INFO[0m ClusterScope Agent starting [3mserver_addr[0m[2m=[0mhttp://127.0.0.1:50051 [3mnode_id[0m[2m=[0mSome("qa-phase5-node")
+[2m2026-10-07T08:53:32.025635Z[0m [32m INFO[0m Node identity resolved [3mnode_id[0m[2m=[0mqa-phase5-node
+[2m2026-10-07T08:53:32.026206Z[0m [32m INFO[0m Connected to server at http://127.0.0.1:50051
+[2m2026-10-07T08:53:32.205639Z[0m [32m INFO[0m Registered with server [3mnode_id[0m[2m=[0mqa-phase5-node
+[2m2026-10-07T08:53:32.263157Z[0m [33m WARN[0m NVML initialized
+[{"gpu_count":6,"hostname":"lyy-node03","ip_address":"172.19.133.164","labels":{},"last_seen":"2026-10-07T08:53:32.335477536+00:00","node_id":"qa-phase5-node","status":"online"}]ls: cannot access '/tmp/qa-verify/agent-home/.config/node_id': No such file or directory
+
+=== 5c NR-21 env-only server ===
+env-only server pid=2485803 health=200
+lsof 命中 /etc|/var 下的 clusterscope 路径：0 行
+
+=== cleanup ===
+remaining of ours: server=gone agent=gone
+resident agent (must be untouched):
+266643
+active
+    PID    PPID     ELAPSED CMD
+ 266643  266625 35-03:54:14 /public/tianyuyang/.local/bin/clusterscope-agent -c /public/tianyuyang/.config/clusterscope/agent.yaml

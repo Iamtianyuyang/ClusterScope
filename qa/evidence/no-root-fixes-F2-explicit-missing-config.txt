@@ -1,0 +1,11 @@
+== 命令 ==
+HOME=/tmp/nr-fixes-checks/home-b timeout 8 /public/tianyuyang/code/ClusterScope-review/nr-fixes/target/release/clusterscope-agent -c /tmp/nr-fixes-checks/absent-dir/agent.yaml
+== exit=1 ==
+Error: config file not found: /tmp/nr-fixes-checks/absent-dir/agent.yaml does not exist. It was requested explicitly with -c/--config, so the agent stops here instead of quietly using built-in defaults. User-level installs keep this file at $HOME/.config/clusterscope/agent.yaml; system-wide installs use /etc/clusterscope/agent.yaml.
+== HOME 下被创建的东西 ==
+/tmp/nr-fixes-checks/home-b
+  ok   退出码非 0（实际 1）
+  ok   输出逐字点名那个不存在的配置路径
+  ok   输出说明该配置文件不存在
+  ok   输出点名用户级配置位置（照抄系统级 unit 的人能看懂）
+  ok   输出中不出现默认地址 http://localhost:50051（没有静默回退）

@@ -85,12 +85,24 @@ for (const line of build.stdout.split('\n')) {
   let m;
   try { m = JSON.parse(s); } catch { continue; }
   if (m.reason === 'compiler-artifact' && m.executable) {
-    artifacts.push({ exe: m.executable, name: m.target?.name || path.basename(m.executable), kind: (m.target?.kind || []).join('/') });
+    // `cargo test` also builds plain product binaries: every bin an integration test references
+    // through `env!("CARGO_BIN_EXE_<name>")` is built as a real (non-test) executable and shows up
+    // in this stream with `profile.test === false`. Those are products, not test harnesses: libtest
+    // never runs, and a daemon like clusterscope-agent simply never returns -- spawning it would
+    // hang the whole gate. Only `profile.test === true` artifacts are executed; the others stay in
+    // the list below so the coverage export still has their object files.
+    artifacts.push({
+      exe: m.executable,
+      name: m.target?.name || path.basename(m.executable),
+      kind: (m.target?.kind || []).join('/'),
+      isTest: m.profile?.test === true,
+    });
   } else if (m.reason === 'compiler-message' && m.message?.rendered) {
     rendered.push(m.message.rendered);
   }
 }
-log(`  build+link of test targets: ${(buildMs / 1000).toFixed(1)}s, ${artifacts.length} test binaries`);
+const testArtifacts = artifacts.filter((a) => a.isTest);
+log(`  build+link of test targets: ${(buildMs / 1000).toFixed(1)}s, ${testArtifacts.length} test binaries${artifacts.length > testArtifacts.length ? ` (+${artifacts.length - testArtifacts.length} product binary/binaries, built for CARGO_BIN_EXE_*, not run)` : ''}`);
 
 const suites = [];
 let compileFailed = false;
@@ -104,7 +116,7 @@ if (build.code !== 0) {
   });
 } else {
   // ------------------------------------------------------------ 2. run each test binary
-  for (const a of [...artifacts].sort((x, y) => x.exe.localeCompare(y.exe))) {
+  for (const a of [...artifacts].filter((x) => x.isTest).sort((x, y) => x.exe.localeCompare(y.exe))) {
     const label = `${a.name} (${a.kind})`;
     log(`$ ${a.exe}`);
     const s0 = Date.now();

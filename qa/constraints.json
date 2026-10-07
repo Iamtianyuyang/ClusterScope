@@ -1038,5 +1038,145 @@
     "verdict": "must-hold",
     "qa": "merge-plan-requirements.md#M10",
     "severity": "blocker"
+  },
+  {
+    "id": "FIX-01",
+    "text": "`deploy/install-agent.sh` 停止/替换 agent 时**只影响本次安装启动的那个进程**（按 PID 文件或精确匹配本次写入的启动命令），不得再用 `pkill -f clusterscope-agent` 这类整机模式匹配：同用户下与本项目无关的其它 agent 进程（含本机常驻实例 PID 266643）必须存活。脚本里要写明它做了什么。",
+    "basis": "NF-02（上一轮审查分支 gauntlet/audit-gh-line 的 no-root 维度，第 5 阶段取证）；deploy/install-agent.sh:80（nohup 回退分支的 pkill -f clusterscope-agent）；NR-12 / NR-14",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F1 段）：脚本里若仍有整机匹配的 pkill/killall 则静态判 FAIL 且不执行破坏性步骤；否则起探针 agent，再用 ssh/scp/systemctl 桩把 install-agent.sh 的远端落到 scratch HOME 连跑两次，断言探针与安装前快照的其它 agent 全部存活、scratch HOME 下只剩 1 个 agent、旧 PID 已被本次替换停掉；并 grep -nE 匹配 (^|[[:space:]])(pkill|killall)([[:space:]]|$) 在 deploy/install-agent.sh 里去掉 -F 行后为空",
+    "expect": "F1 PASS：探针与既存实例全活；停止/替换只动本次安装启动的进程；脚本里有注释交代停止逻辑",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#F1",
+    "severity": "major"
+  },
+  {
+    "id": "FIX-02",
+    "text": "显式给出 `-c PATH` 而 PATH 不存在时，agent 必须**明确报错并逐字点名那个配置文件**，以非 0 退出码结束；错误文案要让照抄系统级 unit（ExecStart=… --config /etc/clusterscope/agent.yaml）的人一眼看懂——要点出用户级安装的配置位置 `.config/clusterscope/agent.yaml`。",
+    "basis": "NF-01（qa/evidence/no-root-verify2-a-agent-missing-config.txt、no-root-verify3-q1-missing-config-lifetime.txt：现状 exit 1 但输出里点名该文件的次数 = 0）；crates/agent/src/config_loader.rs:9-18",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F2 段）：HOME=<scratch> timeout 8 target/release/clusterscope-agent -c <不存在的路径>，断言退出码 ≠0、输出逐字含该路径、含 not found / No such file / does not exist / 不存在 之一、且含 .config/clusterscope/agent.yaml",
+    "expect": "F2 PASS：退出码 ≠0，输出点名不存在的配置路径与用户级配置位置",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#F2",
+    "severity": "major"
+  },
+  {
+    "id": "FIX-03",
+    "text": "配置缺失时不得**静默**回退到默认值：显式 `-c` 缺失必须直接失败（FIX-02），且这一次运行里不得再出现默认地址 `http://localhost:50051`（上一轮的对照实验：配置写 59999 → 实际拨 59999；配置缺失 → 静默拨 50051）。",
+    "basis": "NF-01 的静默回退一条（qa/evidence/no-root-verify-05-nr06-silent-fallback.txt、no-root-verify3-q1）；crates/agent/src/config_loader.rs:9-18",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F2 段）：断言显式 -c 缺失时输出中不出现 http://localhost:50051",
+    "expect": "F2 PASS：显式路径缺失时输出里没有默认地址（进程没有按默认值起步）",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#F2",
+    "severity": "major"
+  },
+  {
+    "id": "FIX-04",
+    "text": "不带 `-c` 而默认配置路径 `/etc/clusterscope/agent.yaml` 不存在时，agent 必须**明确告警点名该默认路径**（回退不再静默），然后仍按内置默认值启动——不得为此崩溃（守住既有 NR-06）。",
+    "basis": "NF-01（静默回退）；NR-06（must-hold：缺省 -c /etc/… 时 agent 不崩）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F3 段）：HOME=<scratch> timeout 6 target/release/clusterscope-agent（不带 -c），断言 exit=124（进程还活着）、输出含启动横幅与 /etc/clusterscope/agent.yaml",
+    "expect": "F3 PASS：告警点名默认路径后继续按默认值启动",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#F3",
+    "severity": "major"
+  },
+  {
+    "id": "FIX-05",
+    "text": "agent 启动时**创建所需父目录**（create_dir_all）：干净 HOME（没有 `~/.config`）下必须能建出 node identity 文件的父目录并写下身份文件，不再以 `Failed to write node identity` 硬失败（现状：exit 1，未创建父目录）。",
+    "basis": "NF-01（qa/evidence/no-root-verify-05 的 files created under the HOME 清单里没有 .config）；crates/agent/src/node_identity.rs:11-30；crates/agent/src/config_loader.rs:39-42",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F4 段）：mkdir 一个没有 .config 的 HOME，用一份有效配置（不指定 node_id_file）启动 agent，断言 $HOME/.config/node_id 存在且非空、输出无 Failed to write node identity、exit=124",
+    "expect": "F4 PASS：父目录与身份文件都被创建，进程继续运行",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#F4",
+    "severity": "major"
+  },
+  {
+    "id": "FIX-06",
+    "text": "仓库随 `deploy/` 提供**用户级** systemd unit，且 unit 名与 README 里出现的名字逐字一致（`clusterscope-server`、`clusterscope-agent`）；路径全走 `%h`（`%h/.local/bin/...`、`%h/.config/clusterscope/...`），不含 `User=`/`Group=`/`/usr/local/bin`/`multi-user.target`；在无 root、`systemd --user` 可用的机器上 `daemon-reload` + `enable --now` + `status` 成功，且**不打扰**已经在跑的本项目实例（MainPID 不变）。",
+    "basis": "NF-03/用户级 unit 缺失（上一轮审查：README:288-293 的 systemctl --user 命令在干净机器上必然失败；仓库里 0 个用户级 unit，NR-13）；README:288-293；deploy/install-agent.sh:60-78（脚本内联的 unit 名必须同名）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F5 段）：先静态断言两个 unit 文件的名字/路径/WantedBy；再真装真启（备份现有 unit 与 server.yaml → cp 到 ~/.config/systemd/user/ → systemctl --user daemon-reload → enable --now clusterscope-agent.service → is-enabled/is-active/status → 端口空闲时 enable --now clusterscope-server.service 并 curl http://127.0.0.1:8080/api/health → disable --now 并还原），断言生产 agent 的 MainPID 前后不变",
+    "expect": "F5 PASS：daemon-reload/enable --now/status 全部成功，health=200，还原后机器状态与安装前一致",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#F5",
+    "severity": "major"
+  },
+  {
+    "id": "FIX-07",
+    "text": "系统级 unit（`deploy/server.service`、`deploy/agent.service`）保留但**角色写清楚**：它们是可选路径、需要 root；README 与 unit 文件里都要能一眼看出它和用户级 unit 的分工。",
+    "basis": "NF-15/NR-15（系统级 unit 非 root 装不上，是既有事实）；用户本轮要求把系统级 unit 的角色写清楚",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F6 段）：系统级 unit 仍在（multi-user.target / User=clusterscope）、文件头注明系统级、README 里能搜到需要 root 的说明",
+    "expect": "F6 PASS：系统级 unit 保留并注明角色与 root 前提",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#F6",
+    "severity": "minor"
+  },
+  {
+    "id": "FIX-08",
+    "text": "README（及必要的 `docs/`）要写清**无 root、无 docker** 时怎么准备 PostgreSQL：至少给出「已有实例直接填 postgres_url」与「把 PostgreSQL 装/编译到 HOME」两条可行路径（命令级），并说明**实测走的是哪一条**；`docker compose` 那条路要写明前提（需要 docker；本集群 docker 不可用）。",
+    "basis": "NF-01 的文档缺口（上一轮审查：README:57/87 承诺 docker compose，但本机无 docker、无外网、podman 零镜像 —— qa/evidence/no-root-verify-11-nr09-docker-vs-source-build.txt；NR-09）；GAUNTLET.md「PostgreSQL 16.4」一节记录的实测路径（源码编译到 HOME 的 pg16）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F7 段）：README 里搜到 postgres_url / initdb / pg_ctl / pg16 或 源码编译，且提到 docker 的行带前提字样；再人工读一遍这一节确认两条路径可照抄",
+    "expect": "F7 PASS：两条路径 + 实测选择 + docker 前提都写进 README",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#F7",
+    "severity": "major"
+  },
+  {
+    "id": "FIX-09",
+    "text": "README（及必要的 `docs/`）要写清用户级部署的 **linger 前提**：`linger=no` 时用户级服务会随 SSH 登出而死；给出 `loginctl show-user $USER` 的检查方法与 `loginctl enable-linger` 需要管理员/root 代办的事实。",
+    "basis": "NR-11（linger 是每机配置，要 root 才能 enable-linger；本机 Linger=yes）；上一轮审查的双向记录（qa/evidence/no-root-verify-01-linger.txt、no-root-verify-15-nr11-linger-semantics.txt）",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F8 段）：README/docs 里搜到 loginctl / Linger / enable-linger，且 enable-linger 附近写了需要 root/管理员",
+    "expect": "F8 PASS：linger 的检查方法与请求管理员的方式都写进文档",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#F8",
+    "severity": "major"
+  },
+  {
+    "id": "FIX-10",
+    "text": "README 要写清**系统级 vs 用户级**两种安装方式的分工与各自前提（用户级 = 默认、无需 root；系统级 = 可选、需 root 时用），并让 `systemctl --user` 一节引用的 unit 文件在仓库里真实存在。",
+    "basis": "NR-10 / NR-13（README:288-293 的 systemctl --user 命令在干净机器上没有对应 unit）；DOC-21",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F9 段）：README 同时提到 deploy/clusterscope-agent.service、deploy/clusterscope-server.service 与系统级 deploy/*.service，并保留 systemctl --user 命令",
+    "expect": "F9 PASS：两种安装方式的分工与前提都在 README 里",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#F9",
+    "severity": "major"
+  },
+  {
+    "id": "FIX-11",
+    "text": "不得删/跳过/弱化任何既有测试：现有 44 个测试必须继续全绿（本轮新增验收测试只能往上加）。",
+    "basis": "本轮任务书「不得删/跳过/弱化任何既有测试（现有 44 个测试必须继续全绿）」；GAUNTLET.md「tests ✅ 44/44」",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F10 段）：cargo test --workspace --offline 的 rc=0、failed 合计 0、passed 合计 ≥44；git diff 7ca587a -- crates 里没有以 - 开头的 #[test]/#[tokio::test] 行",
+    "expect": "F10 PASS：0 失败、通过数 ≥44、没有测试被删除",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#F10",
+    "severity": "major"
+  },
+  {
+    "id": "FIX-12",
+    "text": "`qa/constraints.json` 里既有的 104 条（81 条原样 + 23 条 NR-*/MRG-02）不得改动任何字段与 verdict：本轮只允许**追加** FIX-01…FIX-13。",
+    "basis": "本轮任务书「不要改动既有 104 条的任何字段与 verdict（审计结论属于历史记录）」",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F11 段）：git diff 7ca587a -- qa/constraints.json 里没有被删/被改的行；node 解析后 FIX-01..FIX-13 齐全、id 唯一、NR-* 计数不减少",
+    "expect": "F11 PASS：只追加，既有条目逐字节未动",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#F11",
+    "severity": "major"
+  },
+  {
+    "id": "FIX-13",
+    "text": "改动范围只限本轮四项相关文件（agent 的配置加载/身份文件、`deploy/install-agent.sh`、`deploy/` 下的 unit 与文档、README/docs、features/qa），不做无关重构，不动 `crates/storage/**` 与 `crates/server/**`。",
+    "basis": "本轮任务书「只改与上述四项相关的文件；不要顺手重构、不要动 crates/storage/**、crates/server/**」",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F12 段）：git diff --name-only 7ca587a 与未跟踪文件清单全部落在允许集内；git diff --name-only 7ca587a -- crates/storage crates/server 为空",
+    "expect": "F12 PASS：改动文件全部在允许集内，storage/server 零改动",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#F12",
+    "severity": "minor"
+  },
+  {
+    "id": "FIX-14",
+    "text": "本轮准入的**两处流水线工具修复**（都是工具自身的缺陷，不碰产品代码；Leader 2026-10-07 逐行核验两个 diff 后裁决「准予纳入」），并据此**修订 `FIX-13` 的允许改动集：显式加入 `gauntlet-tools/*`**（本次只有 `gauntlet-tools/rust-gate.mjs`）——修订以本条**追加**的形式落地，`FIX-13` 原文与既有 104 条逐字节不动（理由见 basis 末句）。① rust-gate（+15/−3）：`cargo test` 会为集成测试引用的 `CARGO_BIN_EXE_*` 额外构建**产品二进制**（产物里 `profile.test === false`；本机实测恰好 1 个：`clusterscope-agent (bin)`，而它同时还有一个 `profile.test === true` 的同名测试产物——名字分不开，只有 `profile.test` 分得开），`clusterscope-agent` 是常驻守护进程，被当测试目标 spawn 会让 `gate --profile coder` 挂死（实测 31 分钟、进程 2226159/2233900）；修法只 spawn `profile.test === true` 的产物、产品产物仍留在覆盖率对象表里、日志显式标注被排除的数量，**没有跳过任何测试、没有弱化任何断言**（59 个测试照跑）。② `qa/harness/no-root-fixes-checks.sh` 的 F5 段（**断言集合一字未改**：`b6149ee^` 与当前版本的 F5 段 `A \"…\"` 行集合逐行相同，各 30 条）：F5 改为**自带配置**（由 `deploy/server.yaml.example` 生成，连 `127.0.0.1:5432` + 本检查自己的 `jwt_secret`），不再复用机器上已有的 `~/.config/clusterscope/server.yaml`——那份文件的 `postgres_url` 实测指向 `127.0.0.1:5433`（那里没有实例在听），server 会卡在连库超时里，使 F5 的 health 断言在**任何正确实现**上都不可能通过；备份/还原逻辑照旧。两处都必须在 QA 里被**独立复核**（`qa/no-root-fixes.qa.md#工具修复复核`），不得成为「编码阶段可以顺手改检查工具」的先例。",
+    "basis": "Leader 2026-10-07 对 `2807ef5`（rust-gate）与 `b6149ee`（F5 harness）两个 diff 的逐行核验与裁决；`gate --profile coder` 实测的 31 分钟挂死（`crates/agent/tests/**` 经 `env!(\"CARGO_BIN_EXE_clusterscope-agent\")` 引用产品二进制）；F5 段的原始写法见 `git show b6149ee^:qa/harness/no-root-fixes-checks.sh`；本机环境事实「那份 server.yaml 指向 5433」由本次返工独立复核（`grep -nE \":(5432|5433)/\" ~/.config/clusterscope/server.yaml`）。修订以**追加**落地而不改写 `FIX-13` 原文，是为了保住 `FIX-12` 的「只追加」性质与 F11 段「`git diff 7ca587a -- qa/constraints.json` 零删行」这条原样未动的检查：改写 `FIX-13` 原文必然产生删行，只能靠放宽 F11 的口径来兜，而放宽检查正是本轮要避免的事。",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/nr-fixes && sh qa/harness/no-root-fixes-checks.sh（F12 段的允许集包含 `gauntlet-tools/*`、且负例自检仍把 storage/server/Cargo.toml/gauntlet.config.json/.gauntlet 判越界；F5 段仍 PASS：server unit 真起、`/api/health = 200`）；再按 `qa/no-root-fixes.qa.md#工具修复复核` 独立复核三项：rust-gate 排除的确实是产品二进制而非测试（`cargo test --no-run --message-format=json` 的产物分类）、测试总数与 `cargo test` 输出一致、F5 的断言集合未被削减",
+    "expect": "F12 PASS：`gauntlet-tools/rust-gate.mjs` 在允许集内、`crates/storage` 与 `crates/server` 仍零改动、负例 5/5 被咬住；F5 PASS：server unit 真起且 health=200、机器状态还原；三项独立复核全部成立，结论写进 `qa/qa-report.json` 里 `constraint: \"FIX-14\"` 的 status=pass 条目",
+    "verdict": "must-hold",
+    "qa": "no-root-fixes.qa.md#工具修复复核",
+    "severity": "minor"
   }
 ]

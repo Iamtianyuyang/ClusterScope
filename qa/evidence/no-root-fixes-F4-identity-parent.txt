@@ -1,0 +1,18 @@
+== 命令 ==
+HOME=/tmp/nr-fixes-checks/home-d timeout 6 /public/tianyuyang/code/ClusterScope-review/nr-fixes/target/release/clusterscope-agent -c /tmp/nr-fixes-checks/valid.yaml
+== exit=124 ==
+2026-10-07T10:20:12.220280Z  INFO ClusterScope Agent starting server_addr=http://127.0.0.1:59999 node_id=Some("")
+2026-10-07T10:20:12.220386Z  INFO Node identity resolved node_id=lyy-node03
+2026-10-07T10:20:12.220577Z  WARN Failed to connect to server, retrying error=Failed to connect to server at http://127.0.0.1:59999: transport error delay_secs=1
+2026-10-07T10:20:13.221968Z  WARN Failed to connect to server, retrying error=Failed to connect to server at http://127.0.0.1:59999: transport error delay_secs=2
+2026-10-07T10:20:15.223398Z  WARN Failed to connect to server, retrying error=Failed to connect to server at http://127.0.0.1:59999: transport error delay_secs=4
+== HOME 下被创建的东西 ==
+/tmp/nr-fixes-checks/home-d
+/tmp/nr-fixes-checks/home-d/state-logs
+/tmp/nr-fixes-checks/home-d/.config
+/tmp/nr-fixes-checks/home-d/.config/node_id
+== node_id 内容 ==
+gpu-node-4205d5ef38684b48818a65f858904b34  ok   HOME 下的 .config/node_id 被创建且非空
+  ok   输出中没有 Failed to write node identity
+  ok   进程在 5 秒后仍然在运行（exit 124，实际 124）
+  ok   配置里的 log_dir 也被创建（create_dir_all）
