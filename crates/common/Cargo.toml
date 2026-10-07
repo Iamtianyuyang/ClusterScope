@@ -16,3 +16,6 @@ parking_lot.workspace = true
 dirs.workspace = true
 jsonwebtoken.workspace = true
 argon2 = { version = "0.5", features = ["std"] }
+
+[dev-dependencies]
+serde_yaml.workspace = true
