@@ -70,7 +70,7 @@ impl JobRuntime {
             // Never signal a pid that was recycled to an unrelated process
             // group: the group leader may have exited while its children
             // live on, and the kernel can hand the freed pid to a new
-            // setsid() leader. When the recorded leader is still alive at
+            // session/process-group leader. When the recorded leader is alive at
             // that pid with a different starttime, it is not ours.
             if let Some(actual) = process_starttime(pid)
                 && expected_start > 0
@@ -121,6 +121,37 @@ impl JobRuntime {
             true
         } else {
             false
+        }
+    }
+
+    /// Forced cancellation (the server asked for it explicitly): SIGKILL the
+    /// process group immediately instead of waiting out the SIGTERM grace
+    /// period. Records the cancel marker as well, so a request that raced the
+    /// spawn still stops the job from starting.
+    pub async fn force_cancel(&self, job_id: &str) -> bool {
+        let pids = self.pids.lock().await;
+        let mut cancelled = self.cancelled.lock().await;
+        cancelled.insert(job_id.to_string());
+        match pids.get(job_id).copied() {
+            Some((pid, expected_start)) if pid > 0 => {
+                if let Some(actual) = process_starttime(pid)
+                    && expected_start > 0
+                    && actual != expected_start
+                {
+                    warn!(
+                        job_id = %job_id, pid,
+                        "Job pid recycled — cannot force-kill the original process group"
+                    );
+                    return true;
+                }
+                warn!(job_id = %job_id, pid, "Forced cancellation — sending SIGKILL");
+                unsafe {
+                    libc::kill(-pid, libc::SIGKILL);
+                }
+                true
+            }
+            Some(_) => true,
+            None => false,
         }
     }
 
@@ -965,7 +996,7 @@ mod marker_tests {
 ///
 /// The scenario names are the test function names verbatim. Both tests drive
 /// the real `execute_job` path with real processes in their own process group
-/// (`setsid`), so the SIGTERM -> SIGKILL escalation of `JobRuntime` is
+/// (a session of its own), so the SIGTERM -> SIGKILL escalation of `JobRuntime` is
 /// exercised end to end, including the pid bookkeeping around `wait()`.
 #[cfg(test)]
 mod cancel_acceptance_tests {

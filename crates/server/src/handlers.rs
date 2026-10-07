@@ -966,10 +966,17 @@ pub async fn stop_job(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: axum::http::HeaderMap,
     Path(job_id): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let pool = state.database.pool();
     let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
+    // `force=true` upgrades the cancellation to SIGKILL (README: the process
+    // group gets SIGTERM first, and a job that ignores it is force-killed).
+    let force = params
+        .get("force")
+        .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+        .unwrap_or(false);
 
     // Unknown job: 404 instead of a fake "stopping" success.
     let Some(row) = storage::job_queries::get_job(pool, &job_id)
@@ -1007,11 +1014,11 @@ pub async fn stop_job(
                 // only if it is still active: a concurrent stop may already
                 // have cancelled it, and clobbering that with 'stopping'
                 // would strand a terminal job until the reaper marks it lost.
-                stop_active_job(pool, &job_id).await?
+                stop_active_job(pool, &job_id, force).await?
             }
         }
         // starting / running / stopping: ask the agent to kill it.
-        _ => stop_active_job(pool, &job_id).await?,
+        _ => stop_active_job(pool, &job_id, force).await?,
     };
 
     storage::audit_queries::insert_audit_log(
@@ -1020,7 +1027,11 @@ pub async fn stop_job(
         "stop_job",
         Some(&job_id),
         Some("job"),
-        Some("Stop job requested"),
+        Some(if force {
+            "Stop job requested (force: escalate to SIGKILL)"
+        } else {
+            "Stop job requested"
+        }),
         "success",
         Some(&client_ip),
     )
@@ -1801,9 +1812,20 @@ fn is_unique_violation(e: &anyhow::Error) -> bool {
 /// Returns the status to report: "stopping" when the update applied,
 /// otherwise the current persisted status (a concurrent cancellation or
 /// completion won the race).
-async fn stop_active_job(pool: &sqlx::PgPool, job_id: &str) -> Result<String, StatusCode> {
+async fn stop_active_job(
+    pool: &sqlx::PgPool,
+    job_id: &str,
+    force: bool,
+) -> Result<String, StatusCode> {
     match storage::job_queries::mark_stopping_if_active(pool, job_id).await {
-        Ok(true) => Ok("stopping".to_string()),
+        Ok(true) => {
+            if force {
+                storage::job_queries::mark_force_cancel(pool, job_id)
+                    .await
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            }
+            Ok("stopping".to_string())
+        }
         Ok(false) => {
             let status = storage::job_queries::get_job(pool, job_id)
                 .await

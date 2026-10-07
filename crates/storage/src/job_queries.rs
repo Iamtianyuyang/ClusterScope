@@ -378,6 +378,19 @@ pub async fn cancel_queued_job(pool: &PgPool, job_id: &str) -> Result<bool> {
     Ok(result.rows_affected() > 0)
 }
 
+/// Record a forced-cancellation request on a `stopping` job so the agent
+/// escalates to SIGKILL immediately instead of waiting out the grace period
+/// (see `common::job::FORCE_CANCEL_MARKER`).
+pub async fn mark_force_cancel(pool: &PgPool, job_id: &str) -> Result<()> {
+    sqlx::query("UPDATE jobs SET error_message = $2 WHERE job_id = $1")
+        .bind(job_id)
+        .bind(common::job::FORCE_CANCEL_MARKER)
+        .execute(pool)
+        .await
+        .context("Failed to record the forced cancellation")?;
+    Ok(())
+}
+
 /// `starting`/`running` -> `stopping`; returns false when
 /// the job is not in a state an agent could still be running (the caller then
 /// re-reads the row instead of clobbering a terminal status).
