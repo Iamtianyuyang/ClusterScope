@@ -9,10 +9,8 @@ use common::job::{Job, JobStatus, status_from_str};
 use protocol::AgentServiceServer;
 use scheduler::Scheduler;
 
-use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::net::TcpListener;
 use tonic::transport::Server;
 use tracing::{info, warn};
@@ -35,12 +33,9 @@ struct AppState {
     scheduler: Arc<Scheduler>,
     jwt_secret: String,
     seen_reports: std::sync::Arc<parking_lot::RwLock<lru::LruCache<String, ()>>>,
-    /// Per-source-IP login attempt log (sliding window) for rate limiting.
-    login_attempts: std::sync::Arc<std::sync::Mutex<HashMap<String, VecDeque<Instant>>>>,
-    /// Global login attempt log (all IPs, successes AND failures) for the
-    /// global sliding-window budget — bounds total Argon2 CPU when many
-    /// distinct IPs attack at once.
-    global_login_attempts: std::sync::Arc<std::sync::Mutex<VecDeque<Instant>>>,
+    /// Login rate limiting: per-source-IP sliding window plus the global
+    /// attempt budget (see `handlers::LoginLimiter`).
+    login_limiter: handlers::LoginLimiter,
     /// Caps concurrent Argon2 verifications/hashes so a synchronized login
     /// burst cannot spike CPU across all cores.
     login_concurrency: std::sync::Arc<tokio::sync::Semaphore>,
@@ -91,8 +86,7 @@ async fn main() -> anyhow::Result<()> {
         seen_reports: std::sync::Arc::new(parking_lot::RwLock::new(lru::LruCache::new(
             std::num::NonZeroUsize::new(100000).unwrap(),
         ))),
-        login_attempts: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
-        global_login_attempts: std::sync::Arc::new(std::sync::Mutex::new(VecDeque::new())),
+        login_limiter: handlers::LoginLimiter::new(),
         login_concurrency: std::sync::Arc::new(tokio::sync::Semaphore::new(
             handlers::LOGIN_MAX_CONCURRENCY,
         )),
@@ -119,6 +113,10 @@ async fn main() -> anyhow::Result<()> {
             "agent_token is empty — gRPC accepts any caller; set AGENT_TOKEN for untrusted networks"
         );
     }
+
+    // Refuse to start with an incoherent configuration (e.g. tls_enabled
+    // without a certificate pair) instead of failing halfway through startup.
+    config.validate().map_err(|e| anyhow::anyhow!(e))?;
 
     // HTTP server (REST + WebSocket, both on http_addr)
     let http_state = state.clone();

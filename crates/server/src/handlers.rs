@@ -6,9 +6,9 @@ use axum::{
 use chrono::Utc;
 use common::auth::{self, Claims};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration as StdDuration, Instant};
 use tracing::warn;
 use uuid::Uuid;
@@ -62,50 +62,117 @@ fn dummy_password_hash() -> &'static str {
     })
 }
 
+/// Per-IP sliding window plus the global attempt budget, in one place.
+///
+/// Extracted from the free functions below so the limits can be exercised
+/// without building a whole `AppState`; the handler and the tests share this
+/// single implementation. Caps/windows are unchanged:
+/// `LOGIN_MAX_ATTEMPTS` failures per `LOGIN_WINDOW_SECS` per IP, and
+/// `GLOBAL_LOGIN_MAX_ATTEMPTS` attempts per `GLOBAL_LOGIN_WINDOW_SECS`
+/// across all IPs (every attempt counts, success or failure).
+pub struct LoginLimiter {
+    /// ip -> timestamps of FAILED attempts inside the window.
+    attempts: StdMutex<HashMap<String, VecDeque<Instant>>>,
+    /// Timestamps of every attempt (any IP) inside the global window.
+    global: StdMutex<VecDeque<Instant>>,
+}
+
+impl Default for LoginLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LoginLimiter {
+    pub fn new() -> Self {
+        Self {
+            attempts: StdMutex::new(HashMap::new()),
+            global: StdMutex::new(VecDeque::new()),
+        }
+    }
+
+    /// Sliding-window check for one source IP. Returns `true` when the attempt
+    /// is allowed. Only FAILED attempts are recorded, so legitimate users are
+    /// never throttled by their own successful logins.
+    pub fn allowed(&self, ip: &str) -> bool {
+        let now = Instant::now();
+        let window = StdDuration::from_secs(LOGIN_WINDOW_SECS);
+        let mut attempts = self.attempts.lock().unwrap();
+        let queue = attempts.entry(ip.to_string()).or_default();
+        while queue
+            .front()
+            .map(|t: &Instant| now.duration_since(*t) > window)
+            .unwrap_or(false)
+        {
+            queue.pop_front();
+        }
+        queue.len() < LOGIN_MAX_ATTEMPTS
+    }
+
+    /// Record a failed attempt for an IP.
+    pub fn record_failure(&self, ip: &str) {
+        self.attempts
+            .lock()
+            .unwrap()
+            .entry(ip.to_string())
+            .or_default()
+            .push_back(Instant::now());
+    }
+
+    /// Global budget check across all IPs.
+    pub fn global_allowed(&self) -> bool {
+        let now = Instant::now();
+        let window = StdDuration::from_secs(GLOBAL_LOGIN_WINDOW_SECS);
+        let mut attempts = self.global.lock().unwrap();
+        while attempts
+            .front()
+            .map(|t: &Instant| now.duration_since(*t) > window)
+            .unwrap_or(false)
+        {
+            attempts.pop_front();
+        }
+        attempts.len() < GLOBAL_LOGIN_MAX_ATTEMPTS
+    }
+
+    /// Record one attempt toward the global budget (successful or not).
+    pub fn record_attempt(&self) {
+        self.global.lock().unwrap().push_back(Instant::now());
+    }
+
+    /// Drop per-IP entries whose newest failure fell out of the window, so the
+    /// map cannot grow unboundedly with distinct source IPs. The global queue
+    /// is self-pruning (every check drops expired entries).
+    pub fn prune(&self) {
+        let now = Instant::now();
+        let window = StdDuration::from_secs(LOGIN_WINDOW_SECS);
+        let mut attempts = self.attempts.lock().unwrap();
+        attempts.retain(|_, q| {
+            q.back()
+                .map(|t| now.duration_since(*t) <= window)
+                .unwrap_or(false)
+        });
+    }
+}
+
 /// Sliding-window rate limiter keyed by client IP. Returns `true` when the
 /// attempt is allowed. Only FAILED attempts are recorded (see
 /// [`login_failed`]), so legitimate users are never throttled by their own
 /// successful logins. Old entries are pruned opportunistically.
 pub fn login_allowed(state: &AppState, ip: &str) -> bool {
-    let now = Instant::now();
-    let window = StdDuration::from_secs(LOGIN_WINDOW_SECS);
-    let mut attempts = state.login_attempts.lock().unwrap();
-    let queue = attempts.entry(ip.to_string()).or_default();
-    while queue
-        .front()
-        .map(|t: &Instant| now.duration_since(*t) > window)
-        .unwrap_or(false)
-    {
-        queue.pop_front();
-    }
-    queue.len() < LOGIN_MAX_ATTEMPTS
+    state.login_limiter.allowed(ip)
 }
 
 /// Record a failed login attempt for an IP (only failures count against the
 /// per-IP sliding window).
 pub fn login_failed(state: &AppState, ip: &str) {
-    let mut attempts = state.login_attempts.lock().unwrap();
-    attempts
-        .entry(ip.to_string())
-        .or_default()
-        .push_back(Instant::now());
+    state.login_limiter.record_failure(ip);
 }
 
 /// Drop rate-limit entries whose newest attempt fell out of the window, so
 /// the limiter map cannot grow unboundedly with distinct source IPs. Called
 /// periodically from the server background task.
 pub fn prune_login_attempts(state: &AppState) {
-    let now = Instant::now();
-    let window = StdDuration::from_secs(LOGIN_WINDOW_SECS);
-    let mut attempts = state.login_attempts.lock().unwrap();
-    attempts.retain(|_, q| {
-        q.back()
-            .map(|t| now.duration_since(*t) <= window)
-            .unwrap_or(false)
-    });
-    // The global budget queue is self-pruning (every check drops entries
-    // older than the window), so it stays bounded by the window by
-    // construction — nothing to do here.
+    state.login_limiter.prune();
 }
 
 /// Global sliding-window budget across all IPs: at most
@@ -113,27 +180,13 @@ pub fn prune_login_attempts(state: &AppState) {
 /// attempt (success or failure) is recorded, so the budget bounds the total
 /// Argon2 work an attacker can buy with many distinct source IPs.
 pub fn global_login_allowed(state: &AppState) -> bool {
-    let now = Instant::now();
-    let window = StdDuration::from_secs(GLOBAL_LOGIN_WINDOW_SECS);
-    let mut attempts = state.global_login_attempts.lock().unwrap();
-    while attempts
-        .front()
-        .map(|t| now.duration_since(*t) > window)
-        .unwrap_or(false)
-    {
-        attempts.pop_front();
-    }
-    attempts.len() < GLOBAL_LOGIN_MAX_ATTEMPTS
+    state.login_limiter.global_allowed()
 }
 
 /// Record one attempt toward the global budget (called for every login
 /// attempt, successful or not).
 pub fn record_global_login_attempt(state: &AppState) {
-    state
-        .global_login_attempts
-        .lock()
-        .unwrap()
-        .push_back(Instant::now());
+    state.login_limiter.record_attempt();
 }
 
 /// Resolve the client IP for rate limiting. With `trust_proxy_headers` the
@@ -720,6 +773,43 @@ async fn audit_username(state: &AppState, claims: &Claims) -> String {
         .unwrap_or_else(|| claims.sub.clone())
 }
 
+/// Submission caps shared by the HTTP handler and the gRPC path (the jobs
+/// columns have no DB-side length limits, so without these a single call
+/// could insert a gigantic row). Returns `BAD_REQUEST` plus a message naming
+/// the violated limit.
+pub(crate) fn validate_job_request(req: &JobCreateRequest) -> Result<(), (StatusCode, String)> {
+    if req.arguments.len() > MAX_ARGS {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("too many arguments: {} > {}", req.arguments.len(), MAX_ARGS),
+        ));
+    }
+    if let Some(over) = req.arguments.iter().find(|a| a.len() > MAX_ARG_LEN) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("argument too long: {} > {} bytes", over.len(), MAX_ARG_LEN),
+        ));
+    }
+    let oversize = req.name.len() > MAX_JOB_NAME_LEN
+        || req.executable.len() > MAX_EXECUTABLE_LEN
+        || req.working_directory.len() > MAX_WORKDIR_LEN
+        || req.resource_quota.len() > MAX_QUOTA_LEN
+        || req.environment.len() > MAX_ENV_ENTRIES
+        || req.environment.keys().any(|k| k.len() > MAX_ENV_KEY_LEN)
+        || req.environment.values().any(|v| {
+            v.as_str()
+                .map(|s| s.len() > MAX_ENV_VALUE_LEN)
+                .unwrap_or(false)
+        });
+    if oversize {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "submission exceeds the field length caps".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 pub async fn create_job(
     State(state): State<Arc<AppState>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -741,24 +831,10 @@ pub async fn create_job(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // Input length caps: the jobs columns have no length limits, so without
-    // these a single API call could insert a gigantic row.
-    if req.name.len() > MAX_JOB_NAME_LEN
-        || req.executable.len() > MAX_EXECUTABLE_LEN
-        || req.working_directory.len() > MAX_WORKDIR_LEN
-        || req.resource_quota.len() > MAX_QUOTA_LEN
-        || req.arguments.len() > MAX_ARGS
-        || req.arguments.iter().any(|a| a.len() > MAX_ARG_LEN)
-        || req.environment.len() > MAX_ENV_ENTRIES
-        || req.environment.keys().any(|k| k.len() > MAX_ENV_KEY_LEN)
-        || req.environment.values().any(|v| {
-            v.as_str()
-                .map(|s| s.len() > MAX_ENV_VALUE_LEN)
-                .unwrap_or(false)
-        })
-    {
-        return Err(StatusCode::BAD_REQUEST);
-    }
+    validate_job_request(&req).map_err(|(_status, reason)| {
+        warn!(reason = %reason, "Rejected job submission");
+        StatusCode::BAD_REQUEST
+    })?;
 
     let job_id = Uuid::new_v4().to_string();
     let env: HashMap<String, String> = req
@@ -1737,5 +1813,147 @@ async fn stop_active_job(pool: &sqlx::PgPool, job_id: &str) -> Result<String, St
             Ok(status)
         }
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+/// Acceptance tests for `features/merge_m6_auth_hardening.feature` (login
+/// rate limiting / client-address resolution, F-08) and
+/// `features/merge_m6_job_safety.feature` (submission caps, F-11).
+///
+/// The scenario names are the test function names verbatim. The limiter and
+/// the submission validator are driven directly (the feature file allows
+/// extracting them for exactly this reason): the handlers themselves only
+/// forward to `LoginLimiter` / `validate_job_request`.
+#[cfg(test)]
+mod merge_m6_acceptance_tests {
+    use super::*;
+    use axum::http::HeaderMap;
+
+    fn job_request(arguments: Vec<String>) -> JobCreateRequest {
+        JobCreateRequest {
+            node_id: "m6-node".to_string(),
+            name: "m6-job".to_string(),
+            executable: "/bin/true".to_string(),
+            arguments,
+            working_directory: "/tmp".to_string(),
+            environment: serde_json::Map::new(),
+            resource_quota: String::new(),
+            max_retries: 0,
+        }
+    }
+
+    #[test]
+    fn repeated_failed_logins_from_one_client_address_are_capped() {
+        let limiter = LoginLimiter::new();
+        let ip = "m6-ip-a";
+
+        // The first LOGIN_MAX_ATTEMPTS failures are allowed; the 11th attempt
+        // from the same address is refused *before* any password work (the
+        // handler checks the limiter first).
+        for attempt in 1..=10 {
+            assert!(
+                limiter.allowed(ip),
+                "failed attempt {attempt} must still be allowed"
+            );
+            limiter.record_failure(ip);
+        }
+        assert!(
+            !limiter.allowed(ip),
+            "the 11th attempt from the same address must be refused before the password check"
+        );
+    }
+
+    #[test]
+    fn the_login_attempt_cap_is_tracked_per_client_address() {
+        let limiter = LoginLimiter::new();
+        let capped = "m6-ip-a";
+        for _ in 0..10 {
+            limiter.record_failure(capped);
+        }
+        assert!(!limiter.allowed(capped), "the capped address stays refused");
+
+        // A different source address has its own, untouched window.
+        assert!(
+            limiter.allowed("m6-ip-b"),
+            "the budget must be tracked per client address"
+        );
+    }
+
+    #[test]
+    fn the_global_login_budget_bounds_attempts_across_all_client_addresses() {
+        let limiter = LoginLimiter::new();
+
+        // 300 attempts from 300 distinct addresses: every attempt counts
+        // (success or failure) against the global budget.
+        for attempt in 0..300 {
+            let ip = format!("m6-global-{attempt}");
+            assert!(
+                limiter.global_allowed(),
+                "attempt {attempt} must be inside the global budget"
+            );
+            assert!(limiter.allowed(&ip), "a fresh address is under its own cap");
+            limiter.record_attempt();
+        }
+
+        assert!(
+            !limiter.global_allowed(),
+            "the 301st attempt must be refused even from a brand-new address"
+        );
+    }
+
+    #[test]
+    fn the_client_address_used_for_the_budget_follows_the_forwarded_header_when_the_proxy_is_trusted()
+     {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-forwarded-for",
+            "203.0.113.9, 10.0.0.1".parse().expect("header value"),
+        );
+        let addr: SocketAddr = "127.0.0.1:50000".parse().expect("socket addr");
+
+        assert_eq!(
+            effective_client_ip(&headers, addr, true),
+            "203.0.113.9",
+            "with a trusted proxy the first forwarded entry is the client"
+        );
+        assert_eq!(
+            effective_client_ip(&headers, addr, false),
+            "127.0.0.1",
+            "without trust the header is ignored and the socket address is used"
+        );
+    }
+
+    #[test]
+    fn a_job_submission_with_too_many_arguments_is_rejected() {
+        let too_many = job_request(vec!["m6-arg".to_string(); MAX_ARGS + 1]);
+        let rejected = validate_job_request(&too_many);
+        assert!(rejected.is_err(), "257 arguments must be rejected");
+        assert!(
+            rejected.unwrap_err().1.contains("too many arguments"),
+            "the rejection names the argument-count cap"
+        );
+
+        let at_the_limit = job_request(vec!["m6-arg".to_string(); MAX_ARGS]);
+        assert!(
+            validate_job_request(&at_the_limit).is_ok(),
+            "exactly {MAX_ARGS} arguments are still accepted"
+        );
+    }
+
+    #[test]
+    fn a_job_submission_with_an_argument_over_the_length_limit_is_rejected() {
+        let too_long = job_request(vec!["x".repeat(MAX_ARG_LEN + 1)]);
+        let rejected = validate_job_request(&too_long);
+        assert!(rejected.is_err(), "a 4097-byte argument must be rejected");
+        assert!(
+            rejected.unwrap_err().1.contains("argument too long"),
+            "the rejection names the per-argument limit"
+        );
+
+        let at_the_limit = job_request(vec!["x".repeat(MAX_ARG_LEN)]);
+        assert!(
+            validate_job_request(&at_the_limit).is_ok(),
+            "exactly {MAX_ARG_LEN} bytes are still accepted"
+        );
     }
 }

@@ -96,6 +96,28 @@ pub struct ServerConfig {
     pub trust_proxy_headers: bool,
 }
 
+impl ServerConfig {
+    /// Pre-start sanity check for values that cannot be defaulted: enabling
+    /// TLS requires both the certificate and its private key.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.tls_enabled {
+            if self.tls_cert_path.is_none() {
+                return Err(
+                    "tls_enabled requires tls_cert_path (missing tls_cert_path / tls_key_path)"
+                        .to_string(),
+                );
+            }
+            if self.tls_key_path.is_none() {
+                return Err(
+                    "tls_enabled requires tls_key_path (missing tls_cert_path / tls_key_path)"
+                        .to_string(),
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
