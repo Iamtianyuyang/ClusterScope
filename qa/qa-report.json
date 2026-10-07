@@ -58,7 +58,8 @@
    "notes": [
     "ops-checks.sh 的前置必须齐全（server + agent 都起着）：它开头就量 8080/50051 与 Prometheus 端点，栈没起会多出 4 条假 FAIL。",
     "extra-checks.sh 自带 server/agent 起停（脚本 33-34/89/98-99 行），跑完栈是停的 —— 紧随其后的探针要先自己把栈起回来。",
-    "ops-checks.sh:112 的 `delete from node_metrics;` 是已记录的夹具卫生问题（N9）；本轮两次探针也做过同样的清表，都是 QA 夹具行为。"
+    "ops-checks.sh:112 的 `delete from node_metrics;` 是已记录的夹具卫生问题（N9）；本轮两次探针也做过同样的清表，都是 QA 夹具行为。",
+    "任务书说编码阶段的返工是『4 个提交』；分支实况是 3 个（`git rev-list --count 25f475a..5ceee91` = 3：3230e8b / d26ada0 / 5ceee91），reflog 无 amend / reset / rebase 痕迹，合流提交与 25f475a 的哈希都未变 ——『未重做合流』本身成立，提交计数不影响任何判据。见 qa/evidence/m6-qa6-rework-commit-audit.txt。"
    ]
   }
  },
@@ -3821,7 +3822,8 @@
   "qa/evidence/m6-qa6-static-probes.txt",
   "qa/evidence/m6-qa6-demo-13-m6-audit-endpoint.txt",
   "qa/evidence/m6-qa6-demo-14-m6-force-cancel.txt",
-  "qa/evidence/m6-qa6-demo-15-m6-lockout-and-cluster-info.txt"
+  "qa/evidence/m6-qa6-demo-15-m6-lockout-and-cluster-info.txt",
+  "qa/evidence/m6-qa6-rework-commit-audit.txt"
  ],
  "stage5HarnessAdditions": [
   {
