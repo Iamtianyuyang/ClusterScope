@@ -45,7 +45,7 @@
 ## 目录
 
 - [快速开始](#quickstart) · [环境要求](#requirements) · [TUI](#tui) · [数据采集](#collection)
-- [配置](#config) · [任务与告警](#jobs-alerts) · [服务管理](#services) · [数据保留](#retention)
+- [配置](#config) · [任务与告警](#jobs-alerts) · [安装方式](#install) · [服务管理](#services) · [数据保留](#retention)
 - [文档](#docs) · [项目结构](#structure) · [测试](#testing) · [常见问题](#faq) · [已知限制](#limitations)
 
 ## 环境要求 {#requirements}
@@ -54,7 +54,7 @@
 |------|------|
 | 操作系统 | Linux x86_64(NVIDIA 驱动 + NVML 采集 GPU 指标) |
 | 权限 | 普通用户即可,**无需 root** |
-| PostgreSQL | v16+(server 必需;可用 `deploy/docker-compose.yml` 一键起) |
+| PostgreSQL | v16+(server 必需;无需 root 的两条落地路径见[快速开始](#quickstart)第 2 步;`deploy/docker-compose.yml` 需要本机有 docker) |
 | 源码编译 | Rust 工具链 + `protoc` |
 
 ## 快速开始 {#quickstart}
@@ -84,7 +84,42 @@ cp deploy/server.yaml.example server.yaml
 clusterscope-server server.yaml
 ```
 
-无 root 时可用 `docker compose up`(`deploy/docker-compose.yml`,只含 postgres + server)。
+#### 无 root 准备 PostgreSQL(两条可行路径)
+
+**路径 A —— 已经有 PostgreSQL 实例:直接把它填进 `postgres_url`,什么都不用装**
+
+```yaml
+postgres_url: "postgresql://<用户>:<口令>@<主机>:5432/clusterscope"
+```
+
+```bash
+psql "postgresql://<用户>:<口令>@<主机>:5432/clusterscope" -c 'select version()'   # 先确认真的能连
+```
+
+**路径 B —— 把 PostgreSQL 装到自己的 HOME(无 root、无 docker、无外网时用这条)**
+
+本集群实测走的就是这条:源码编译到 `~/pg16`,数据目录 `~/pgdata`,用普通账号起停。
+
+```bash
+# 1) 源码包解到 HOME 后编译(有外网的机器下好 tar 包传上来,或直接解发行版 tar 包)
+./configure --prefix="$HOME/pg16" && make -j"$(nproc)" && make install
+
+# 2) 初始化数据目录(HOME 内,不需要 root)
+"$HOME/pg16/bin/initdb" -D "$HOME/pgdata" -U clusterscope --auth=trust
+
+# 3) 起服务(监听 127.0.0.1:5432)并建库
+"$HOME/pg16/bin/pg_ctl" -D "$HOME/pgdata" -l "$HOME/pgdata/server.log" -o "-p 5432 -k /tmp" start
+"$HOME/pg16/bin/createdb" -h 127.0.0.1 -p 5432 -U clusterscope clusterscope
+
+# 4) 停服务
+"$HOME/pg16/bin/pg_ctl" -D "$HOME/pgdata" stop
+```
+
+`postgres_url` 填 `postgresql://clusterscope:<口令>@127.0.0.1:5432/clusterscope`;
+`initdb` / `pg_ctl` / `psql` 不在 PATH 时用 `$HOME/pg16/bin/` 下的完整路径。
+
+> `docker compose up`(`deploy/docker-compose.yml`,只含 postgres + server)**需要本机有 docker**:
+> 本集群实测 `docker` 与 `docker-compose` 都不存在(podman 也没有镜像),因此走的是上面路径 B。
 
 ### 3. 部署 Agent(免密 ssh,无需 root)
 
@@ -281,6 +316,55 @@ curl -X POST http://SERVER:8080/api/alerts/rules -H "Authorization: Bearer $TOKE
 ```
 
 完整接口见 `docs/api.md`。
+
+## 安装方式(用户级 / 系统级) {#install}
+
+| 方式 | 需要 root? | 二进制 / 配置 | unit 文件(仓库里现成的) |
+|------|-----------|---------------|--------------------------|
+| **用户级(默认,推荐)** | **不需要** | `~/.local/bin/` + `~/.config/clusterscope/` | `deploy/clusterscope-server.service`、`deploy/clusterscope-agent.service`(`WantedBy=default.target`,路径全走 `%h`) |
+| 系统级(可选) | **需要 root** | `/usr/local/bin/` + `/etc/clusterscope/` | `deploy/server.service`、`deploy/agent.service`(`User=clusterscope`、`WantedBy=multi-user.target`) |
+
+### 用户级安装(无需 root)
+
+```bash
+mkdir -p ~/.local/bin ~/.config/clusterscope ~/.config/systemd/user
+cp target/release/clusterscope-server target/release/clusterscope-agent ~/.local/bin/   # 或 Release 包里的二进制
+cp deploy/server.yaml.example ~/.config/clusterscope/server.yaml   # 改 postgres_url
+cp deploy/agent.yaml.example  ~/.config/clusterscope/agent.yaml    # 改 server_addr
+cp deploy/clusterscope-server.service deploy/clusterscope-agent.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now clusterscope-server clusterscope-agent
+systemctl --user status clusterscope-agent
+```
+
+远程节点的 agent 也可以用 `./deploy/install-agent.sh user@host http://SERVER_IP:50051` 装(免密 ssh,同样无需 root)。
+它只停自己启动过的那个进程(按 PID 文件 + 核对 `/proc/<pid>/cmdline`),不会碰到同机器上别人的 agent。
+
+**前提:linger(`systemd --user` 的常驻开关)**。用户级服务由 user manager 托管,**默认随最后一次 SSH 登出被杀**;
+要它登出后继续跑,必须给这个用户开 linger:
+
+```bash
+loginctl show-user "$USER" | grep '^Linger='   # Linger=yes 才会常驻;Linger=no 时登出即死
+loginctl enable-linger "$USER"                 # 需要管理员/root 代办(普通用户通常没权限)
+```
+
+本机实测 `Linger=yes`,所以用户级 agent 断开 SSH 后仍在跑;`Linger=no` 的机器要先请管理员执行
+上面的 `loginctl enable-linger`(否则改用系统级安装)。linger 是**每台机器**的配置,换机器要重新确认。
+
+### 系统级安装(可选,需要 root)
+
+```bash
+sudo install -m755 target/release/clusterscope-server target/release/clusterscope-agent /usr/local/bin/
+sudo mkdir -p /etc/clusterscope /var/lib/clusterscope
+sudo cp deploy/server.yaml.example /etc/clusterscope/server.yaml
+sudo cp deploy/agent.yaml.example  /etc/clusterscope/agent.yaml
+sudo useradd --system --home /var/lib/clusterscope --shell /usr/sbin/nologin clusterscope   # unit 里的 User=clusterscope
+sudo cp deploy/server.service deploy/agent.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now clusterscope-server clusterscope-agent
+```
+
+没有 root 就只用用户级那套;两套不要混装(同名服务会互相顶掉)。
 
 ## 服务管理 {#services}
 
