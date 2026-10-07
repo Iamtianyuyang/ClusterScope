@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
 };
 use chrono::Utc;
-use common::auth::{self, Claims, UserRole};
+use common::auth::{self, Claims};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -1050,12 +1050,3 @@ pub async fn get_prometheus_metrics(
 
 // ===== Helpers =====
 
-/// Role-based authorization helper used by the auth middleware.
-pub fn check_role(claims: &Claims, allowed: &[&str]) -> Result<(), StatusCode> {
-    let role = claims.role.parse::<UserRole>().unwrap_or(UserRole::Viewer);
-    if allowed.contains(&role.to_str()) {
-        Ok(())
-    } else {
-        Err(StatusCode::FORBIDDEN)
-    }
-}
