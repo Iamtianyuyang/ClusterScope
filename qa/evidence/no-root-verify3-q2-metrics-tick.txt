@@ -1,0 +1,13 @@
+pid=1903157 alive_after_25s=yes
+== log lines: 7
+== panics / permission errors: 0
+== distinct message shapes (stripped of timestamps)
+        5 WARN Failed to
+        1 INFO Node identity
+        1 INFO ClusterScope Agent
+== retry backoff observed (agent keeps trying because no server is listening)
+  retry_lines=5
+== nvidia-smi reachable from this same uid (NR-20 support)
+  0, NVIDIA L20, 0 %
+  1, NVIDIA L20, 0 %
+  2, NVIDIA L20, 0 %

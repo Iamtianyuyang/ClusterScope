@@ -1,0 +1,14 @@
+{
+  "title": "证据 6 — jobs.pid 从不落库：agent 知道真实 pid，数据库里永远是 NULL",
+  "cwd": "..",
+  "steps": [
+    { "say": "起 server 与 agent，然后提交一个短任务" },
+    { "run": "sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01", "timeoutSec": 120 },
+    { "say": "登录拿 token → 提交任务 → 等它跑完，然后同时看 agent 日志与数据库" },
+    { "run": "T=$(curl -s -X POST -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin123\"}' http://127.0.0.1:8080/api/login | jq -r .access_token); J=$(curl -s -X POST -H \"Authorization: Bearer $T\" -H 'Content-Type: application/json' -d '{\"node_id\":\"qa-node-01\",\"name\":\"qa-pid-demo\",\"executable\":\"/bin/sh\",\"arguments\":[\"-c\",\"echo qa-pid-demo; sleep 3\"],\"working_directory\":\"/tmp\"}' http://127.0.0.1:8080/api/jobs | jq -r .job_id); echo \"job_id=$J\"; PSQL=/public/tianyuyang/code/ClusterScope-review/pg16/bin/psql; PG='postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope'; for i in $(seq 1 60); do s=$($PSQL \"$PG\" -tAc \"select status from jobs where job_id='$J'\"); [ \"$s\" = \"succeeded\" ] && break; sleep 1; done; echo '--- agent 日志（它知道真实 pid）---'; grep -h 'Process spawned' gauntlet-out/qa/agent.log | sed 's/\\x1b\\[[0-9;]*m//g' | tail -1; echo '--- 数据库行（任务已经 succeeded，pid 仍是 NULL）---'; $PSQL \"$PG\" -tAc \"select job_id || ' | ' || status || ' | pid=' || coalesce(pid::text,'NULL') from jobs where job_id='$J'\"", "timeoutSec": 180 },
+    { "say": "根因：grpc.rs 调 update_job_status 时 pid 位置恒传字面量 None（同一个函数的 exit_code / started_at 也是 None）" },
+    { "run": "sed -n '497,508p' crates/server/src/grpc.rs; /public/tianyuyang/code/ClusterScope-review/pg16/bin/psql 'postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope' -tAc \"select 'jobs=' || count(*) || ' with_pid=' || count(pid) from jobs;\"", "timeoutSec": 60 },
+    { "say": "顺带一个同类结论：retry_count / max_retries 没有任何代码路径会写非 0 值，失败任务永不重试" },
+    { "run": "sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh", "timeoutSec": 60 }
+  ]
+}

@@ -1,0 +1,32 @@
+        })
+        .collect()
+}
+
+// ===== Job Handlers =====
+
+pub async fn create_job(
+    State(state): State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
+    Json(req): Json<JobCreateRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // Basic input validation: a job needs an executable and a known node.
+    if req.executable.trim().is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let node_known = storage::queries::node_exists(state.database.pool(), &req.node_id)
+        .await
+        .unwrap_or(false);
+    if !node_known {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let job_id = Uuid::new_v4().to_string();
+    let env: HashMap<String, String> = req
+        .environment
+        .into_iter()
+        .map(|(k, v)| (k, v.as_str().unwrap_or_default().to_string()))
+        .collect();
+
+    let job_row = storage::models::JobRow {
+        job_id: job_id.clone(),
+        node_id: req.node_id.clone(),

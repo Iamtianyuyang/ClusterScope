@@ -1,0 +1,281 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "ClusterScope 运行时结构（GitHub 已发布线 f9c080b）",
+    "subtitle": "TUI 客户端 · Rust workspace 服务端/agent · PostgreSQL 16 持久层",
+    "output": "gauntlet-out/evidence/diagrams/clusterscope-runtime.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "repository": {
+      "url": "https://github.com/Iamtianyuyang/ClusterScope",
+      "revision": "f9c080bdcb1a679d0ceb71a7e29749525b4d2a03"
+    }
+  },
+  "components": [
+    {
+      "id": "operator",
+      "type": "external",
+      "label": "运维人员",
+      "sublabel": "终端 / TUI",
+      "pos": [
+        20,
+        260
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "tui",
+      "type": "frontend",
+      "label": "clusterscope-tui",
+      "sublabel": "ratatui · 独立 crate",
+      "pos": [
+        240,
+        260
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "不链接任何内部 crate",
+      "sources": [
+        {
+          "path": "crates/tui/src/main.rs",
+          "line": 40,
+          "end_line": 90,
+          "label": "TUI 主循环"
+        },
+        {
+          "path": "crates/tui/src/ui.rs",
+          "line": 1,
+          "label": "绘制层"
+        }
+      ]
+    },
+    {
+      "id": "server",
+      "type": "backend",
+      "label": "clusterscope-server",
+      "sublabel": "axum REST + /ws · tonic gRPC :50051",
+      "pos": [
+        580,
+        260
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "sources": [
+        {
+          "path": "crates/server/src/main.rs",
+          "line": 235,
+          "end_line": 291,
+          "label": "REST 路由注册"
+        },
+        {
+          "path": "crates/server/src/main.rs",
+          "line": 85,
+          "end_line": 113,
+          "label": "后台任务与 gRPC 启动"
+        },
+        {
+          "path": "crates/server/src/grpc.rs",
+          "line": 81,
+          "end_line": 141,
+          "label": "AgentService 实现"
+        }
+      ]
+    },
+    {
+      "id": "scheduler",
+      "type": "backend",
+      "label": "scheduler",
+      "sublabel": "内存队列 · 容量调度",
+      "pos": [
+        580,
+        90
+      ],
+      "size": [
+        190,
+        56
+      ],
+      "sources": [
+        {
+          "path": "crates/scheduler/src/lib.rs",
+          "line": 1,
+          "label": "调度器 crate"
+        }
+      ]
+    },
+    {
+      "id": "agent",
+      "type": "backend",
+      "label": "clusterscope-agent",
+      "sublabel": "sysinfo + NVML · 每节点常驻",
+      "pos": [
+        880,
+        260
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "sources": [
+        {
+          "path": "crates/agent/src/main.rs",
+          "line": 53,
+          "end_line": 100,
+          "label": "agent 启动"
+        },
+        {
+          "path": "crates/agent/src/grpc_client.rs",
+          "line": 128,
+          "end_line": 190,
+          "label": "上报指标 / 拉取任务流"
+        },
+        {
+          "path": "crates/agent/src/metrics.rs",
+          "line": 495,
+          "label": "TOP_CPU_PROCESSES 采集"
+        }
+      ]
+    },
+    {
+      "id": "gpu",
+      "type": "external",
+      "label": "NVIDIA GPU",
+      "sublabel": "NVML 指标源",
+      "pos": [
+        880,
+        470
+      ],
+      "size": [
+        190,
+        56
+      ]
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "PostgreSQL 16",
+      "sublabel": "sqlx · 11 张表内联建表",
+      "pos": [
+        580,
+        470
+      ],
+      "size": [
+        190,
+        56
+      ],
+      "sources": [
+        {
+          "path": "crates/storage/src/lib.rs",
+          "line": 35,
+          "end_line": 216,
+          "label": "run_migrations（CREATE TABLE ×11）"
+        },
+        {
+          "path": "crates/storage/src/queries.rs",
+          "line": 1,
+          "label": "指标读写"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Rust workspace（cargo，--offline 可构建）",
+      "wraps": [
+        "tui",
+        "server",
+        "scheduler",
+        "agent",
+        "postgres",
+        "gpu"
+      ],
+      "pad": 18
+    }
+  ],
+  "connections": [
+    {
+      "id": "operator-to-tui",
+      "from": "operator",
+      "to": "tui",
+      "label": "按键",
+      "variant": "emphasis"
+    },
+    {
+      "id": "tui-to-server",
+      "from": "tui",
+      "to": "server",
+      "label": "REST + WebSocket",
+      "variant": "emphasis"
+    },
+    {
+      "id": "agent-to-server",
+      "from": "agent",
+      "to": "server",
+      "label": "gRPC 上报",
+      "variant": "emphasis"
+    },
+    {
+      "id": "server-to-scheduler",
+      "from": "server",
+      "to": "scheduler",
+      "label": "入队/派发"
+    },
+    {
+      "id": "server-to-postgres",
+      "from": "server",
+      "to": "postgres",
+      "label": "sqlx"
+    },
+    {
+      "id": "agent-to-gpu",
+      "from": "agent",
+      "to": "gpu",
+      "label": "NVML 查询",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "客户端",
+      "items": [
+        "TUI 只依赖 ratatui/crossterm，不链接 common/protocol/storage/server（QA OPS-11 实测）",
+        "README 的「Web 前端」已在本线删除，WebSocket /ws 仍在服务端注册"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "服务端",
+      "items": [
+        "7 个 crate：common 与 protocol 是叶子；storage/scheduler 依赖 common；server 依赖全部；tui 独立",
+        "REST 分 public / admin / operator / read 四组路由，read-only 模式下 GET 的边界与文档不一致（F-07）",
+        "调度器每轮只取 100 个最老 queued 任务，存在队头阻塞（B 线 eac070e 已修）"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "持久层与 agent",
+      "items": [
+        "11 张表全部由 storage::DatabasePool::run_migrations 内联创建，没有独立迁移工具链",
+        "agent 每 2s 上报一次指标；jobs.pid 从不落库（F-03）",
+        "存储层零测试：storage crate 行覆盖率 0%（总体 20.7%）"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "本次审查的边界",
+      "items": [
+        "未纳入闸门测量：proto/、deploy/、docs/、README.md、assets/（分析器读不了这些语言）",
+        "quality 三闸门在硬阈值下 FAIL：complexity 21/316、CRAP 45/316、覆盖率 20.7%"
+      ]
+    }
+  ]
+}

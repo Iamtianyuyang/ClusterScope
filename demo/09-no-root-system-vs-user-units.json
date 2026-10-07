@@ -1,0 +1,18 @@
+{
+  "title": "证据 9 — 同一个项目两套部署件：系统级 unit 非 root 装不上，用户级安装器能装",
+  "cwd": "..",
+  "steps": [
+    { "say": "需求是「不用 root 的程序」。仓库发的两个 unit 长什么样（User=clusterscope、/usr/local/bin、/var/lib、/var/log、multi-user.target）" },
+    { "run": "grep -n 'User=\\|Group=\\|ExecStart=\\|WorkingDirectory=\\|LogsDirectory=\\|WantedBy=\\|After=' deploy/server.service deploy/agent.service" },
+    { "say": "先看这两个 unit 指的东西在本机存不存在：clusterscope 用户不存在，/usr/local/bin 不可写，配置目录也不存在" },
+    { "run": "id clusterscope 2>&1 | head -1; echo \"/usr/local/bin = $(stat -c '%U:%G %a' /usr/local/bin)\"; ls -d /etc/clusterscope /var/lib/clusterscope 2>&1; echo \"/lib/systemd/system/postgresql.service: $(test -e /lib/systemd/system/postgresql.service && echo exists || echo absent)（After= 里还写着 redis.service，而代码从没读过 redis_url）\"; grep -rn 'redis_url' crates/ | wc -l" },
+    { "say": "真按文档装一次，看非 root 的确切失败：systemctl link 要交互认证；写 /etc/systemd/system 直接 Permission denied" },
+    { "run": "systemctl link deploy/server.service 2>&1; echo \"  systemctl link exit=$?\"; cp deploy/server.service /etc/systemd/system/clusterscope-server.service 2>&1; echo \"  cp exit=$?\"" },
+    { "say": "systemd 自己也说了：ExecStart 的程序不存在（没有任何安装步骤会把它放到 /usr/local/bin）" },
+    { "run": "systemd-analyze verify deploy/server.service 2>&1 | head -3" },
+    { "say": "对照：用户级安装器 deploy/install-agent.sh —— 语法检查通过，非注释行里 0 处系统路径，两个分支都在 systemd --user / nohup" },
+    { "run": "bash -n deploy/install-agent.sh && echo 'SYNTAX-OK'; echo \"用户路径引用行数=$(grep -c '\\.local/bin\\|\\.config/clusterscope\\|\\.config/systemd/user' deploy/install-agent.sh)\"; echo \"非注释行里的系统路径引用=$(grep -vE '^[[:space:]]*#' deploy/install-agent.sh | grep -c '/usr/local/bin\\|/etc/clusterscope\\|/var/lib/clusterscope\\|/var/log/clusterscope')\"; grep -n 'Restart=always\\|nohup\\|pkill' deploy/install-agent.sh" },
+    { "say": "结论一句话：能装的那套（用户级）只覆盖 agent；README:288-289 却让用户用 systemctl --user 管 server，而仓库里 0 个用户级 server unit" },
+    { "run": "echo \"README 里 systemctl --user 行数=$(grep -c 'systemctl --user' README.md)\"; echo \"仓库里 clusterscope-server.service 个数=$(find . -name clusterscope-server.service -not -path './target/*' | wc -l)\"; ls deploy/*.service" }
+  ]
+}

@@ -1,0 +1,19 @@
+== control: existing config (server_addr=127.0.0.1:59999) -> which addr does the agent dial?
+  control: http://127.0.0.1:59999
+== silent fallback: -c /tmp/nr-verify/does-not-exist.yaml (missing) -> exit=1
+  stderr/stdout (full):
+    [2m2026-10-07T05:52:46.657877Z[0m [32m INFO[0m ClusterScope Agent starting [3mserver_addr[0m[2m=[0mhttp://localhost:50051 [3mnode_id[0m[2m=[0mNone
+    Error: Failed to write node identity to "/tmp/nr-verify/missing-home/.config/node_id"
+    
+    Caused by:
+        No such file or directory (os error 2)
+  which addr does the agent dial?
+  greeting line: [2m2026-10-07T05:52:46.657877Z[0m [32m INFO[0m ClusterScope Agent starting [3mserver_addr[0m[2m=[0mhttp://localhost:50051 [3mnode_id[0m[2m=[0mNone
+  log dir created under HOME:
+    /tmp/nr-verify/missing-home
+    /tmp/nr-verify/missing-home/.local
+    /tmp/nr-verify/missing-home/.local/state
+    /tmp/nr-verify/missing-home/.local/state/clusterscope-agent
+  any warning about the missing file? (grep -iE 'config|not found|missing|warn'):
+    2:Error: Failed to write node identity to "/tmp/nr-verify/missing-home/.config/node_id"
+    5:    No such file or directory (os error 2)

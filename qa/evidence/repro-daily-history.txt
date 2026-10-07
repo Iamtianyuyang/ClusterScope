@@ -1,0 +1,47 @@
+### metrics_daily contents (independent reproduction of DOC-07 / CON-12)
+qa-node-01|qa-old-daily|2026-07-08|1
+qa-node-01|cpu_usage_percent|2026-09-07|21
+qa-node-01|cpu_usage_percent|2026-09-08|21
+qa-node-01|cpu_usage_percent|2026-09-17|31
+qa-node-01|cpu_usage_percent|2026-09-22|41
+qa-node-01|cpu_usage_percent|2026-09-28|51
+
+### the exact server filter, run in psql (30d -> now)
+4
+
+### REST response for the same window
+total_rows=197
+by_source=[{"source":null,"rows":192},{"source":"hourly","rows":5}]
+oldest_row={"cpu_usage_percent":11.0,"node_id":"qa-node-01","source":"hourly","timestamp_ms":1791057177106}
+
+### diag-daily.sql (stage-1 fixture script) — SELECT only
+--- all daily buckets ---
+  node_id   |    metric_name    | day_bucket | avg_value 
+------------+-------------------+------------+-----------
+ qa-node-01 | qa-old-daily      | 2026-07-08 |         1
+ qa-node-01 | cpu_usage_percent | 2026-09-07 |        21
+ qa-node-01 | cpu_usage_percent | 2026-09-08 |        21
+ qa-node-01 | cpu_usage_percent | 2026-09-17 |        31
+ qa-node-01 | cpu_usage_percent | 2026-09-22 |        41
+ qa-node-01 | cpu_usage_percent | 2026-09-28 |        51
+(6 rows)
+
+--- exact server filter, 30d ago -> 8d ago (bigint-safe) ---
+ day_bucket |    metric_name    | avg_value 
+------------+-------------------+-----------
+ 2026-09-08 | cpu_usage_percent |        21
+ 2026-09-17 | cpu_usage_percent |        31
+ 2026-09-22 | cpu_usage_percent |        41
+ 2026-09-28 | cpu_usage_percent |        51
+(4 rows)
+
+--- same filter, date-vs-timestamp cast detail ---
+ bucket_20d |   bucket_20d_as_tstz   |          lower_bound          | passes_lower 
+------------+------------------------+-------------------------------+--------------
+ 2026-09-17 | 2026-09-17 00:00:00+08 | 2026-09-07 04:50:14.526459+08 | t
+(1 row)
+
+
+### 读法：source=null 的行是原始档（handlers.rs:252-257 直接把 NodeMetricsRow 序列化，没有 source 字段）；带 source 的行来自 aggregate_rows_to_json。所以直方图 [null:192, hourly:5] 等价于 [raw:192, hourly:5, daily:0]。
+### 抽两行样例：
+[{"cpu_usage_percent":11.0,"node_id":"qa-node-01","source":"hourly","timestamp_ms":1791057177106},{"cpu_usage_percent":11.0,"node_id":"qa-node-01","source":"hourly","timestamp_ms":1791057367325}]

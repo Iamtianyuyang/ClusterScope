@@ -1,0 +1,10 @@
+== --server-addr/--node-id/--agent-token/--config-dir given; which addr is dialled?
+  http://127.0.0.1:58888
+== directories created (log_dir must follow --config-dir)
+  /tmp/nr-verify/ovr-cfgdir
+  /tmp/nr-verify/ovr-cfgdir/logs
+  /tmp/nr-verify/ovr-cfgdir/node_id
+== node_id file honoured?
+  total 4
+  drwxr-xr-x 2 tianyuyang tianyuyang  6 Oct  7 13:52 logs
+  -rw-r--r-- 1 tianyuyang tianyuyang 41 Oct  7 13:52 node_id

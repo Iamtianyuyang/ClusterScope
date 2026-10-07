@@ -1,0 +1,367 @@
+{
+  "version": 1,
+  "createdAt": "2026-10-06T19:11:02.604Z",
+  "commit": "f9c080b+dirty",
+  "functions": {
+    "crates/tui/src/ui.rs|node_panel": {
+      "complexity": 23,
+      "lines": 170,
+      "nesting": 4,
+      "params": 5,
+      "crap": 552
+    },
+    "crates/tui/src/ui.rs|draw_process": {
+      "complexity": 18,
+      "lines": 196,
+      "nesting": 3,
+      "params": 4,
+      "crap": 342
+    },
+    "crates/server/src/main.rs|run_scheduler_cycle": {
+      "complexity": 15,
+      "lines": 110,
+      "nesting": 4,
+      "params": 1,
+      "crap": 240
+    },
+    "crates/common/src/alert.rs|evaluate": {
+      "complexity": 12,
+      "lines": 135,
+      "nesting": 5,
+      "params": 6,
+      "crap": 12.07
+    },
+    "crates/server/src/main.rs|run_background_tasks": {
+      "complexity": 12,
+      "lines": 66,
+      "nesting": 3,
+      "params": 1,
+      "crap": 156
+    },
+    "crates/tui/src/ui.rs|draw_cpu_processes": {
+      "complexity": 9,
+      "lines": 109,
+      "nesting": 2,
+      "params": 7,
+      "crap": 90
+    },
+    "crates/server/src/grpc.rs|evaluate_alerts": {
+      "complexity": 9,
+      "lines": 63,
+      "nesting": 7,
+      "params": 2,
+      "crap": 90
+    },
+    "crates/agent/src/config_loader.rs|load_config": {
+      "complexity": 9,
+      "lines": 40,
+      "nesting": 1,
+      "params": 1,
+      "crap": 90
+    },
+    "crates/server/src/main.rs|load_config": {
+      "complexity": 8,
+      "lines": 52,
+      "nesting": 1,
+      "params": 0,
+      "crap": 72
+    },
+    "crates/server/src/auth_middleware.rs|readonly_middleware": {
+      "complexity": 8,
+      "lines": 42,
+      "nesting": 4,
+      "params": 4,
+      "crap": 72
+    },
+    "crates/tui/src/ui.rs|draw_trend_full": {
+      "complexity": 7,
+      "lines": 114,
+      "nesting": 2,
+      "params": 3,
+      "crap": 56
+    },
+    "crates/server/src/grpc.rs|report_metrics": {
+      "complexity": 7,
+      "lines": 110,
+      "nesting": 4,
+      "params": 3,
+      "crap": 56
+    },
+    "crates/server/src/handlers.rs|get_metrics_history": {
+      "complexity": 7,
+      "lines": 75,
+      "nesting": 1,
+      "params": 3,
+      "crap": 56
+    },
+    "crates/tui/src/ui.rs|draw_topbar": {
+      "complexity": 7,
+      "lines": 62,
+      "nesting": 2,
+      "params": 3,
+      "crap": 56
+    },
+    "crates/server/src/handlers.rs|create_alert_rule": {
+      "complexity": 6,
+      "lines": 69,
+      "nesting": 1,
+      "params": 4,
+      "crap": 42
+    },
+    "crates/server/src/ws_handler.rs|broadcast": {
+      "complexity": 6,
+      "lines": 28,
+      "nesting": 3,
+      "params": 3,
+      "crap": 42
+    },
+    "crates/tui/src/ui.rs|push": {
+      "complexity": 6,
+      "lines": 20,
+      "nesting": 2,
+      "params": 3,
+      "crap": 42
+    },
+    "crates/server/src/handlers.rs|login": {
+      "complexity": 5,
+      "lines": 65,
+      "nesting": 1,
+      "params": 3,
+      "crap": 30
+    },
+    "crates/tui/src/ui.rs|draw_nodes": {
+      "complexity": 5,
+      "lines": 37,
+      "nesting": 2,
+      "params": 3,
+      "crap": 30
+    },
+    "crates/agent/src/node_identity.rs|load_or_create": {
+      "complexity": 5,
+      "lines": 19,
+      "nesting": 3,
+      "params": 1,
+      "crap": 30
+    },
+    "crates/server/src/grpc.rs|update_job_status": {
+      "complexity": 4,
+      "lines": 69,
+      "nesting": 1,
+      "params": 3,
+      "crap": 20
+    },
+    "crates/tui/src/ui.rs|mini_chart": {
+      "complexity": 4,
+      "lines": 56,
+      "nesting": 1,
+      "params": 5,
+      "crap": 20
+    },
+    "crates/server/src/handlers.rs|create_user": {
+      "complexity": 4,
+      "lines": 51,
+      "nesting": 1,
+      "params": 3,
+      "crap": 20
+    },
+    "crates/server/src/ws_handler.rs|ws_upgrade": {
+      "complexity": 4,
+      "lines": 28,
+      "nesting": 2,
+      "params": 5,
+      "crap": 20
+    },
+    "crates/server/src/auth_middleware.rs|auth_middleware": {
+      "complexity": 4,
+      "lines": 23,
+      "nesting": 2,
+      "params": 4,
+      "crap": 20
+    },
+    "crates/tui/src/api.rs|fmt_bytes": {
+      "complexity": 4,
+      "lines": 14,
+      "nesting": 1,
+      "params": 1,
+      "crap": 20
+    },
+    "crates/tui/src/ui.rs|draw_alerts": {
+      "complexity": 3,
+      "lines": 96,
+      "nesting": 2,
+      "params": 3,
+      "crap": 12
+    },
+    "crates/server/src/main.rs|build_http_router": {
+      "complexity": 3,
+      "lines": 79,
+      "nesting": 1,
+      "params": 1,
+      "crap": 12
+    },
+    "crates/server/src/handlers.rs|create_job": {
+      "complexity": 3,
+      "lines": 71,
+      "nesting": 1,
+      "params": 4,
+      "crap": 12
+    },
+    "crates/server/src/grpc.rs|submit_job": {
+      "complexity": 3,
+      "lines": 64,
+      "nesting": 2,
+      "params": 2,
+      "crap": 12
+    },
+    "crates/server/src/ws_handler.rs|handle": {
+      "complexity": 3,
+      "lines": 59,
+      "nesting": 6,
+      "params": 2,
+      "crap": 12
+    },
+    "crates/server/src/grpc.rs|watch_job_status": {
+      "complexity": 3,
+      "lines": 46,
+      "nesting": 4,
+      "params": 3,
+      "crap": 12
+    },
+    "crates/server/src/grpc.rs|get_pending_jobs": {
+      "complexity": 3,
+      "lines": 41,
+      "nesting": 6,
+      "params": 3,
+      "crap": 12
+    },
+    "crates/server/src/grpc.rs|report_job_logs": {
+      "complexity": 3,
+      "lines": 33,
+      "nesting": 4,
+      "params": 3,
+      "crap": 12
+    },
+    "crates/tui/src/ui.rs|draw_footer": {
+      "complexity": 3,
+      "lines": 28,
+      "nesting": 2,
+      "params": 3,
+      "crap": 12
+    },
+    "crates/tui/src/api.rs|login": {
+      "complexity": 3,
+      "lines": 24,
+      "nesting": 1,
+      "params": 3,
+      "crap": 12
+    },
+    "crates/tui/src/ui.rs|draw_nav": {
+      "complexity": 3,
+      "lines": 20,
+      "nesting": 2,
+      "params": 3,
+      "crap": 12
+    },
+    "crates/agent/src/metrics.rs|uid_to_username": {
+      "complexity": 3,
+      "lines": 13,
+      "nesting": 2,
+      "params": 1,
+      "crap": 12
+    },
+    "crates/tui/src/api.rs|get": {
+      "complexity": 3,
+      "lines": 13,
+      "nesting": 1,
+      "params": 2,
+      "crap": 12
+    },
+    "crates/tui/src/api.rs|fmt_uptime": {
+      "complexity": 3,
+      "lines": 12,
+      "nesting": 1,
+      "params": 1,
+      "crap": 12
+    },
+    "crates/tui/src/ui.rs|fmt_vram": {
+      "complexity": 3,
+      "lines": 11,
+      "nesting": 1,
+      "params": 1,
+      "crap": 12
+    },
+    "crates/tui/src/ui.rs|temp_color": {
+      "complexity": 3,
+      "lines": 9,
+      "nesting": 1,
+      "params": 1,
+      "crap": 12
+    },
+    "crates/tui/src/ui.rs|mem_color": {
+      "complexity": 3,
+      "lines": 9,
+      "nesting": 1,
+      "params": 1,
+      "crap": 12
+    },
+    "crates/tui/src/ui.rs|util_color": {
+      "complexity": 3,
+      "lines": 9,
+      "nesting": 1,
+      "params": 1,
+      "crap": 12
+    },
+    "crates/agent/src/metrics.rs|parse_opt": {
+      "complexity": 3,
+      "lines": 8,
+      "nesting": 1,
+      "params": 1,
+      "crap": 12
+    },
+    "crates/storage/src/audit_queries.rs|insert_audit_log": {
+      "complexity": 1,
+      "lines": 32,
+      "nesting": 0,
+      "params": 9,
+      "crap": 2
+    }
+  },
+  "coverage": {
+    "crates/agent/src/config_loader.rs": 0,
+    "crates/agent/src/grpc_client.rs": 0,
+    "crates/agent/src/job_executor.rs": 0,
+    "crates/agent/src/main.rs": 0,
+    "crates/agent/src/node_identity.rs": 0,
+    "crates/common/src/lib.rs": 0,
+    "crates/protocol/build.rs": 0,
+    "crates/protocol/src/lib.rs": 0,
+    "crates/server/src/auth_middleware.rs": 0,
+    "crates/server/src/main.rs": 0,
+    "crates/server/src/ws_handler.rs": 0,
+    "crates/storage/src/aggregation.rs": 0,
+    "crates/storage/src/alert_queries.rs": 0,
+    "crates/storage/src/audit_queries.rs": 0,
+    "crates/storage/src/job_queries.rs": 0,
+    "crates/storage/src/lib.rs": 0,
+    "crates/storage/src/models.rs": 0,
+    "crates/storage/src/queries.rs": 0,
+    "crates/storage/src/user_queries.rs": 0,
+    "crates/tui/src/api.rs": 0,
+    "crates/tui/src/main.rs": 0,
+    "crates/tui/src/ui.rs": 0.0473,
+    "crates/server/src/handlers.rs": 0.0723,
+    "crates/server/src/grpc.rs": 0.1688,
+    "crates/common/src/config.rs": 0.3617,
+    "crates/agent/src/metrics.rs": 0.5398,
+    "crates/common/src/error.rs": 0.6,
+    "crates/common/src/job.rs": 0.6667,
+    "crates/common/src/node_registry.rs": 0.7939,
+    "crates/common/src/auth.rs": 0.8319,
+    "crates/common/src/alert.rs": 0.8729
+  },
+  "findings": {},
+  "clones": {},
+  "duplicationRatio": 0,
+  "unanalyzed": [],
+  "arch": {}
+}

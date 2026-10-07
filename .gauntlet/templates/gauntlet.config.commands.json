@@ -1,0 +1,53 @@
+{
+  "$comment": "Gauntlet 配置（commands 适配器：任何语言 / 构建系统）。提交到仓库，由人确认。sources/exclude/thresholds 决定闸门量什么、量多严；任何收窄都会在证据包里标黄。{out} = 输出目录。",
+  "adapter": "commands",
+  "outDir": "gauntlet-out",
+  "sources": ["src/**/*.<扩展名>"],
+  "exclude": [
+    "**/test/**", "**/tests/**", "**/testing/**", "**/*_test.*", "**/*_tests.*", "**/test_*.*",
+    "**/*.test.*", "**/*.spec.*", "**/__tests__/**", "**/conftest.py", "**/node_modules/**",
+    "acceptance/**", "features/**", "examples/**", "docs/**", "tmp/**", "build*/**", "dist/**", "target/**",
+    "**/third_party/**", "**/vendor/**", "**/external/**", "**/generated/**", ".gauntlet/**", ".venv/**"
+  ],
+  "features": "features",
+  "requireEquivalence": false,
+  "commands": {
+    "build": "<构建命令；解释型语言删掉这一行>",
+    "test": {
+      "run": "<跑全部测试（单元 + 验收）的命令，输出 JUnit 和覆盖率>",
+      "junit": ["{out}/junit.xml"],
+      "lcov": ["{out}/lcov.info"]
+    },
+    "lint": []
+  },
+  "$examples": {
+    "python": {
+      "test": { "run": "python -m pytest --junitxml={out}/junit.xml --cov=src --cov-report=lcov:{out}/lcov.info", "junit": ["{out}/junit.xml"], "lcov": ["{out}/lcov.info"] },
+      "lint": [{ "name": "ruff", "run": "ruff check src --output-format sarif -o {out}/ruff.sarif", "sarif": "{out}/ruff.sarif" }],
+      "arch": { "run": "lint-imports" }
+    },
+    "node": {
+      "test": { "run": "node --test --experimental-test-coverage --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination={out}/junit.xml --test-reporter=lcov --test-reporter-destination={out}/lcov.info", "junit": ["{out}/junit.xml"], "lcov": ["{out}/lcov.info"] },
+      "lint": [{ "name": "eslint", "run": "npx eslint src -f @microsoft/eslint-formatter-sarif -o {out}/eslint.sarif", "sarif": "{out}/eslint.sarif" }],
+      "arch": { "run": "npx depcruise src --config .dependency-cruiser.cjs" },
+      "mutation": { "run": "npx stryker run", "report": "reports/mutation/mutation.json" }
+    },
+    "go": {
+      "test": { "run": "gotestsum --junitfile {out}/junit.xml -- -coverprofile={out}/cover.out ./... && gocover-cobertura < {out}/cover.out > {out}/cobertura.xml", "junit": ["{out}/junit.xml"], "cobertura": ["{out}/cobertura.xml"] },
+      "lint": [{ "name": "golangci-lint", "run": "golangci-lint run --output.sarif.path={out}/golangci.sarif", "sarif": "{out}/golangci.sarif" }]
+    },
+    "c-make-gcc": {
+      "build": "make -j8 CFLAGS=--coverage",
+      "test": { "run": "make check && gcovr --cobertura {out}/cobertura.xml --exclude tests/ && cp test-results.xml {out}/junit.xml", "junit": ["{out}/junit.xml"], "cobertura": ["{out}/cobertura.xml"] },
+      "lint": [{ "name": "compiler", "run": "make -B -j8", "parse": "diagnostics" }]
+    }
+  },
+  "complexity": { "engine": "auto" },
+  "thresholds": {
+    "crapMax": 8, "complexityMax": 10, "functionLinesMax": 60, "nestingMax": 4, "paramsMax": 7,
+    "lineCoverageMin": 0.9, "mutationScoreMin": 1.0, "duplicationMax": 0.03,
+    "warningsMax": 0, "tidyMax": 0, "staticScopeMin": 1.0
+  },
+  "duplication": { "minTokens": 100 },
+  "mutation": { "scope": "all", "base": "auto", "maxMutants": 0, "timeoutFactor": 3, "minTimeoutSec": 10 }
+}

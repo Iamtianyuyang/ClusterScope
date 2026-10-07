@@ -1,0 +1,4 @@
+crates/common/src/config.rs:85:    pub default_admin_password: String,
+crates/common/src/config.rs:120:            default_admin_password: "admin".to_string(),
+README.md:232:default_admin_password: "admin123"
+deploy/server.yaml.example:13:default_admin_password: "admin123"

@@ -1,0 +1,16 @@
+{
+  "title": "证据 8 — 并发正确性与运维：requeue、GPU 容量调度、告警去重、保留策略、端口",
+  "cwd": "..",
+  "steps": [
+    { "say": "起 server + agent；下面的脚本全部在真实进程上跑，不用 mock" },
+    { "run": "sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01", "timeoutSec": 120 },
+    { "say": "卡在 starting 的任务会被 requeue 回 queued 并清空 started_at；6 卡节点上两个 gpu:6 任务只有一个 running；告警在同一目标上只产生一次 firing 事件" },
+    { "run": "sh qa/harness/concurrency-checks.sh", "timeoutSec": 420, "expectCode": 1 },
+    { "say": "唯一 FAIL 是 CON-JOB-PID-PERSISTED（已单独取证）；retry 列全 0、去重缓存是 100000 条有界 LRU" },
+    { "run": "sh qa/harness/ops-checks.sh", "timeoutSec": 480, "expectCode": 1 },
+    { "say": "ops 的三条 FAIL：server --help、天级历史、cluster/info 的 active_alerts 语义（README 说 null，实际恒为 0）" },
+    { "run": "grep -E 'FAIL|NOTE listening|DEADKEY (prometheus_addr|tls_enabled|log_level)' gauntlet-out/qa/evidence/ops-checks.txt", "timeoutSec": 60 },
+    { "say": "收尾：只按 PID 文件停自己起的进程（这台机器是共享的，绝不 pkill）" },
+    { "run": "sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh", "timeoutSec": 60 }
+  ]
+}

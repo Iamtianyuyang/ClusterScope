@@ -1,0 +1,60 @@
+{
+  "profile": "quality",
+  "title": "ClusterScope GitHub 已发布线 f9c080b 全维度审查",
+  "startedAt": "2026-10-06T22:26:14.008Z",
+  "finishedAt": "2026-10-06T22:26:20.434Z",
+  "commit": "2f4da96+dirty",
+  "pass": false,
+  "gates": {
+    "build": {
+      "pass": true
+    },
+    "tests": {
+      "pass": true,
+      "total": 44,
+      "failed": 0
+    },
+    "scope": {
+      "pass": true,
+      "scope": 1,
+      "failedUnits": 0,
+      "files": 33
+    },
+    "complexity": {
+      "pass": false,
+      "functions": 316,
+      "offenders": 21,
+      "maxComplexity": 23
+    },
+    "warnings": {
+      "pass": true,
+      "warnings": 0
+    },
+    "tidy": {
+      "pass": true,
+      "ran": true,
+      "findings": 0
+    },
+    "duplication": {
+      "pass": true,
+      "ratio": 0,
+      "clones": 0
+    },
+    "crap": {
+      "pass": false,
+      "maxCrap": 552,
+      "offenders": 45,
+      "instrumentedFunctions": 316
+    },
+    "arch": {
+      "pass": true,
+      "violations": 0,
+      "edges": 0,
+      "skipped": "没有配置 commands.arch（架构依赖检查）"
+    },
+    "coverage": {
+      "pass": false,
+      "lineCoverage": 0.207
+    }
+  }
+}

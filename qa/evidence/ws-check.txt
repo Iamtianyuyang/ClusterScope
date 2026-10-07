@@ -1,0 +1,21 @@
+OPEN ws://127.0.0.1:8080/ws
+MSG connected {"type":"connected"}
+MSG subscribed {"type":"subscribed"}
+MSG alert_update {"node_id":"qa-node-01","payload":{"current_value":0.93,"event_id":"60e15420-7d3c-43fd-8700-410892d49b41","gpu_uuid":"","new_state":"pending","old_state":"norma
+MSG metrics_update {"node_id":"qa-node-01","payload":{"avg_gpu_utilization":0.0,"cpu_usage_percent":0.8979601860046387,"gpu_count":6,"load_1":0.93,"memory_total_bytes":54008330649
+MSG alert_update {"node_id":"qa-node-01","payload":{"current_value":0.86,"event_id":"36a44ad0-718e-4d8d-bd5a-5cbebec99e32","gpu_uuid":"","new_state":"firing","old_state":"pendin
+MSG metrics_update {"node_id":"qa-node-01","payload":{"avg_gpu_utilization":0.0,"cpu_usage_percent":0.8667302131652832,"gpu_count":6,"load_1":0.86,"memory_total_bytes":54008330649
+MSG metrics_update {"node_id":"qa-node-01","payload":{"avg_gpu_utilization":0.0,"cpu_usage_percent":1.4701414108276367,"gpu_count":6,"load_1":0.86,"memory_total_bytes":54008330649
+MSG metrics_update {"node_id":"qa-node-01","payload":{"avg_gpu_utilization":0.0,"cpu_usage_percent":0.8425173163414001,"gpu_count":6,"load_1":0.86,"memory_total_bytes":54008330649
+MSG job_update {"type":"job_update","job_id":"54456363-9476-4231-a2ff-5182d44ea8fb"}
+MSG metrics_update {"node_id":"qa-node-01","payload":{"avg_gpu_utilization":0.0,"cpu_usage_percent":0.7962416410446167,"gpu_count":6,"load_1":0.79,"memory_total_bytes":54008330649
+MSG job_update {"type":"job_update","job_id":"54456363-9476-4231-a2ff-5182d44ea8fb"}
+MSG job_update {"type":"job_update","job_id":"54456363-9476-4231-a2ff-5182d44ea8fb"}
+MSG metrics_update {"node_id":"qa-node-01","payload":{"avg_gpu_utilization":0.0,"cpu_usage_percent":0.9173733592033386,"gpu_count":6,"load_1":0.79,"memory_total_bytes":54008330649
+MSG metrics_update {"node_id":"qa-node-01","payload":{"avg_gpu_utilization":0.0,"cpu_usage_percent":0.776669442653656,"gpu_count":6,"load_1":0.73,"memory_total_bytes":540083306496
+MSG metrics_update {"node_id":"qa-node-01","payload":{"avg_gpu_utilization":0.0,"cpu_usage_percent":1.4505691528320312,"gpu_count":6,"load_1":0.73,"memory_total_bytes":54008330649
+MSG metrics_update {"node_id":"qa-node-01","payload":{"avg_gpu_utilization":0.0,"cpu_usage_percent":0.8631746172904968,"gpu_count":6,"load_1":0.73,"memory_total_bytes":54008330649
+MSG metrics_update {"node_id":"qa-node-01","payload":{"avg_gpu_utilization":0.0,"cpu_usage_percent":0.8352270126342773,"gpu_count":6,"load_1":0.67,"memory_total_bytes":54008330649
+MSG metrics_update {"node_id":"qa-node-01","payload":{"avg_gpu_utilization":0.0,"cpu_usage_percent":0.7840583324432373,"gpu_count":6,"load_1":0.67,"memory_total_bytes":54008330649
+MSG metrics_update {"node_id":"qa-node-01","payload":{"avg_gpu_utilization":0.0,"cpu_usage_percent":1.3847466707229614,"gpu_count":6,"load_1":0.69,"memory_total_bytes":54008330649
+RESULT connected=1 subscribed=1 metrics=12 alerts=2 jobs=3

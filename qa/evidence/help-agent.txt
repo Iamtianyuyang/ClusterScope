@@ -1,0 +1,12 @@
+ClusterScope GPU Node Agent
+
+Usage: clusterscope-agent [OPTIONS]
+
+Options:
+  -c, --config <CONFIG>            [default: /etc/clusterscope/agent.yaml]
+      --config-dir <CONFIG_DIR>    
+      --server-addr <SERVER_ADDR>  
+      --node-id <NODE_ID>          
+      --agent-token <AGENT_TOKEN>  
+  -h, --help                       Print help
+exit=0

@@ -1,0 +1,9 @@
+62:- Aggregated retention policy (2s → 1min → 10min)
+---
+303:    const RAW_RETENTION_MS: i64 = 24 * 3600 * 1000;
+304:    const HOURLY_RETENTION_MS: i64 = 7 * 24 * 3600 * 1000;
+305:    let raw_cutoff = now_ms - RAW_RETENTION_MS;
+306:    let hourly_cutoff = now_ms - HOURLY_RETENTION_MS;
+---
+350:                Utc::now() - ChronoDuration::days(30),
+373:                storage::aggregation::cleanup_daily_data(state.database.pool(), 90).await

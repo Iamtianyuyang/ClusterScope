@@ -1,0 +1,17 @@
+{
+  "title": "证据 7 — 历史查询的天级（90 天）档永不返回：SQL 有行，REST 0 行",
+  "cwd": "..",
+  "steps": [
+    { "say": "起 server + agent；README:307/357 与 docs/api.md 承诺历史查询合并原始/小时/天三档" },
+    { "run": "sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01", "timeoutSec": 120 },
+    { "say": "往库里塞一个 29 天前的天级桶（ops-checks.sh 用的同一条 fixture SQL，避免撞上 DATE 边界的时区细节）" },
+    { "run": "NOW_MS=$(python3 -c 'import time;print(int(time.time()*1000))'); D29=$((NOW_MS - 29*86400000)); /public/tianyuyang/code/ClusterScope-review/pg16/bin/psql 'postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope' -tAc \"insert into metrics_daily (node_id, metric_name, day_bucket, avg_value, max_value, min_value, p95_value, sample_count) values ('qa-node-01','cpu_usage_percent', (to_timestamp($D29/1000.0))::date, 21.0, 22.0, 20.0, 21.5, 7) on conflict (node_id, metric_name, day_bucket) do update set avg_value = excluded.avg_value; select 'daily rows matching the server filter: ' || count(*) from metrics_daily where node_id='qa-node-01' and day_bucket >= to_timestamp($((NOW_MS - 30*86400000))/1000.0) and day_bucket <= to_timestamp($NOW_MS/1000.0);\"", "timeoutSec": 90 },
+    { "say": "同一个时间窗走 REST：返回 200 多行，但 source 只有 hourly 和原始行，daily 一条都没有" },
+    { "run": "NOW_MS=$(python3 -c 'import time;print(int(time.time()*1000))'); D30=$((NOW_MS - 30*86400000)); curl -s \"http://127.0.0.1:8080/api/metrics/history?node_id=qa-node-01&start_time_ms=$D30&end_time_ms=$NOW_MS\" > /tmp/hist.json; echo \"rows=$(jq length /tmp/hist.json)\"; jq -c '[.[] | (.source // \"raw\")] | group_by(.) | map({source: .[0], rows: length})' /tmp/hist.json", "timeoutSec": 90 },
+    { "say": "根因：metrics_daily.day_bucket 是 DATE，而查询统一按 DateTime<Utc> 解码；解码失败被 handlers.rs:274 的 if let Ok(...) 吞掉，所以静默返回 0 行" },
+    { "run": "grep -n 'day_bucket DATE' crates/storage/src/lib.rs; sed -n '167,194p' crates/storage/src/queries.rs; sed -n '273,285p' crates/server/src/handlers.rs", "timeoutSec": 60 },
+    { "say": "对照：同一 SQL 在 psql 里能取出 4 行（qa/harness/diag-daily.sql 是第 1 阶段留下的诊断脚本）" },
+    { "run": "/public/tianyuyang/code/ClusterScope-review/pg16/bin/psql 'postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope' -tAc \"select count(*) from metrics_daily where day_bucket >= now() - interval '30 days';\"", "timeoutSec": 60 },
+    { "run": "sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh", "timeoutSec": 60 }
+  ]
+}

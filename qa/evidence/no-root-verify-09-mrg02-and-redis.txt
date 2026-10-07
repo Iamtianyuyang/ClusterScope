@@ -1,0 +1,19 @@
+== M10 section present
+38:| M10 | **不变量**：合流不得引入新的 root 依赖，系统级 unit 必须修掉或明确区分——B 的 12 个未提交改动 + B 的 12 个独有提交 + A 的独有资产搬进来以后，用户需求「这个项目是要做一个不用 root 的程序」是否仍然成立？怎么证明？ | 逐条回答下面的 `NRM1`–`NRM8`（每条都要贴命令与输出）；再跑全量 `sh qa/harness/no-root-checks.sh`（约束 `NR-01`–`NR-21`） | NRM1–NRM8 全部满足；no-root 检查无**新增** FAIL（既有 FAIL 只允许是 `NR-13`/`NR-15` 两条「系统级 unit + 缺 user unit」，且必须已有处置决定）；`NR-*`/`MRG-02` 在 `qa/qa-report.json` 里逐条配对 |
+== NRM rows: 8
+47:| NRM1 | **运行时零特权**：server 用普通用户起得来（argv[1] 指用户目录里的 yaml），8080/50051 监听、`/api/health`=2
+48:| NRM2 | **零配置文件也不崩**：server 只靠 `POSTGRES_URL`/`JWT_SECRET`/`AUTH_REQUIRED` 环境变量可启动（`NR
+49:| NRM3 | **产品代码与用户级脚本里 0 处硬编码系统路径**：`crates/**/*.rs` 与 `deploy/install-agent.sh`、`deplo
+50:| NRM4 | **B 的 12 个未提交文件逐一验证不引入 root 依赖**，重点 `crates/agent/src/{job_executor,metrics}.r
+51:| NRM5 | **合流不得新增特权原语**：不出现 `libc::setuid/setgid/setreuid`、`pre_exec` 提权、`chown` 系统路径、`
+52:| NRM6 | **两套部署件的矛盾必须被修掉或明确区分**（不能继续「README 说 user、仓库发 system」）：要么 (a) 给 server 补一个用户级 
+53:| NRM7 | **文档承诺与实测口径一致**：M10 的修改若触及 README，`:87` 的 `docker compose up` 承诺必须改成与本集群一致的说明（
+54:| NRM8 | **合流后仍可复现证明**：合流分支上跑 `sh qa/harness/no-root-checks.sh`（全量，含 NR11/NR12 的 sleep 
+== NR constraints in qa/constraints.json: 23
+== redis: declared in units but used by the code?
+/public/tianyuyang/code/ClusterScope-review/gh-line/deploy/server.service:3:After=network.target postgresql.service redis.service
+redis refs in crates/**: 1 files
+/public/tianyuyang/code/ClusterScope-review/gh-line/crates/common/src/config.rs:66:    pub redis_url: String,
+/public/tianyuyang/code/ClusterScope-review/gh-line/crates/common/src/config.rs:101:            redis_url: "redis://localhost:6379".to_string(),
+== postgresql.service is a distro unit name (Debian/Ubuntu); this host runs PG built into HOME
+ls: cannot access '/lib/systemd/system/postgresql.service': No such file or directory

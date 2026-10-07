@@ -1,0 +1,43 @@
+== unit files
+--- /public/tianyuyang/code/ClusterScope-review/gh-line/deploy/agent.service
+[Unit]
+Description=ClusterScope GPU Agent
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/clusterscope-agent --config /etc/clusterscope/agent.yaml
+Restart=always
+RestartSec=5
+User=clusterscope
+Group=clusterscope
+LogsDirectory=/var/log/clusterscope-agent
+WorkingDirectory=/var/lib/clusterscope
+
+[Install]
+WantedBy=multi-user.target
+--- /public/tianyuyang/code/ClusterScope-review/gh-line/deploy/server.service
+[Unit]
+Description=ClusterScope Central Server
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/clusterscope-server /etc/clusterscope/server.yaml
+Restart=always
+RestartSec=5
+User=clusterscope
+Group=clusterscope
+LogsDirectory=/var/log/clusterscope-server
+WorkingDirectory=/var/lib/clusterscope
+Environment=PATH=/usr/local/rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+
+[Install]
+WantedBy=multi-user.target
+== prerequisites the shipped units require
+id: ‘clusterscope’: no such user
+usr_local_bin=root:root 755
+/etc/clusterscope absent
+/var/lib/clusterscope absent
+/var/log/clusterscope-server absent
+/var/log/clusterscope-agent absent

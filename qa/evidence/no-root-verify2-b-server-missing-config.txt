@@ -1,0 +1,4 @@
+command: timeout 10 clusterscope-server /tmp/nr-verify2/absent-server.yaml
+exit=1
+  Error: Config file not found: /tmp/nr-verify2/absent-server.yaml
+== NOTE: the agent is silent here, the server is not -> the two binaries disagree

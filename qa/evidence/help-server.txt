@@ -1,0 +1,2 @@
+Error: Config file not found: --help
+exit=1

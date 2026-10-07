@@ -1,0 +1,18 @@
+{
+  "title": "证据 4 — REST 安全矩阵 + GET /api/audit-logs 恒 500（真实 server + PostgreSQL 16.4）",
+  "cwd": "..",
+  "steps": [
+    { "say": "起一个只读模式（auth_required:false）的 server，连本机 PostgreSQL 16.4" },
+    { "run": "sh qa/harness/server-up.sh false", "timeoutSec": 90 },
+    { "say": "20 条安全矩阵：实测 18 PASS / 2 FAIL。要 token 的写操作、伪造/过期/垃圾 JWT、refresh 轮换、账号锁定全部符合预期" },
+    { "run": "sh qa/harness/api-checks.sh", "timeoutSec": 180, "expectCode": 1 },
+    { "say": "FAIL 之一就是 docs/api.md:84 文档化的审计日志端点 —— 它返回 500，而且响应体是空的" },
+    { "run": "curl -s -i 'http://127.0.0.1:8080/api/audit-logs' | head -5" },
+    { "say": "根因：查询用 SELECT *，而 Rust 模型字段是 user、表列叫 username（sqlx::FromRow 解码失败 → 500）" },
+    { "run": "grep -n 'SELECT \\*' crates/storage/src/audit_queries.rs; grep -n 'pub user' crates/storage/src/models.rs; /public/tianyuyang/code/ClusterScope-review/pg16/bin/psql 'postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope' -c '\\d audit_logs' | head -8", "timeoutSec": 60 },
+    { "say": "表里明明有 13 行数据；同一个 SELECT 在 psql 里能查出来，只有 REST 这条路断了" },
+    { "run": "/public/tianyuyang/code/ClusterScope-review/pg16/bin/psql 'postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope' -tAc \"select 'rows=' || count(*) from audit_logs;\"", "timeoutSec": 60 },
+    { "say": "收尾：只按 PID 文件停自己起的 server（这台机器是共享的）" },
+    { "run": "sh qa/harness/server-down.sh" }
+  ]
+}

@@ -1,0 +1,125 @@
+# line-fork-verify : B (node line bundle) vs C (GitHub line bundle)
+# git:    git version 2.47.3
+# host:   lyy-node03
+# date:   2026-10-06T22:43:41Z (UTC)
+# probe:  /tmp/probe-verify (fresh empty repo created below; read-only on every working tree)
+# bundle: /public/tianyuyang/code/ClusterScope-review/node-line.bundle  -> refs/remotes/b/master
+# bundle: /public/tianyuyang/code/ClusterScope-review/gh-line.bundle    -> refs/remotes/c/master
+# bare:   /public/tianyuyang/git/ClusterScope.git (B 的本地裸仓库)
+
+$ rm -rf /tmp/probe-verify && mkdir -p /tmp/probe-verify && cd /tmp/probe-verify && git init -q .
+
+$ git bundle list-heads /public/tianyuyang/code/ClusterScope-review/node-line.bundle
+19d8fbcf5a26b8b8247ccea8b7b3205a58b12c7a refs/heads/master
+
+$ git bundle list-heads /public/tianyuyang/code/ClusterScope-review/gh-line.bundle
+f9c080bdcb1a679d0ceb71a7e29749525b4d2a03 refs/remotes/github/master
+
+$ git fetch -q /public/tianyuyang/code/ClusterScope-review/node-line.bundle 'refs/heads/master:refs/remotes/b/master'
+$ git fetch -q /public/tianyuyang/code/ClusterScope-review/gh-line.bundle 'refs/remotes/github/master:refs/remotes/c/master'
+19d8fbc refs/remotes/b/master
+f9c080b refs/remotes/c/master
+
+$ git rev-parse --short b/master; git rev-parse --short c/master
+19d8fbc
+f9c080b
+
+$ git merge-base b/master c/master
+f8ac7267f834a2b65da1aaf9c065f2de3c524250
+
+$ git merge-base --all b/master c/master   # 唯一共同祖先？（只输出一行即为唯一）
+f8ac7267f834a2b65da1aaf9c065f2de3c524250
+
+$ git merge-base --is-ancestor b/master c/master; echo $?   # 0 = b 是 c 的祖先
+1
+
+$ git merge-base --is-ancestor c/master b/master; echo $?   # 0 = c 是 b 的祖先
+1
+
+$ git rev-list --count c/master..b/master   # B 独有
+15
+
+$ git rev-list --count b/master..c/master   # C 独有
+33
+
+$ git rev-list --count b/master; git rev-list --count c/master   # 总提交数
+22
+40
+
+$ git rev-list --count f8ac726   # 共同前缀的提交数
+7
+
+$ git log --oneline --no-decorate c/master..b/master   # B 独有 15 个
+19d8fbc fix: web — refresh-token rotation on 401, read-only-mode probe, job args quoting
+eac070e fix: unbreak audit-log listing, unblock scheduler head-of-line, guard duration narrowing
+0c26dcd fix: replay completed-run markers in proto numbering, refuse corrupt markers, reap orphan process groups
+a65f82b fix: reject placeholder secrets, reap stuck jobs, close double-run window
+9d8cb98 fix: TLS everywhere, scheduler fairness, alert sync, audit IPs, input caps
+94c1410 fix: harden auth against forged JWTs, token replay, and orphaned job runs
+738a0bc fix: gpu-count flicker on re-register, cancel/prune deadlock, log line cap, hashed refresh tokens
+90615bb fix: FK-violation deletes, last-admin guard, atomic retries, login limiter, retention
+38be6bd fix: cancel/schedule race, streaming retry slot leak, password policy, resource limits
+b7f304d security: gRPC shared-token auth, weak-password guards, login rate limiting
+0e79e5a perf: job retries, real cluster stats, agent CPU sampling, input validation
+09f7460 fix: dedup job dispatch, fix audit-log SQL, stop/refresh-token logic
+d1586b6 chore: bump version to 0.1.1
+15b47a7 docs: README — Trend chart page, adaptive GPU density, web frontend section
+f266f2f feat: real-time CPU/GPU charts in TUI + web, fix WebSocket live metrics
+
+$ git log --oneline --no-decorate b/master..c/master   # C 独有 33 个
+f9c080b Merge pull request #1 from Iamtianyuyang/agent/gem-documentation-writer/f5cd6800
+ccc31b8 docs: README optimization — TOC, requirements, TUI CLI flags, FAQ, docs links
+9f01f87 feat: TUI CPU monitoring — per-core bars, cluster CPU, top CPU processes
+fba6661 fix: delete alert rule cascades to its events (was FK 500 after firing)
+2f03188 chore: allow result_large_err on tonic interceptor (API-fixed Status type)
+8a1900a fix: restore brace balance in gpu process fallback after collapsible_if
+a8fc219 chore: fix clippy 1.97 lints in agent (items-after-test-module, collapsible_if, is_multiple_of)
+3a356ec fix: agent test compile + clippy 1.97 lints (unused import, Option fmt, unnecessary casts)
+7ce4e09 chore: fix int_plus_one clippy lint (rust 1.97)
+85381bc chore: fix for_kv_map clippy lint (rust 1.97)
+812db07 chore: remove unused AgentClient methods (dead code, clippy -D warnings)
+4f79b88 merge: review fixes round 3 (placeholder leak, requeue race, cancelled-set cleanup)
+e6fe7a1 merge: review fixes round 2 (agent race, lost jobs, GPU metric honesty, quota)
+d96adeb merge: review fixes round 1 (history range, stop guard, gRPC task leak, hardening)
+785b6e0 fix: residual review findings — placeholder leak, requeue race, cancelled-set cleanup
+155f0d9 fix: remaining review findings — agent race, lost jobs, GPU metric honesty, quota plumbing
+9fe8f90 fix: review findings — history range, stop guard, gRPC task leak, misc hardening
+0555fbb Merge feat/review-fixes: review fixes + TUI-only + new icon/README
+481ab93 docs: new icon + rewritten TUI-only README
+6784ee6 refactor: remove web UI — TUI-only monitoring
+bd2e2d4 chore: fix remaining clippy lints in server (let-chains, is_multiple_of)
+ca97f1f chore: deploy/doc updates — nginx /ws proxy, compose cleanup, agent_token docs
+a11474e chore: cargo fmt + clippy -D warnings clean (non-agent crates)
+47e4e03 refactor: remove dead code, unused dependencies, stale repo artifacts
+57938b4 fix: revoke refresh tokens on rotation; agent job dedup; retention; input validation
+f4a8a31 feat: history endpoint serves hourly/daily aggregates beyond 24h
+309e543 fix: real swap/CPU/GPU/cluster metrics, no fabricated values
+0b87b0d fix: scheduler queue dedup, online-node dispatch, capacity recovery
+4211c2d refactor: drop unused agent dependencies (reqwest/regex/rand/sha2/thiserror/...)
+5f210c2 feat: gRPC agent token authentication
+d43af1f chore: bump version to 0.1.1
+963ed9c docs: README — Trend chart page, adaptive GPU density, web frontend section
+75c3f98 feat: real-time CPU/GPU charts in TUI + web, fix WebSocket live metrics
+
+$ git rev-parse --short 09f7460^; git rev-parse --short 5f210c2^   # 分叉后各自的第一个提交
+d1586b6
+d43af1f
+
+$ git diff --stat f266f2f 75c3f98   # 空 = B/C 第一个提交 tree 相同（同 parent，仅提交者/时间戳不同）
+diff exit=0
+
+$ git diff --stat 15b47a7 963ed9c; git diff --stat d1586b6 d43af1f
+diff exit=0
+diff exit=0
+
+$ git patch-id --stable  (f266f2f / 75c3f98)   # 相同 = 同一份改动
+1ff6ff102f79c1294d892d04b71decd0b85c268a
+1ff6ff102f79c1294d892d04b71decd0b85c268a
+
+$ git -C /public/tianyuyang/git/ClusterScope.git rev-parse --short master   # B 的本地裸仓库停在 d1586b6
+d1586b6
+$ git rev-list --count d1586b6..b/master   # 裸仓库落后 B 的提交数 = 12
+12
+
+# 结论：b/master 与 c/master 互不为祖先（两次 is-ancestor 都是 exit 1），
+#       共同祖先 f8ac726 唯一；B 独有 15 个提交、C 独有 33 个提交。

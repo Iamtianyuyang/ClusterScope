@@ -1,0 +1,8 @@
+CI-ABSENT
+commits=46
+HEAD=5ee70a36535a03626e34fe3537aac492172b0b78
+short=5ee70a3
+5ee70a36535a03626e34fe3537aac492172b0b78 2026-10-07 04:32:03 +0800
+5ee70a3 [spec] normalize merge-plan anchors so every constraint resolves to a QA row
+412c002 [spec] mark frontend + container-deploy dimensions N/A (FE-01) with evidence
+784f1ab [spec] audit checklist: 80 machine-checkable constraints + 5 QA runbooks + tested harness + merge-plan questions

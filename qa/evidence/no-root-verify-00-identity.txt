@@ -1,0 +1,8 @@
+date_utc=2026-10-07T05:52:42Z
+host=lyy-node03 user=tianyuyang uid=3000 groups=tianyuyang
+git_head=24b5b0d021887fb2880575aac10b3bae416771a5
+git_status=[?? qa/evidence/no-root-verify-00-identity.txt;?? qa/harness/nr-verify.sh;]
+script_sha256=c5fb868f8c8b4cd54c5ea445f5a367f094df5ce09778cb11766a030f9c527c6e
+binary_sha256_server=95b89cd4d98cfa8c7e5f86938fbe5a40b9f8abf2d0ef209a8d117fb4cb8193d8
+binary_sha256_agent=c7633c5a5e01945bb77b96d72c50b9767da7e09ed8d8ac35c6189a98a31c36e3
+binary_sha256_tui=1d0ba845425f860f9dc5868261d7521ed4297c6b750619f53c68cb3b1b4f03b7

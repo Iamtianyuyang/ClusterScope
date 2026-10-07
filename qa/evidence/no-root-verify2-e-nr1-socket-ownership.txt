@@ -1,0 +1,13 @@
+== server pid=1901587 euid/ruid (must be 3000, never 0)
+Uid:	3000	3000	3000	3000
+Gid:	3000	3000	3000	3000
+== /proc/1901587/net or ss ownership of the two documented ports
+LISTEN 0      128          0.0.0.0:8080       0.0.0.0:*    users:(("clusterscope-se",pid=1901587,fd=12))
+LISTEN 0      128          0.0.0.0:50051      0.0.0.0:*    users:(("clusterscope-se",pid=1901587,fd=11))
+== getcap on the binary (no file capability granted -> pure unprivileged bind)
+== capabilities of the running process
+  CapPrm:	0000000000000000
+  CapEff:	0000000000000000
+  CapBnd:	000001ffffffffff
+  CapEff 0000000000000000 would mean zero privileges; a non-zero value means
+  standard ambient caps from the user session (NOT setcap on the binary).

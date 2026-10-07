@@ -1,0 +1,7 @@
+pty_bytes=1185
+panic_hits=0
+== first 20 printable lines of the rendering
+  Script started on 2026-10-07 13:53:41+08:00 [<not executed on terminal>]
+  connected to http://127.0.0.1:8080
+  [?1049h[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l
+  Script done on 2026-10-07 13:53:49+08:00 [COMMAND_EXIT_CODE="124"]

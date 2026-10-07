@@ -1,0 +1,37 @@
+== what a plain user sees for a foreign pid
+  --- pid 1
+    /proc/1/status readable? yes
+    /proc/1/cmdline readable? yes
+    /proc/1/io readable? no
+  --- pid 1898975
+    /proc/1898975/status readable? yes
+    /proc/1898975/cmdline readable? yes
+    /proc/1898975/io readable? yes
+== hidepid mount options on /proc
+  proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+== the code path that degrades (crates/agent/src/metrics.rs:596-616)
+  /// Best-effort lookup of USER and COMMAND for a PID via /proc.
+  /// Never fails: on permission errors (hidepid, other users) or if the
+  /// process has already exited, returns ("unknown"/"?" , "unknown").
+  fn process_user_command(pid: u32) -> (String, String) {
+      let mut username = "unknown".to_string();
+      if let Ok(status) = std::fs::read_to_string(format!("/proc/{}/status", pid)) {
+          for line in status.lines() {
+              if line.starts_with("Uid:") {
+                  let uid: u32 = line
+                      .split_whitespace()
+                      .nth(1)
+                      .and_then(|s| s.parse().ok())
+                      .unwrap_or(0);
+                  username = uid_to_username(uid).unwrap_or_else(|| "?".to_string());
+                  break;
+              }
+          }
+      }
+  
+      let mut command = "unknown".to_string();
+      if let Ok(bytes) = std::fs::read(format!("/proc/{}/cmdline", pid)) {
+          let text = String::from_utf8_lossy(&bytes);
+== live agent's own metrics sample: does it report unknown/?, or crash?
+  agent alive=no (no panic while sampling other users' pids)
+  panic_or_denied_lines=0

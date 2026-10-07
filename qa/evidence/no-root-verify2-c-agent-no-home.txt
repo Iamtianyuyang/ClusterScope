@@ -1,0 +1,14 @@
+command: env -i PATH=/usr/bin:/bin timeout 8 clusterscope-agent --server-addr http://127.0.0.1:59997
+exit=124
+  [2m2026-10-07T05:54:55.551962Z[0m [32m INFO[0m ClusterScope Agent starting [3mserver_addr[0m[2m=[0mhttp://127.0.0.1:59997 [3mnode_id[0m[2m=[0mNone
+  [2m2026-10-07T05:54:55.552042Z[0m [32m INFO[0m Node identity resolved [3mnode_id[0m[2m=[0mlyy-node03
+  [2m2026-10-07T05:54:55.552223Z[0m [33m WARN[0m Failed to connect to server, retrying [3merror[0m[2m=[0mFailed to connect to server at http://127.0.0.1:59997: transport error [3mdelay_secs[0m[2m=[0m1
+  [2m2026-10-07T05:54:56.553542Z[0m [33m WARN[0m Failed to connect to server, retrying [3merror[0m[2m=[0mFailed to connect to server at http://127.0.0.1:59997: transport error [3mdelay_secs[0m[2m=[0m2
+  [2m2026-10-07T05:54:58.554885Z[0m [33m WARN[0m Failed to connect to server, retrying [3merror[0m[2m=[0mFailed to connect to server at http://127.0.0.1:59997: transport error [3mdelay_secs[0m[2m=[0m4
+  [2m2026-10-07T05:55:02.556257Z[0m [33m WARN[0m Failed to connect to server, retrying [3merror[0m[2m=[0mFailed to connect to server at http://127.0.0.1:59997: transport error [3mdelay_secs[0m[2m=[0m8
+== can a plain user write /etc/clusterscope at all?
+  touch: cannot touch '/etc/clusterscope/.nr-probe': No such file or directory
+  touch exit=0
+== conclusion: config.rs:38's /etc/clusterscope fallback is only reachable when
+   HOME is unset; when HOME is set (the normal case) node_id lands in HOME.
+   With HOME unset the agent fails BEFORE reaching a root path (see the error above).

@@ -1,0 +1,15 @@
+{
+  "minTokens": 100,
+  "threshold": 0.03,
+  "summary": {
+    "files": 33,
+    "codeLines": 7030,
+    "duplicatedLines": 0,
+    "ratio": 0,
+    "clones": 0,
+    "crossDirectory": 0
+  },
+  "pass": true,
+  "clones": [],
+  "files": []
+}

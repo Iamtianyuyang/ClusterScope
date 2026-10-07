@@ -1,0 +1,24 @@
+### raw HTTP response for GET /api/audit-logs (independent reproduction)
+HTTP/1.1 500 Internal Server Error
+content-length: 0
+date: Tue, 06 Oct 2026 20:37:22 GMT
+
+
+### server log lines mentioning audit
+[2m2026-10-06T20:37:08.413593Z[0m [32m INFO[0m relation "audit_logs" already exists, skipping
+[2m2026-10-06T20:37:08.413691Z[0m [32m INFO[0m relation "idx_audit_logs_user" already exists, skipping
+[2m2026-10-06T20:37:08.413747Z[0m [32m INFO[0m relation "idx_audit_logs_action" already exists, skipping
+[2m2026-10-06T20:37:08.413807Z[0m [32m INFO[0m relation "idx_audit_logs_timestamp" already exists, skipping
+
+### direct SQL: does the table have rows and what are their columns?
+log_id|character varying
+username|character varying
+action|character varying
+target|character varying
+target_type|character varying
+details|text
+result|character varying
+source_ip|character varying
+timestamp|timestamp with time zone
+### row count
+13

@@ -1,0 +1,20 @@
+{
+  "title": "证据 10 — 用户级服务活过登出（linger 是每机事实）+ agent 的配置静默回退会静默地死",
+  "cwd": "..",
+  "steps": [
+    { "say": "先如实记录本机事实：Linger=yes。⚠️ 这个 yes 很可能是前期探测时 Leader 执行 loginctl enable-linger 造成的（探测时先读到 no），不是集群默认值；linger 要 root 才能改，本次不动它" },
+    { "run": "hostname; id -un; id -u; loginctl show-user $(id -un) | grep -E '^(Linger|State|RuntimePath)='" },
+    { "say": "装一个专用探针单元（ExecStart=/bin/sleep 180），全程不用 sudo" },
+    { "run": "mkdir -p ~/.config/systemd/user && printf '[Unit]\\nDescription=nr demo persist probe\\n[Service]\\nType=simple\\nExecStart=/bin/sleep 180\\n[Install]\\nWantedBy=default.target\\n' > ~/.config/systemd/user/nr-demo-persist.service && systemctl --user daemon-reload && systemctl --user enable --now nr-demo-persist.service && systemctl --user is-active nr-demo-persist.service; systemctl --user show nr-demo-persist.service -p MainPID --value > /tmp/nr-demo-pid; echo \"MainPID=$(cat /tmp/nr-demo-pid) fragment=$(systemctl --user show nr-demo-persist.service -p FragmentPath --value)\"" },
+    { "say": "开一个新 SSH 会话再让它结束（模拟登出），然后看这个 pid 还在不在：linger=yes 时 user manager 不会随会话消失" },
+    { "run": "ssh -o BatchMode=yes localhost 'exit 0' >/dev/null 2>&1; sleep 5; P=$(cat /tmp/nr-demo-pid); kill -0 \"$P\" 2>/dev/null && echo \"SURVIVES: pid $P 在会话结束后仍存活\" || echo \"GONE: pid $P 已消失\"" },
+    { "say": "对照方向（本机无法实测，只能记录语义）：linger=no 的节点上，最后一个会话结束时 logind 会停掉整个 per-user manager，Restart=always 也一起被杀；而 install-agent.sh:60 只探测 systemctl --user show-environment，从不检查 Linger" },
+    { "run": "grep -n 'systemctl --user show-environment\\|Linger\\|enable-linger' deploy/install-agent.sh" },
+    { "say": "清掉探针单元（只按自己记的单元名处理，不碰任何别人的进程）" },
+    { "run": "systemctl --user disable --now nr-demo-persist.service >/dev/null 2>&1; rm -f ~/.config/systemd/user/nr-demo-persist.service /tmp/nr-demo-pid; systemctl --user daemon-reload; echo cleaned" },
+    { "say": "换个话题：配置路径。README 的启动方式要求写 server.yaml；如果 -c 指向的文件不存在，agent 会安静地用默认值（日志里 server_addr 变成 http://localhost:50051）——这是隐患不是崩溃，因为下一步才炸" },
+    { "run": "rm -rf /tmp/nr-demo-fallback; mkdir -p /tmp/nr-demo-fallback/home; HOME=/tmp/nr-demo-fallback/home timeout 8 ./target/release/clusterscope-agent -c /tmp/nr-demo-fallback/absent.yaml 2>&1 | grep -E 'server_addr|Failed to write node identity|os error' ; echo \"（$HOME 里没有 .config，agent 在写 node_id 时退出 1；错误信息从没提过缺配置文件）\"" },
+    { "say": "证据落点：同一台机器上已有的用户级 agent 服务（2026-09-02 起）——用户级这条路真的可行，只是仓库没给 server 那半" },
+    { "run": "systemctl --user is-active clusterscope-agent.service; systemctl --user show clusterscope-agent.service -p FragmentPath --value; ps -u $(id -un) -o pid,lstart,cmd | grep clusterscope-agent | grep -v grep" }
+  ]
+}

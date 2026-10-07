@@ -1,0 +1,10 @@
+{
+  "$comment": "架构宪法：由人类维护。agent 不得修改本文件；需要新依赖方向时，在 issue 里请求人类批准。",
+  "modules": {
+    "domain": { "paths": ["src/domain/**", "include/domain/**"], "mayDependOn": [] },
+    "app":    { "paths": ["src/app/**"],    "mayDependOn": ["domain"] }
+  },
+  "includeRoots": ["src", "include"],
+  "forbidCycles": true,
+  "strict": true
+}

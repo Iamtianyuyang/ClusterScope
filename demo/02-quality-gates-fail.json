@@ -1,0 +1,14 @@
+{
+  "title": "Gate 2 — 硬阈值下的质量闸门：complexity / crap / coverage 三项 FAIL",
+  "cwd": "..",
+  "steps": [
+    { "say": "用户裁决：关棘轮、硬阈值判定。本次审查不改产品代码，所以这三项 FAIL 就是审查结论，不是待办" },
+    { "run": "node .gauntlet/gauntlet.mjs gate --profile quality 2>&1 | grep -E '^(  (✅|❌|➖)|GATE)'", "timeoutSec": 600 },
+    { "say": "注意退出码：gate 本身返回 1（FAIL），上面那行只是 grep 的 0" },
+    { "run": "node .gauntlet/gauntlet.mjs gate --profile quality > /dev/null 2>&1; echo \"GATE quality exit=$?\"", "timeoutSec": 600 },
+    { "say": "最严重的函数全在 TUI 绘制与 server 后台循环里；45 个 CRAP 超标函数中 44 个覆盖率是 0%" },
+    { "run": "jq -r '.functions | sort_by(-.crap) | .[0:6][] | \"CRAP \\(.crap)  cc=\\(.complexity)  cov=\\(((.coverage*100)|floor))%  \\(.file):\\(.line)  \\(.name)\"' gauntlet-out/crap.json" },
+    { "say": "kit 的「距离」口径也逐字复现：97 项待修、离阈值 409.505（第 0 阶段记录过同一组数字）" },
+    { "run": "head -3 qa/evidence/next.md; jq -r '.summary | \"functions=\\(.functions) offenders=\\(.offenders) maxCRAP=\\(.maxCrap) lineCoverage=\\(.lineCoverage) lines=\\(.linesCovered)/\\(.linesTotal)\"' gauntlet-out/crap.json" }
+  ]
+}

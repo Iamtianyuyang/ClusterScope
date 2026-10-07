@@ -1,0 +1,19 @@
+[20:46:39] start: host=lyy-node03 commit=5ee70a3
+[20:46:45] agent up; restarting the server to time the re-registration
+[20:47:35] DOC-15 server restart: health-ready after 1s, qa-node-01 back 48s after health (total 49s)
+CHECK DOC-15-NODE-REAPPEARS-LE75: PASS expected=1 actual=1
+[20:47:35] fixtures: job_id=088c181c-915a-4dba-9d42-07cbb9ddbd0a
+[20:47:35] fixtures inserted: hourly 8d=1, daily 91d=1, joblog 31d=1
+[20:58:15] tick1 done: newest cpu bucket=2026-10-07 04:00:00+08, cpu rows for node=6, sample_count=383
+[20:58:16] tick1 retention: hourly8d=0, joblog31d=0, daily91d=1
+CHECK CON-10-HOURLY-7D-PRUNED: PASS expected=0 actual=0
+CHECK CON-10-JOBLOG-30D-PRUNED: PASS expected=0 actual=0
+CHECK CON-11-HOURLY-BUCKET-CREATED: PASS expected=1 actual=1
+CHECK CON-11-ONE-ROW-PER-BUCKET: PASS expected=1 actual=1
+[21:08:56] tick2 done: newest cpu bucket=2026-10-07 05:00:00+08, cpu rows for node=7, sample_count for 2026-10-07 04:00:00+08=485 (tick1: 6 / 383)
+CHECK CON-11-SECOND-TICK-NO-DUPLICATE: FAIL expected=1 actual=0
+CHECK CON-11-BUCKET-STILL-SINGLE-ROW: PASS expected=1 actual=1
+[21:08:56] waiting 2440s more for the cycle-360 tick (daily rollup + 90d cleanup)
+[21:49:36] tick6 done: daily91d=0, daily-rows-for-node=5
+CHECK CON-10-DAILY-90D-PRUNED: PASS expected=0 actual=0
+[21:49:38] done; server + agent stopped
