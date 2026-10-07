@@ -99,3 +99,28 @@ F10–F12 PASS。**F1 有安全阀**：脚本里还有「用字面量名字整�
 见 `qa/no-root-fixes.qa.md`。
 
 > 上面「一键复跑」的 1)–5) 是**审查分支 `gh-line`** 的入口；本分支（`nr-fixes`）用本节这两条。
+
+## 第 5 阶段（QA）在 `gauntlet/no-root-fixes` 上的复核 —— 已提交
+
+第 5 阶段在这一层上做的不是「再跑一遍作者的脚本」，而是**独立复核**（作者自述一律不信）：
+
+```sh
+cd /public/tianyuyang/code/ClusterScope-review/nr-fixes
+sh qa/harness/no-root-fixes-checks.sh      # F1–F12：干净状态复跑，PASS=12 FAIL=0
+node .gauntlet/gauntlet.mjs gate --profile coder   # spec/build/tests/acceptance 全绿，59/59 + 6/6
+node .gauntlet/gauntlet.mjs demo demo/11-no-root-fixes-install-agent-safety.json
+node .gauntlet/gauntlet.mjs demo demo/12-no-root-fixes-user-units-and-config-errors.json
+```
+
+配套材料（全部提交在分支上）：
+
+| 文件 | 内容 |
+|---|---|
+| `qa/qa-report.json` | 追加 `Q401`…`Q414`（`FIX-01`…`FIX-14` 的配对条目）与 `Q421`…`Q431`（受影响既有约束 `NR-01/03/05/06/06b/08/09/10/12/13/14/15/19/21` 的回归复跑）。既有 106 条检查一字未动 |
+| `qa/evidence/no-root-fixes-FIX14-tool-fix-recheck.txt` | 两处流水线工具修复的四项独立复核（产物分类 / 测试数对账 / F5 断言集 diff / 允许集负例与正例） |
+| `qa/evidence/no-root-fixes-phase5-*` | 回归复跑、正常路径端到端、F1 静态闸门的负例对照、`gate --profile coder` 复跑、两个 demo 的实跑记录 |
+| `demo/11-*.json`、`demo/12-*.json` | 两个可回放演示（安装脚本安全 / 用户级 unit + 配置报错语义） |
+
+第 5 阶段记录的两条偏差（见 `qa/qa-report.json#findings` 的 `F-17`/`F-18`）：
+F5 的 agent unit「真装真启」在**同名服务已在跑**的机器上是 no-op（只能证明 MainPID 不变，不能证明新起成功）；
+`NR-06` 的旧文案（「`-c` 缺失应静默回退继续跑」）与本轮修复后的硬错误语义字面相反——两者都未修，等 Leader/用户裁决。

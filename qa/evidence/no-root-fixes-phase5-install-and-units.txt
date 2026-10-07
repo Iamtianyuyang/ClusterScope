@@ -1,0 +1,80 @@
+victim pid=2494734 ; install1 rc=0 ; install2 rc=0
+== install #1 (pidfile pointed at the unrelated victim) ==
+==> testing passwordless ssh to qa@fake-host
+==> uploading agent binary
+==> writing config (node_id=qa-fix-node, server=http://127.0.0.1:59999)
+==> starting agent on qa@fake-host
+pidfile points at an unrelated process (pid 2494734) -- leaving it alone
+started via nohup (pid 2494899)
+==> done. Check the dashboard: node 'qa-fix-node' should appear within ~10s.
+== install #2 ==
+==> testing passwordless ssh to qa@fake-host
+==> uploading agent binary
+==> writing config (node_id=qa-fix-node, server=http://127.0.0.1:59999)
+==> starting agent on qa@fake-host
+stopping previous agent (pid 2494899)
+started via nohup (pid 2495058)
+==> done. Check the dashboard: node 'qa-fix-node' should appear within ~10s.
+== victim still alive? ==
+YES
+== agents under fake HOME ==
+2495058 /tmp/qa-verify2/fakehome/.local/bin/clusterscope-agent -c /tmp/qa-verify2/fakehome/.config/clusterscope/agent.yaml
+cleaned: victim=gone, fake-home agents=0
+
+== is-enabled / is-active ==
+enabled
+active
+2495266
+/public/tianyuyang/.config/systemd/user/qa-phase5-server.service
+== health ==
+http=200
+== nodes ==
+[]
+after cleanup: is-active=inactive FragmentPath=
+resident agent: MainPID=266643 state=active
+our unit file present? ls: cannot access '/public/tianyuyang/.config/systemd/user/qa-phase5-server.service': No such file or directory
+ports 8080/50051:
+clear
+    PID    PPID     ELAPSED CMD
+ 266643  266625 35-03:59:37 /public/tianyuyang/.local/bin/clusterscope-agent -c /public/tianyuyang/.config/clusterscope/agent.yaml
+
+ExecStart (expanded) = /tmp/qa-verify2/agent-home/.local/bin/clusterscope-agent -c /tmp/qa-verify2/agent-home/.config/clusterscope/agent.yaml
+binary exists: yes ; config exists: yes
+-- config used (from deploy/agent.yaml.example):
+# ClusterScope Agent configuration
+# Copy to ~/.config/clusterscope/agent.yaml (shared across nodes is fine).
+
+# Central server gRPC address
+server_addr: "http://127.0.0.1:59998"
+
+# Optional: fixed node id. Leave EMPTY to auto-use the local hostname —
+# recommended on shared-HOME clusters where this file is shared by many nodes.
+node_id: ""
+
+# Persisted node identity (fallback when hostname is unavailable)
+node_id_file: /tmp/qa-verify2/agent-home/.config/clusterscope/node_id
+
+# How often to collect and report metrics (seconds)
+report_interval_secs: 2
+
+# Log directory for job output
+log_dir: /tmp/qa-verify2/agent-home/logs
+
+log_level: info
+
+# Mount points to monitor
+disk_mounts:
+  - /
+
+# Read process details (/proc/<pid>) best-effort; degrades to "unknown" when
+# restricted. Never requires root.
+collect_process_details: true
+
+# Must match the server's agent_token (empty on both sides = no auth).
+agent_token: ""
+agent run exit=124 (124 = still running when timeout reaped it)
+[2m2026-10-07T08:59:03.657338Z[0m [32m INFO[0m ClusterScope Agent starting [3mserver_addr[0m[2m=[0mhttp://127.0.0.1:59998 [3mnode_id[0m[2m=[0mSome("")
+[2m2026-10-07T08:59:03.657430Z[0m [32m INFO[0m Node identity resolved [3mnode_id[0m[2m=[0mlyy-node03
+[2m2026-10-07T08:59:03.657566Z[0m [33m WARN[0m Failed to connect to server, retrying [3merror[0m[2m=[0mFailed to connect to server at http://127.0.0.1:59998: transport error [3mdelay_secs[0m[2m=[0m1
+[2m2026-10-07T08:59:04.658832Z[0m [33m WARN[0m Failed to connect to server, retrying [3merror[0m[2m=[0mFailed to connect to server at http://127.0.0.1:59998: transport error [3mdelay_secs[0m[2m=[0m2
+-rw-r--r-- 1 tianyuyang tianyuyang 41 Oct  7 16:59 /tmp/qa-verify2/agent-home/.config/clusterscope/node_id

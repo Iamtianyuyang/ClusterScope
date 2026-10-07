@@ -1,0 +1,71 @@
+### cluster 1: rust-gate artifact classification (cargo test --no-run jsonl)
+profile.test=false（产品二进制，rust-gate 不 spawn）: 1 -> clusterscope-agent (bin)
+profile.test=true （测试二进制，rust-gate 照跑）: 8 -> clusterscope-agent (bin), clusterscope-server (bin), clusterscope-tui (bin), common (lib), no_root_agent_config (test), protocol (lib), scheduler (lib), storage (lib)
+
+### cluster 2: test counts junit vs cargo
+rust-gate exit=0
+$ cargo test --workspace --offline --no-run   (CARGO_TARGET_DIR=/tmp/qa-verify/rg/cov-target)
+  build+link of test targets: 18.6s, 8 test binaries (+1 product binary/binaries, built for CARGO_BIN_EXE_*, not run)
+$ /tmp/qa-verify/rg/cov-target/debug/deps/clusterscope_agent-9954b24536f7516d
+$ /tmp/qa-verify/rg/cov-target/debug/deps/clusterscope_server-38095c0d17b01acc
+$ /tmp/qa-verify/rg/cov-target/debug/deps/clusterscope_tui-4d25be27e9617823
+$ /tmp/qa-verify/rg/cov-target/debug/deps/common-f590d5465b21e6ba
+junit 根元素 tests=59 ; 12 个 testsuite 求和=59 ; cargo test 实测 passed=59
+"clusterscope-agent (bin)" tests="11"
+"clusterscope-server (bin)" tests="6"
+"clusterscope-tui (bin)" tests="3"
+"common (lib)" tests="21"
+"no_root_agent_config (test)" tests="6"
+"protocol (lib)" tests="0"
+"scheduler (lib)" tests="12"
+"storage (lib)" tests="0"
+"Doc-tests common" tests="0"
+"Doc-tests protocol" tests="0"
+"Doc-tests scheduler" tests="0"
+"Doc-tests storage" tests="0"
+
+### cluster 3: F5 assertion-set diff
+before=30 asserts, after=30 asserts
+
+### cluster 4: F12 allowlist + negative controls
+crates/agent/src/config_loader.rs
+crates/agent/src/main.rs
+crates/agent/src/node_identity.rs
+crates/agent/tests/no_root_agent_config.rs
+deploy/agent.service
+deploy/clusterscope-agent.service
+deploy/clusterscope-server.service
+deploy/install-agent.sh
+deploy/server.service
+features/no_root_agent_config.feature
+GAUNTLET.md
+gauntlet-tools/rust-gate.mjs
+qa/constraints.json
+qa/harness/no-root-fixes-checks.sh
+qa/no-root-fixes.qa.md
+qa/README.md
+README.md
+OUT-COUNT=0
+== negatives (must all print NEG-OUT) ==
+NEG-OUT crates/storage/src/lib.rs
+NEG-OUT crates/server/src/lib.rs
+NEG-OUT Cargo.toml
+NEG-OUT gauntlet.config.json
+NEG-OUT .gauntlet/gauntlet.mjs
+== positives (must all print POS-IN) ==
+POS-IN crates/agent/src/config_loader.rs
+POS-IN crates/agent/tests/no_root_agent_config.rs
+POS-IN qa/harness/no-root-fixes-checks.sh
+POS-IN gauntlet-tools/rust-gate.mjs
+POS-IN deploy/clusterscope-agent.service
+负例 5/5 判越界；反向控制 3/3 判允许（见 D-scope.txt）
+gauntlet-tools 改动：gauntlet-tools/rust-gate.mjs
+--- scope-test script (extracted in_scope + probes) ---
+FAILP=0
+. /tmp/qa-verify/in_scope.sh
+while IFS= read -r f; do [ -z "$f" ] && continue; in_scope "$f" || { echo "OUT-OF-SCOPE $f"; FAILP=$((FAILP+1)); }; done < /tmp/qa-verify/changed.txt
+echo "OUT-COUNT=$FAILP"
+echo "== negatives (must all print NEG-OUT) =="
+for p in crates/storage/src/lib.rs crates/server/src/lib.rs Cargo.toml gauntlet.config.json .gauntlet/gauntlet.mjs; do in_scope "$p" && echo "NEG-MISSED $p" || echo "NEG-OUT $p"; done
+echo "== positives (must all print POS-IN) =="
+for p in crates/agent/src/config_loader.rs crates/agent/tests/no_root_agent_config.rs qa/harness/no-root-fixes-checks.sh gauntlet-tools/rust-gate.mjs deploy/clusterscope-agent.service; do in_scope "$p" && echo "POS-IN $p" || echo "POS-MISSED $p"; done
