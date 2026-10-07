@@ -20,6 +20,27 @@ fn local_ip() -> String {
     }
 }
 
+/// Attach `Authorization: Bearer <token>` to a request (free-function form).
+///
+/// `AgentClient` owns a precomputed metadata value, but `job_executor`
+/// receives the raw `AgentServiceClient`, so it needs the same behaviour
+/// without an `AgentClient` instance. An empty token attaches nothing (the
+/// documented "no auth on a trusted network" mode).
+pub fn authed<T>(token: &str, mut request: tonic::Request<T>) -> tonic::Request<T> {
+    if token.is_empty() {
+        return request;
+    }
+    match format!("Bearer {}", token)
+        .parse::<tonic::metadata::MetadataValue<tonic::metadata::Ascii>>()
+    {
+        Ok(value) => {
+            request.metadata_mut().insert("authorization", value);
+        }
+        Err(e) => tracing::warn!(error = %e, "Invalid agent_token - request sent unauthenticated"),
+    }
+    request
+}
+
 #[derive(Clone)]
 pub struct AgentClient {
     client: AgentServiceClient<tonic::transport::Channel>,
@@ -186,8 +207,15 @@ impl AgentClient {
                         let job_id = job.job_id.clone();
                         // Handle cancellation concurrently: the poll loop must
                         // keep consuming the stream.
+                        // A forced cancellation (`?force=true`) carries the
+                        // marker in error_message: SIGKILL straight away.
+                        let force = job.error_message == common::job::FORCE_CANCEL_MARKER;
                         tokio::spawn(async move {
-                            let running = runtime.request_cancel(&job_id).await;
+                            let running = if force {
+                                runtime.force_cancel(&job_id).await
+                            } else {
+                                runtime.request_cancel(&job_id).await
+                            };
                             if !running {
                                 // Nothing to kill — never started or already gone.
                                 let _ = client
@@ -232,7 +260,7 @@ impl AgentClient {
                             .pids
                             .lock()
                             .await
-                            .insert(job.job_id.clone(), 0);
+                            .insert(job.job_id.clone(), (0, 0));
                         // Execute the job concurrently so long-running jobs do
                         // not block polling for new jobs / cancellations.
                         let config = self.config.clone();

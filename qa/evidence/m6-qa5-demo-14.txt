@@ -1,0 +1,33 @@
+# 起 server 与 agent（只读模式；agent 用 qa-node-01 注册）
+$ sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01
+server up (pid 3654376), config /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/server.yaml, log /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/server.log
+agent started (pid 3654525), config /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/agent.yaml, log /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/agent.log
+
+# 提交两个忽略 SIGTERM 的任务（trap '' TERM; sleep 180），分别用普通取消与 ?force=true 取消，量进程组何时真的消失
+$ sh qa/harness/m6-demo-cancel.sh
+① 普通取消：任务 b693c68a-0a17-4279-a9ff-a96d5d8e523d 在跑（进程组 leader pid=3654888，cmdline: /bin/sh -c trap '' TERM; sleep 180 ）
+   该进程 trap '' TERM：SIGTERM 拿它没办法，只能靠 5s 后的 SIGKILL 升级。
+   DELETE /api/jobs/b693c68a-0a17-4279-a9ff-a96d5d8e523d -> HTTP 200
+   进程组消失耗时 = 9626 ms（含 agent 收到 stopping 的延迟 + 5s 宽限期）
+   agent 日志：1 条 SIGKILL 升级记录
+② 强制取消：任务 e1b41f9d-5a78-492a-b961-ccf9f26f91d8 在跑（pid=3655269）
+   DELETE /api/jobs/e1b41f9d-5a78-492a-b961-ccf9f26f91d8?force=true -> HTTP 200
+   进程组消失耗时 = 4867 ms（跳过 5s 宽限期，agent 一看到 stopping 就 SIGKILL）
+   agent 日志：1 条强制取消记录
+   终态：stopping
+
+# 两条路径在 agent 端都留了痕：普通取消是 5s 升级，force 是立即 SIGKILL
+$ grep -E 'SIGTERM ignored|Forced cancellation' gauntlet-out/qa/agent.log | tail -2
+[2m2026-10-07T15:46:20.076741Z[0m [33m WARN[0m SIGTERM ignored, escalating to SIGKILL [3mjob_id[0m[2m=[0mb693c68a-0a17-4279-a9ff-a96d5d8e523d [3mpid[0m[2m=[0m3654888
+[2m2026-10-07T15:46:35.073299Z[0m [33m WARN[0m Forced cancellation — sending SIGKILL [3mjob_id[0m[2m=[0me1b41f9d-5a78-492a-b961-ccf9f26f91d8 [3mpid[0m[2m=[0m3655269
+
+# 再取消一个已经结束的任务，应当得到 409（文档契约），而不是静默 200
+$ sh qa/harness/m6-demo-terminal-409.sh
+已结束的任务 f10c0fdb-b99a-4d75-997f-a668d9578da6 -> DELETE HTTP 409   （409 = 冲突，文档契约）
+不存在的任务 -> DELETE HTTP 404   （404）
+新提交的 queued 任务 d7163a55-e33b-47b1-b2e3-f5b69895cc0c -> DELETE HTTP 200，状态变为 cancelled   （200 = 还没派发就撤销）
+
+# 收尾：只按 PID 文件停自己起的 agent 与 server
+$ sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh
+agent stopped (pid 3654525)
+server stopped (pid 3654376)

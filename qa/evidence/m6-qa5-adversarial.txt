@@ -1,0 +1,91 @@
+repo=/public/tianyuyang/code/ClusterScope-review/merge-m6  head=e8fd233  uid=3000  date=2026-10-07T23:15:37+08:00
+admin login: token len=268
+
+===== A 锁定账号的 HTTP 状态码（master 8601ac9 = 429 TOO_MANY_REQUESTS） =====
+A0 create qa5-lock-1791386137            -> 200
+A1 正确口令（未失败过） -> 200
+A2.1 错误口令           -> 401
+A2.2 错误口令           -> 401
+A2.3 错误口令           -> 401
+A2.4 错误口令           -> 401
+A2.5 错误口令           -> 401
+A3 锁定期内正确口令     -> 401
+A4 DB 行: qa5-lock-1791386137 failed=5 locked_until=2026-10-07 23:20:38.078986+08
+
+===== B 限速桶键 =（源地址, 用户名）：爆破一个账号是否误伤同源其它账号 =====
+B0 create qa5-nat-a-1791386138 -> 200
+B0 create qa5-nat-b-1791386138 -> 200
+B1 针对 qa5-nat-a-1791386138 的 12 次错误口令状态码: 401 401 401 401 401 401 401 401 401 401 429 429 
+B2 其中 429 次数: 2
+B3 紧接其后、同源登录 qa5-nat-b-1791386138（正确口令） -> 200   [期望 200；若 429 = 误伤同 NAT 其它账号]
+B4 紧接其后、同源登录 admin（正确口令）-> 200   [期望 200]
+B5 紧接着再打 qa5-nat-a-1791386138 一次（正确口令）   -> 429   [期望 429：本账号确实被限]
+
+===== C GET /api/audit-logs 筛选矩阵：HTTP 码 / total / 实回条数 / SQL 计数 四方一致（F-01 / F-16） =====
+C  [无过滤] http=200 total=296 rows=296 sql=296 -> OK
+C  [user=admin] http=200 total=95 rows=95 sql=95 -> OK
+C  [action=login] http=200 total=180 rows=180 sql=180 -> OK
+C  [时间窗] http=200 total=278 rows=278 sql=278 -> OK
+C  [四条件组合] http=200 total=28 rows=28 sql=28 -> OK
+C  [user=不存在] http=200 total=0 rows=0 sql=0 -> OK
+C  [空结果形状] user=qa5-absent-user -> {"total":0,"n":0}
+C  [坏参数] start_time_ms=abc -> 400   [期望 400，不是 500]
+C  [分页] page=1&page_size=5 -> {"total":296,"n":5}   [期望 n<=5；total 与不分页一致]
+C  [无 token 只读模式] /api/audit-logs -> 200   [延续基线 200]
+
+===== D 认证模型实测：JWT 即权威（不回查数据库） =====
+D0 create qa5-jwt-1791386138 -> 200
+D1 该账号登录: access_token len=269 refresh_token len=36
+D2 删除前 GET /api/jobs（用它自己的 access token） -> 200
+D3 管理员删除该账号 -> 200
+D4 删除后再用同一个 access token GET /api/jobs -> 200   [F-09 原文：3600s 内仍可用 = 200]
+D5 删除后用它的 refresh token 换新 -> 401   [期望 401 = refresh 侧已吊销]
+D6 库里不存在的 subject 的合法签名 JWT -> 200   [api-checks 的 SEC-JWT-VALID 期望 200]
+D7 同 token 建任务（viewer 角色）-> 403   [期望 403 = 角色取自 claim]
+
+===== E 审计写入点计数（F-10：合流前 2 处） =====
+E  handlers.rs: insert_audit_log 调用点 产品代码 14 处 / 测试模块内 0 处
+E   line 289   -> action login
+E   line 308   -> action login
+E   line 330   -> action login
+E   line 356   -> action login
+E   line 378   -> action login
+E   line 812   -> action create_job
+E   line 931   -> action create_job
+E   line 1075  -> action stop_job
+E   line 1245  -> action create_alert_rule
+E   line 1291  -> action delete_alert_rule
+E   line 1437  -> action create_user
+E   line 1554  -> action update_user
+E   line 1594  -> action delete_user
+E   line 1676  -> action change_password
+E  去重后的 action 种类（产品代码）: ['change_password', 'create_alert_rule', 'create_job', 'create_user', 'delete_alert_rule', 'delete_user', 'login', 'stop_job', 'update_user']
+E  存储层定义: /public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage/src/audit_queries.rs:8:pub async fn insert_audit_log(
+
+===== F 曾经「写了不生效」的配置键（F-06）现在是否真的被读 =====
+F  log_level -> 非 config.rs 命中 0 处 []
+F  disk_mounts -> 非 config.rs 命中 0 处 []
+F  collect_process_details -> 非 config.rs 命中 4 处 [metrics.rs,]
+F  tls_enabled -> 非 config.rs 命中 19 处 [config_keys_acceptance.rs,main.rs,]
+F  prometheus_enabled -> 非 config.rs 命中 6 处 [config_keys_acceptance.rs,handlers.rs,main.rs,]
+F  prometheus_addr -> 非 config.rs 命中 7 处 [config_keys_acceptance.rs,handlers.rs,main.rs,]
+F  ws_heartbeat_interval_secs -> 非 config.rs 命中 1 处 [ws_handler.rs,]
+F  ws_slow_threshold_ms -> 非 config.rs 命中 0 处 []
+F  ws_max_backlog -> 非 config.rs 命中 3 处 [config_keys_acceptance.rs,ws_handler.rs,]
+F  max_concurrent_ws_clients -> 非 config.rs 命中 6 处 [config_keys_acceptance.rs,ws_handler.rs,]
+F  node_labels -> 非 config.rs 命中 0 处 []
+F  max_cached_reports -> 非 config.rs 命中 0 处 []
+F  reconnect_initial_delay_secs -> 非 config.rs 命中 0 处 []
+F  reconnect_max_delay_secs -> 非 config.rs 命中 0 处 []
+
+===== G 任务提交上限实测（F-11：MAX_ARGS=256 / MAX_ARG_LEN=4096） =====
+G  使用已注册节点: qa-node-01
+G  257 个参数    -> 400 
+G  恰好 256 个   -> 200 {"job_id":"f9c61359-3584-4164-83e7-bd3138f25661","status":"queued"}
+G  4097 字节参数 -> 400 
+G  恰好 4096 字节-> 200 {"job_id":"1f58bacc-5354-483e-84dc-8a9f20be3474","status":"queued"}
+G  server 侧拒绝理由（原始日志）:
+G    [2m2026-10-07T15:15:39.364160Z[0m [33m WARN[0m Rejected job submission [3mreason[0m[2m=[0mtoo many arguments: 257 > 256
+G    [2m2026-10-07T15:15:39.437079Z[0m [33m WARN[0m Rejected job submission [3mreason[0m[2m=[0margument too long: 4097 > 4096 bytes
+
+qa5-adversarial: 完成（原始输出 /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence/phase5/qa5-adversarial.txt）

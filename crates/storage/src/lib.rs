@@ -6,6 +6,7 @@ use std::sync::Arc;
 pub mod aggregation;
 pub mod alert_queries;
 pub mod audit_queries;
+pub mod conversions;
 pub mod job_queries;
 pub mod migrations;
 pub mod models;

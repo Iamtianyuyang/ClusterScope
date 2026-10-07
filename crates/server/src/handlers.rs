@@ -1,17 +1,226 @@
 use axum::{
     Json,
-    extract::{Extension, Path, Query, State},
+    extract::{ConnectInfo, Extension, Path, Query, State},
     http::StatusCode,
 };
 use chrono::Utc;
-use common::auth::{self, Claims, UserRole};
+use common::auth::{self, Claims};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{HashMap, VecDeque};
+use std::net::SocketAddr;
+use std::sync::{Arc, Mutex as StdMutex};
+use std::time::{Duration as StdDuration, Instant};
 use tracing::warn;
 use uuid::Uuid;
 
 use crate::AppState;
+
+/// Submission input limits (the jobs columns have no DB-side length caps).
+/// `pub(crate)` so the gRPC `submit_job` path enforces the same caps.
+pub(crate) const MAX_JOB_NAME_LEN: usize = 255;
+pub(crate) const MAX_EXECUTABLE_LEN: usize = 4096;
+pub(crate) const MAX_WORKDIR_LEN: usize = 4096;
+pub(crate) const MAX_QUOTA_LEN: usize = 64;
+pub(crate) const MAX_ARGS: usize = 256;
+pub(crate) const MAX_ARG_LEN: usize = 4096;
+pub(crate) const MAX_ENV_ENTRIES: usize = 128;
+pub(crate) const MAX_ENV_KEY_LEN: usize = 255;
+pub(crate) const MAX_ENV_VALUE_LEN: usize = 4096;
+
+/// Login rate limit: at most 10 attempts per source IP per 60s window.
+const LOGIN_WINDOW_SECS: u64 = 60;
+const LOGIN_MAX_ATTEMPTS: usize = 10;
+
+/// Global login budget: at most 300 attempts (successes AND failures) per
+/// minute across ALL source IPs. The per-IP window cannot bound a distributed
+/// brute force / Argon2 CPU DoS launched from many IPs; this one can.
+const GLOBAL_LOGIN_WINDOW_SECS: u64 = 60;
+const GLOBAL_LOGIN_MAX_ATTEMPTS: usize = 300;
+
+/// Cap on concurrent Argon2 operations (each login attempt burns ~30-50ms):
+/// a synchronized burst of logins must not spike CPU across all cores.
+/// Referenced from `main.rs` when building the shared semaphore.
+pub(crate) const LOGIN_MAX_CONCURRENCY: usize = 4;
+
+/// users.username is VARCHAR(100) (characters, not bytes); email is
+/// VARCHAR(255). Shared caps keep login/create/update consistent.
+const MAX_USERNAME_CHARS: usize = 100;
+const MAX_EMAIL_CHARS: usize = 255;
+/// Argon2 cost scales with input length; cap passwords at 1 KiB so a huge
+/// body cannot burn CPU per attempt.
+const MAX_PASSWORD_BYTES: usize = 1024;
+
+/// Dummy Argon2 hash verified against when a username does not exist, so the
+/// response time does not reveal whether the account exists (timing side
+/// channel). Argon2 cost is dominated by its parameters, not the salt, so a
+/// fresh hash per process is fine.
+fn dummy_password_hash() -> &'static str {
+    use std::sync::OnceLock;
+    static HASH: OnceLock<String> = OnceLock::new();
+    HASH.get_or_init(|| {
+        auth::hash_password("clusterscope-dummy-password-for-timing").unwrap_or_default()
+    })
+}
+
+/// Key of one rate-limit bucket: source address + the account being
+/// attempted (see [`LoginLimiter`]).
+fn login_key(ip: &str, username: &str) -> String {
+    format!("{ip}\u{1f}{username}")
+}
+
+/// Per-address sliding window plus the global attempt budget, in one place.
+///
+/// Extracted from the free functions below so the limits can be exercised
+/// without building a whole `AppState`; the handler and the tests share this
+/// single implementation. Caps/windows are unchanged:
+/// `LOGIN_MAX_ATTEMPTS` failures per `LOGIN_WINDOW_SECS` per IP, and
+/// `GLOBAL_LOGIN_MAX_ATTEMPTS` attempts per `GLOBAL_LOGIN_WINDOW_SECS`
+/// across all IPs (every attempt counts, success or failure).
+pub struct LoginLimiter {
+    /// "address\u{1f}username" -> timestamps of FAILED attempts inside the
+    /// window. Keying on the pair (not the bare address) means a brute force
+    /// against one account cannot lock every other account behind the same
+    /// NAT address out of the service.
+    attempts: StdMutex<HashMap<String, VecDeque<Instant>>>,
+    /// Timestamps of every attempt (any IP) inside the global window.
+    global: StdMutex<VecDeque<Instant>>,
+}
+
+impl Default for LoginLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LoginLimiter {
+    pub fn new() -> Self {
+        Self {
+            attempts: StdMutex::new(HashMap::new()),
+            global: StdMutex::new(VecDeque::new()),
+        }
+    }
+
+    /// Sliding-window check for one source IP. Returns `true` when the attempt
+    /// is allowed. Only FAILED attempts are recorded, so legitimate users are
+    /// never throttled by their own successful logins.
+    pub fn allowed(&self, ip: &str, username: &str) -> bool {
+        let now = Instant::now();
+        let window = StdDuration::from_secs(LOGIN_WINDOW_SECS);
+        let mut attempts = self.attempts.lock().unwrap();
+        let queue = attempts.entry(login_key(ip, username)).or_default();
+        while queue
+            .front()
+            .map(|t: &Instant| now.duration_since(*t) > window)
+            .unwrap_or(false)
+        {
+            queue.pop_front();
+        }
+        queue.len() < LOGIN_MAX_ATTEMPTS
+    }
+
+    /// Record a failed attempt for an IP.
+    pub fn record_failure(&self, ip: &str, username: &str) {
+        self.attempts
+            .lock()
+            .unwrap()
+            .entry(login_key(ip, username))
+            .or_default()
+            .push_back(Instant::now());
+    }
+
+    /// Global budget check across all IPs.
+    pub fn global_allowed(&self) -> bool {
+        let now = Instant::now();
+        let window = StdDuration::from_secs(GLOBAL_LOGIN_WINDOW_SECS);
+        let mut attempts = self.global.lock().unwrap();
+        while attempts
+            .front()
+            .map(|t: &Instant| now.duration_since(*t) > window)
+            .unwrap_or(false)
+        {
+            attempts.pop_front();
+        }
+        attempts.len() < GLOBAL_LOGIN_MAX_ATTEMPTS
+    }
+
+    /// Record one attempt toward the global budget (successful or not).
+    pub fn record_attempt(&self) {
+        self.global.lock().unwrap().push_back(Instant::now());
+    }
+
+    /// Drop per-IP entries whose newest failure fell out of the window, so the
+    /// map cannot grow unboundedly with distinct source IPs. The global queue
+    /// is self-pruning (every check drops expired entries).
+    pub fn prune(&self) {
+        let now = Instant::now();
+        let window = StdDuration::from_secs(LOGIN_WINDOW_SECS);
+        let mut attempts = self.attempts.lock().unwrap();
+        attempts.retain(|_, q| {
+            q.back()
+                .map(|t| now.duration_since(*t) <= window)
+                .unwrap_or(false)
+        });
+    }
+}
+
+/// Sliding-window rate limiter keyed by client IP. Returns `true` when the
+/// attempt is allowed. Only FAILED attempts are recorded (see
+/// [`login_failed`]), so legitimate users are never throttled by their own
+/// successful logins. Old entries are pruned opportunistically.
+pub fn login_allowed(state: &AppState, ip: &str, username: &str) -> bool {
+    state.login_limiter.allowed(ip, username)
+}
+
+/// Record a failed login attempt for an IP (only failures count against the
+/// per-IP sliding window).
+pub fn login_failed(state: &AppState, ip: &str, username: &str) {
+    state.login_limiter.record_failure(ip, username);
+}
+
+/// Drop rate-limit entries whose newest attempt fell out of the window, so
+/// the limiter map cannot grow unboundedly with distinct source IPs. Called
+/// periodically from the server background task.
+pub fn prune_login_attempts(state: &AppState) {
+    state.login_limiter.prune();
+}
+
+/// Global sliding-window budget across all IPs: at most
+/// `GLOBAL_LOGIN_MAX_ATTEMPTS` attempts per minute in total. Every login
+/// attempt (success or failure) is recorded, so the budget bounds the total
+/// Argon2 work an attacker can buy with many distinct source IPs.
+pub fn global_login_allowed(state: &AppState) -> bool {
+    state.login_limiter.global_allowed()
+}
+
+/// Record one attempt toward the global budget (called for every login
+/// attempt, successful or not).
+pub fn record_global_login_attempt(state: &AppState) {
+    state.login_limiter.record_attempt();
+}
+
+/// Resolve the client IP for rate limiting. With `trust_proxy_headers` the
+/// first `X-Forwarded-For` entry wins (the reverse proxy is expected to
+/// overwrite the header, so it is the real client); otherwise the socket
+/// address is used. Never panics and never returns an empty string.
+pub fn effective_client_ip(
+    headers: &axum::http::HeaderMap,
+    addr: SocketAddr,
+    trust_proxy: bool,
+) -> String {
+    if trust_proxy
+        && let Some(xff) = headers
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+        // X-Forwarded-For is a comma-separated list: client, proxy1, …
+        && let Some(first) = xff.split(',').next()
+    {
+        let ip = first.trim();
+        if !ip.is_empty() {
+            return ip.to_string();
+        }
+    }
+    addr.ip().to_string()
+}
 
 // ===== Auth Handlers =====
 
@@ -30,21 +239,110 @@ pub struct LoginResponse {
 
 pub async fn login(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
+    // Global budget first: bounds the total Argon2 CPU an attacker can buy
+    // with many distinct IPs (the per-IP window below cannot). Counts every
+    // attempt, success or failure.
+    if !global_login_allowed(&state) {
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
+    record_global_login_attempt(&state);
+
+    // Concurrency cap: each attempt burns ~30-50ms of Argon2 (plus the dummy
+    // hash on unknown users). A synchronized burst must not spike all cores.
+    let _permit = state
+        .login_concurrency
+        .acquire()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // `trust_proxy_headers` is off by default so the limiter keys on the
+    // socket address; behind a proxy that overwrites X-Forwarded-For it
+    // keys on the real client (otherwise all users share the proxy IP and
+    // one attacker can lock everyone out).
+    let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
+    if !login_allowed(&state, &client_ip, &req.username) {
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
+    // The username column is VARCHAR(100) (characters); reject oversized
+    // inputs up front instead of binding a huge parameter (rate limiting is
+    // per-IP, so this would otherwise be a cheap way to waste server/DB work).
+    if req.username.chars().count() > MAX_USERNAME_CHARS || req.password.len() > MAX_PASSWORD_BYTES
+    {
+        login_failed(&state, &client_ip, &req.username);
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
     let user = storage::user_queries::get_user_by_username(state.database.pool(), &req.username)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let user = user.ok_or(StatusCode::UNAUTHORIZED)?;
+    // Constant-time-ish path for unknown users: burn the same Argon2 cost so
+    // the 401 latency does not leak whether the account exists.
+    let user = match user {
+        Some(u) => u,
+        None => {
+            let _ = auth::verify_password(&req.password, dummy_password_hash());
+            storage::audit_queries::insert_audit_log(
+                state.database.pool(),
+                &req.username,
+                "login",
+                None,
+                None,
+                Some("unknown user"),
+                "failed",
+                Some(&client_ip),
+            )
+            .await
+            .ok();
+            login_failed(&state, &client_ip, &req.username);
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    };
 
     if !user.enabled {
+        let _ = auth::verify_password(&req.password, dummy_password_hash());
+        storage::audit_queries::insert_audit_log(
+            state.database.pool(),
+            &req.username,
+            "login",
+            Some(&user.user_id),
+            Some("user"),
+            Some("disabled account"),
+            "failed",
+            Some(&client_ip),
+        )
+        .await
+        .ok();
+        login_failed(&state, &client_ip, &req.username);
         return Err(StatusCode::UNAUTHORIZED);
     }
 
+    // A locked account answers 429 (not 401): the documented contract tells
+    // the client to back off until `locked_until` passes, and 429 is what
+    // master answered before the graft (the QA lockout check drives exactly
+    // this path). A locked account is therefore distinguishable from a wrong
+    // password — acceptable, because the account is already known to the
+    // caller and the lock is what protects it.
     if let Some(locked_until) = user.locked_until
         && locked_until > Utc::now()
     {
+        storage::audit_queries::insert_audit_log(
+            state.database.pool(),
+            &req.username,
+            "login",
+            Some(&user.user_id),
+            Some("user"),
+            Some("locked account"),
+            "failed",
+            Some(&client_ip),
+        )
+        .await
+        .ok();
+        login_failed(&state, &client_ip, &req.username);
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
@@ -58,13 +356,40 @@ pub async fn login(
         )
         .await
         .ok();
+        storage::audit_queries::insert_audit_log(
+            state.database.pool(),
+            &req.username,
+            "login",
+            Some(&user.user_id),
+            Some("user"),
+            Some("wrong password"),
+            "failed",
+            Some(&client_ip),
+        )
+        .await
+        .ok();
+        login_failed(&state, &client_ip, &req.username);
         return Err(StatusCode::UNAUTHORIZED);
     }
 
     // Record successful login
-    storage::user_queries::record_login(state.database.pool(), &user.user_id)
-        .await
-        .ok();
+    if let Err(e) = storage::user_queries::record_login(state.database.pool(), &user.user_id).await
+    {
+        warn!(error = %e, username = %user.username, "Failed to record login");
+    }
+
+    storage::audit_queries::insert_audit_log(
+        state.database.pool(),
+        &user.username,
+        "login",
+        Some(&user.user_id),
+        Some("user"),
+        None,
+        "success",
+        Some(&client_ip),
+    )
+    .await
+    .ok();
 
     // Generate tokens
     let access_token = auth::generate_jwt(
@@ -78,6 +403,8 @@ pub async fn login(
     let refresh_token = auth::generate_refresh_token();
     let expires_at = Utc::now().timestamp() + state.config.jwt_refresh_expiry_secs as i64;
 
+    // Persisting the refresh token is part of a successful login: failing it
+    // would hand the client an access token with no way to renew.
     storage::user_queries::add_refresh_token(
         state.database.pool(),
         &refresh_token,
@@ -85,7 +412,10 @@ pub async fn login(
         chrono::DateTime::from_timestamp(expires_at, 0).unwrap_or(Utc::now()),
     )
     .await
-    .ok();
+    .map_err(|e| {
+        warn!(error = %e, username = %user.username, "Failed to persist refresh token");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     Ok(Json(LoginResponse {
         access_token,
@@ -96,34 +426,62 @@ pub async fn login(
 
 pub async fn refresh_token(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
+    // Same per-address sliding window as login (failures only): a leaked/expired
+    // refresh token must not enable unlimited attempts, and an attacker
+    // must not be able to burn unbounded DB work on this public endpoint.
+    let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
+    // The refresh endpoint has no account name in the request: it uses one
+    // dedicated bucket per source address.
+    const REFRESH_BUCKET: &str = "<refresh-token>";
+    if !login_allowed(&state, &client_ip, REFRESH_BUCKET) {
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
+
     let refresh_token = req
         .get("refresh_token")
         .and_then(|v| v.as_str())
         .ok_or(StatusCode::BAD_REQUEST)?;
 
     let user_id =
-        storage::user_queries::validate_refresh_token(state.database.pool(), refresh_token)
+        storage::user_queries::consume_refresh_token(state.database.pool(), refresh_token)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .ok_or(StatusCode::UNAUTHORIZED)?;
-
-    // Rotation: revoke the presented token so a stolen refresh token cannot
-    // be reused once it has been refreshed.
-    let _ = storage::user_queries::revoke_refresh_token(state.database.pool(), refresh_token).await;
+            .ok_or_else(|| {
+                login_failed(&state, &client_ip, REFRESH_BUCKET);
+                StatusCode::UNAUTHORIZED
+            })?;
 
     let user = storage::user_queries::get_user_by_id(state.database.pool(), &user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+        .ok_or_else(|| {
+            login_failed(&state, &client_ip, REFRESH_BUCKET);
+            StatusCode::UNAUTHORIZED
+        })?;
 
-    // Disabled users must not be able to keep their session alive by
-    // refreshing a token obtained before the account was disabled.
+    // Disabled or locked users must not be able to keep refreshing: the login
+    // path checks these, the refresh path must too.
     if !user.enabled {
+        login_failed(&state, &client_ip, REFRESH_BUCKET);
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    if let Some(locked_until) = user.locked_until
+        && locked_until > Utc::now()
+    {
+        login_failed(&state, &client_ip, REFRESH_BUCKET);
         return Err(StatusCode::UNAUTHORIZED);
     }
 
+    // Rotate: revoke the presented refresh token so a stolen/leaked token
+    // cannot be replayed for the whole expiry window. The consume is a single
+    // conditional UPDATE (revoke + validity check in one statement), so two
+    // concurrent refreshes with the same token cannot both mint new pairs
+    // (validate-then-revoke had a TOCTOU window). If the consume failed after
+    // returning a user_id, refuse to mint rather than leaving both tokens live.
     let access_token = auth::generate_jwt(
         &user.user_id,
         &user.role,
@@ -142,7 +500,10 @@ pub async fn refresh_token(
         chrono::DateTime::from_timestamp(expires_at, 0).unwrap_or(Utc::now()),
     )
     .await
-    .ok();
+    .map_err(|e| {
+        warn!(error = %e, "Failed to persist new refresh token");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     Ok(Json(LoginResponse {
         access_token,
@@ -417,19 +778,117 @@ fn aggregate_rows_to_json(
 
 // ===== Job Handlers =====
 
+/// Best-effort username for audit logs (JWT claims carry the user id, the
+/// audit trail stores usernames). Falls back to the user id on lookup error.
+async fn audit_username(state: &AppState, claims: &Claims) -> String {
+    storage::user_queries::get_user_by_id(state.database.pool(), &claims.sub)
+        .await
+        .ok()
+        .flatten()
+        .map(|u| u.username)
+        .unwrap_or_else(|| claims.sub.clone())
+}
+
+/// Submission caps shared by the HTTP handler and the gRPC path (the jobs
+/// columns have no DB-side length limits, so without these a single call
+/// could insert a gigantic row). Returns `BAD_REQUEST` plus a message naming
+/// the violated limit.
+/// Is the target node usable for a submission?
+///
+/// Either it is live in the in-memory registry, or the cluster still knows it
+/// in the persistent `node_info` table -- which is also what the
+/// `jobs.node_id` foreign key points at. Right after a server restart the
+/// registry is empty until the agents re-register, and a submission for a
+/// known node must not be refused in that window.
+async fn node_is_known(state: &AppState, node_id: &str) -> bool {
+    if state.node_registry.exists(node_id) {
+        return true;
+    }
+    storage::queries::node_exists(state.database.pool(), node_id)
+        .await
+        .unwrap_or(false)
+}
+
+/// Record a refused job submission (F-10: refusals are audited the same way
+/// failed logins are, so an operator can see who tried to submit what).
+async fn audit_job_rejection(state: &AppState, claims: &Claims, client_ip: &str, reason: &str) {
+    storage::audit_queries::insert_audit_log(
+        state.database.pool(),
+        &audit_username(state, claims).await,
+        "create_job",
+        None,
+        Some("job"),
+        Some(reason),
+        "rejected",
+        Some(client_ip),
+    )
+    .await
+    .ok();
+}
+
+pub(crate) fn validate_job_request(req: &JobCreateRequest) -> Result<(), (StatusCode, String)> {
+    if req.arguments.len() > MAX_ARGS {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("too many arguments: {} > {}", req.arguments.len(), MAX_ARGS),
+        ));
+    }
+    if let Some(over) = req.arguments.iter().find(|a| a.len() > MAX_ARG_LEN) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("argument too long: {} > {} bytes", over.len(), MAX_ARG_LEN),
+        ));
+    }
+    let oversize = req.name.len() > MAX_JOB_NAME_LEN
+        || req.executable.len() > MAX_EXECUTABLE_LEN
+        || req.working_directory.len() > MAX_WORKDIR_LEN
+        || req.resource_quota.len() > MAX_QUOTA_LEN
+        || req.environment.len() > MAX_ENV_ENTRIES
+        || req.environment.keys().any(|k| k.len() > MAX_ENV_KEY_LEN)
+        || req.environment.values().any(|v| {
+            v.as_str()
+                .map(|s| s.len() > MAX_ENV_VALUE_LEN)
+                .unwrap_or(false)
+        });
+    if oversize {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "submission exceeds the field length caps".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 pub async fn create_job(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
     Extension(claims): Extension<Claims>,
     Json(req): Json<JobCreateRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    // Basic input validation: a job needs an executable and a known node.
-    if req.executable.trim().is_empty() {
+    // Same client-IP resolution as login: honor trust_proxy_headers so the
+    // audit trail records the real client behind a reverse proxy.
+    let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
+    // Reject nonsense submissions early instead of queueing a job that can
+    // never run: an executable is required, and a non-empty target node must
+    // be known to the cluster (otherwise the row violates the node_info FK
+    // and the job is silently un-runnable).
+    if req.name.trim().is_empty() || req.executable.trim().is_empty() {
+        let reason = "name and executable are required";
+        warn!(reason, "Rejected job submission");
+        audit_job_rejection(&state, &claims, &client_ip, reason).await;
         return Err(StatusCode::BAD_REQUEST);
     }
-    let node_known = storage::queries::node_exists(state.database.pool(), &req.node_id)
-        .await
-        .unwrap_or(false);
-    if !node_known {
+    if !req.node_id.trim().is_empty() && !node_is_known(&state, &req.node_id).await {
+        let reason = format!("unknown target node: {}", req.node_id);
+        warn!(reason = %reason, "Rejected job submission");
+        audit_job_rejection(&state, &claims, &client_ip, &reason).await;
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if let Err((_status, reason)) = validate_job_request(&req) {
+        warn!(reason = %reason, "Rejected job submission");
+        audit_job_rejection(&state, &claims, &client_ip, &reason).await;
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -439,6 +898,7 @@ pub async fn create_job(
         .into_iter()
         .map(|(k, v)| (k, v.as_str().unwrap_or_default().to_string()))
         .collect();
+    let max_retries = req.max_retries.min(10) as i32;
 
     let job_row = storage::models::JobRow {
         job_id: job_id.clone(),
@@ -457,9 +917,13 @@ pub async fn create_job(
         started_at: None,
         finished_at: None,
         created_by: claims.sub.clone(),
-        resource_quota: req.resource_quota.filter(|s| !s.trim().is_empty()),
+        resource_quota: if req.resource_quota.trim().is_empty() {
+            None
+        } else {
+            Some(req.resource_quota.trim().to_string())
+        },
         retry_count: 0,
-        max_retries: 0,
+        max_retries,
     };
 
     storage::job_queries::insert_job(state.database.pool(), &job_row)
@@ -469,7 +933,7 @@ pub async fn create_job(
     // Audit log
     storage::audit_queries::insert_audit_log(
         state.database.pool(),
-        &claims.sub,
+        &audit_username(&state, &claims).await,
         "create_job",
         Some(&job_id),
         Some("job"),
@@ -478,7 +942,7 @@ pub async fn create_job(
             req.name, req.node_id
         )),
         "success",
-        None,
+        Some(&client_ip),
     )
     .await
     .ok();
@@ -498,9 +962,12 @@ pub struct JobCreateRequest {
     pub working_directory: String,
     #[serde(default)]
     pub environment: serde_json::Map<String, serde_json::Value>,
-    /// GPU requirements for the scheduler, e.g. "gpu:2". Empty = 1 GPU.
+    /// GPU requirement, e.g. "2", "gpu:2", "gpus:4". Empty = 1 GPU.
     #[serde(default)]
-    pub resource_quota: Option<String>,
+    pub resource_quota: String,
+    /// Number of automatic retries after a failed run (0 = no retry, max 10).
+    #[serde(default)]
+    pub max_retries: u32,
 }
 
 pub async fn list_jobs(
@@ -516,12 +983,12 @@ pub async fn list_jobs(
             .get("page")
             .and_then(|s| s.parse().ok())
             .unwrap_or(0)
-            .max(0),
+            .clamp(0, 1_000_000),
         params
             .get("page_size")
             .and_then(|s| s.parse().ok())
             .unwrap_or(20)
-            .clamp(1, 200),
+            .clamp(1, 500),
     )
     .await
     .map_err(|e| {
@@ -552,62 +1019,91 @@ pub async fn get_job(
 
 pub async fn stop_job(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
     Path(job_id): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    // A stop request for an unknown job is an error, not a silent success;
-    // terminal jobs must not be flipped back to `stopping` (that would
-    // rewrite their finished state to `cancelled` once the agent reports).
-    let job = storage::job_queries::get_job(state.database.pool(), &job_id)
+    let pool = state.database.pool();
+    let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
+    // `force=true` upgrades the cancellation to SIGKILL (README: the process
+    // group gets SIGTERM first, and a job that ignores it is force-killed).
+    let force = params
+        .get("force")
+        .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+        .unwrap_or(false);
+
+    // Unknown job: 404 instead of a fake "stopping" success.
+    let Some(row) = storage::job_queries::get_job(pool, &job_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
-    if matches!(
-        job.status.as_str(),
-        "succeeded" | "failed" | "cancelled" | "lost"
-    ) {
-        return Err(StatusCode::CONFLICT);
-    }
+    else {
+        return Err(StatusCode::NOT_FOUND);
+    };
 
-    storage::job_queries::update_job_status(
-        state.database.pool(),
-        &job_id,
-        "stopping",
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let new_status: String = match row.status.as_str() {
+        // Already terminal: a stop request is a conflict, not a silent
+        // success (the documented contract and the QA matrix expect 409).
+        "succeeded" | "failed" | "cancelled" | "lost" => {
+            return Err(StatusCode::CONFLICT);
+        }
+        // Not dispatched yet: cancel atomically, no agent involved. Leaving
+        // it 'stopping' would strand it forever (scheduler only picks
+        // 'queued', and with no node_id no agent would ever see it). The
+        // UPDATE is conditional on status='queued' and the in-memory
+        // scheduler queue is drained too — otherwise the next schedule()
+        // pass would dispatch the cancelled job anyway.
+        "queued" => {
+            let cancelled = storage::job_queries::cancel_queued_job(pool, &job_id)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            if cancelled {
+                state.scheduler.remove_queued(&job_id).await;
+                state.scheduler.drop_job(&job_id).await;
+                "cancelled".to_string()
+            } else {
+                // Raced with dispatch (status moved off 'queued'): the job
+                // may be starting/running — ask the agent to kill it, but
+                // only if it is still active: a concurrent stop may already
+                // have cancelled it, and clobbering that with 'stopping'
+                // would strand a terminal job until the reaper marks it lost.
+                stop_active_job(pool, &job_id, force).await?
+            }
+        }
+        // starting / running / stopping: ask the agent to kill it.
+        _ => stop_active_job(pool, &job_id, force).await?,
+    };
 
     storage::audit_queries::insert_audit_log(
         state.database.pool(),
-        &claims.sub,
+        &audit_username(&state, &claims).await,
         "stop_job",
         Some(&job_id),
         Some("job"),
-        Some("Stop job requested"),
+        Some(if force {
+            "Stop job requested (force: escalate to SIGKILL)"
+        } else {
+            "Stop job requested"
+        }),
         "success",
-        None,
+        Some(&client_ip),
     )
     .await
     .ok();
 
+    state.ws_manager.push_job_update(&job_id).await;
+
     Ok(Json(serde_json::json!({
         "job_id": job_id,
-        "status": "stopping",
+        "status": new_status,
     })))
 }
-
 pub async fn get_job_logs(
     State(state): State<Arc<AppState>>,
     Path(job_id): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    // Clamp paging so a hostile/huge `limit` cannot make the server stream
-    // an unbounded result set into memory.
     let offset: i64 = params
         .get("offset")
         .and_then(|s| s.parse().ok())
@@ -617,7 +1113,7 @@ pub async fn get_job_logs(
         .get("limit")
         .and_then(|s| s.parse().ok())
         .unwrap_or(100)
-        .clamp(1, 10000);
+        .clamp(1, 1000);
 
     let logs = storage::queries::get_job_logs(state.database.pool(), &job_id, offset, limit, false)
         .await
@@ -630,19 +1126,29 @@ pub async fn get_job_logs(
 
 pub async fn create_alert_rule(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
     Extension(claims): Extension<Claims>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let rule_id = Uuid::new_v4().to_string();
+    let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
 
     let name = req.get("name").and_then(|v| v.as_str()).unwrap_or("");
     let metric = req.get("metric").and_then(|v| v.as_str()).unwrap_or("");
     let operator = req.get("operator").and_then(|v| v.as_str()).unwrap_or("gt");
     let threshold: f64 = req.get("threshold").and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let duration: i32 = req
+    // Parse duration as i64 first and range-check before narrowing: `as i32`
+    // on an oversized value truncates (e.g. 2^40 -> 0), which would silently
+    // turn a long duration into an instant-firing rule.
+    let duration_secs: i64 = req
         .get("duration_seconds")
         .and_then(|v| v.as_i64())
-        .unwrap_or(30) as i32;
+        .unwrap_or(30);
+    let duration: i32 = i32::try_from(duration_secs)
+        .ok()
+        .filter(|d| *d >= 0)
+        .ok_or(StatusCode::BAD_REQUEST)?;
     let severity = req
         .get("severity")
         .and_then(|v| v.as_str())
@@ -661,16 +1167,62 @@ pub async fn create_alert_rule(
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    // Whitelist the operator/severity and sanity-check the metric so bad
-    // rules cannot be persisted (they would silently never fire).
-    let valid_operator = matches!(operator, "gt" | "gte" | "lt" | "lte" | "eq" | "neq");
-    let valid_severity = matches!(severity, "info" | "warning" | "critical");
-    if metric.is_empty()
-        || !valid_operator
-        || !valid_severity
-        || !threshold.is_finite()
-        || duration < 0
+    // Validate against the alert engine's supported inputs; an unknown
+    // operator/severity would otherwise silently disable the rule.
+    if name.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    // Length/size caps so a single rule cannot grow the DB row without bound.
+    if name.len() > 255 || description.len() > 4096 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(arr) = gpu_uuids.as_array()
+        && arr.len() > 256
     {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(obj) = labels.as_object()
+        && obj.len() > 64
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if !matches!(operator, "gt" | "gte" | "lt" | "lte" | "eq" | "neq") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    // Per-item caps: gpu_uuids entries and node_id feed VARCHAR columns and
+    // end up in per-GPU alert keys, so an oversized string would bloat the
+    // DB row and the in-memory engine without bound.
+    if node_id.len() > 255 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(arr) = gpu_uuids.as_array()
+        && arr
+            .iter()
+            .any(|v| v.as_str().map(|s| s.len() > 255).unwrap_or(false))
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(obj) = labels.as_object()
+        && (obj.keys().any(|k| k.len() > 255)
+            || obj
+                .values()
+                .any(|v| v.as_str().map(|s| s.len() > 4096).unwrap_or(false)))
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if !matches!(severity, "info" | "warning" | "critical") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if !matches!(
+        metric,
+        "cpu_usage_percent"
+            | "memory_usage_percent"
+            | "load_1"
+            | "gpu_temperature"
+            | "gpu_utilization"
+            | "gpu_memory_used_percent"
+            | "gpu_power_watts"
+    ) {
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -693,6 +1245,19 @@ pub async fn create_alert_rule(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    storage::audit_queries::insert_audit_log(
+        state.database.pool(),
+        &audit_username(&state, &claims).await,
+        "create_alert_rule",
+        Some(&rule_id),
+        Some("alert_rule"),
+        Some(&format!("Created alert rule '{}' on {}", name, metric)),
+        "success",
+        Some(&client_ip),
+    )
+    .await
+    .ok();
+
     Ok(Json(serde_json::json!({
         "rule_id": rule_id,
     })))
@@ -710,15 +1275,34 @@ pub async fn list_alert_rules(
 
 pub async fn delete_alert_rule(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
+    Extension(claims): Extension<Claims>,
     Path(rule_id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
-    // Delete events first (FK RESTRICT would otherwise 500 once the rule
-    // has fired) and drop the engine's in-memory instances so stale state
-    // cannot surface afterwards.
+    let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
+    // alert_events reference the rule with no ON DELETE CASCADE; this tree's
+    // cascade helper removes both inside one transaction (B used two calls).
     storage::alert_queries::delete_alert_rule_cascade(state.database.pool(), &rule_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    state.alert_engine.remove_rule(&rule_id);
+
+    // Drop in-memory engine instances so deleted rules stop being tracked
+    // (and stop consuming memory) immediately.
+    state.alert_engine.remove_rule_instances(&rule_id);
+
+    storage::audit_queries::insert_audit_log(
+        state.database.pool(),
+        &audit_username(&state, &claims).await,
+        "delete_alert_rule",
+        Some(&rule_id),
+        Some("alert_rule"),
+        Some("Alert rule deleted"),
+        "success",
+        Some(&client_ip),
+    )
+    .await
+    .ok();
 
     Ok(StatusCode::OK)
 }
@@ -753,9 +1337,45 @@ pub async fn acknowledge_alert(
 ) -> Result<StatusCode, StatusCode> {
     let node_id = req.get("node_id").and_then(|v| v.as_str()).unwrap_or("");
     let gpu_uuid = req.get("gpu_uuid").and_then(|v| v.as_str()).unwrap_or("");
+    // Caps mirror the alert-rule path (VARCHAR columns + engine keys).
+    if node_id.len() > 255 || gpu_uuid.len() > 255 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
-    let key = common::alert::AlertKey::new(rule_id, node_id.to_string(), gpu_uuid.to_string());
+    let key =
+        common::alert::AlertKey::new(rule_id.clone(), node_id.to_string(), gpu_uuid.to_string());
+
+    // Snapshot the instance before resetting it so the ack event can carry
+    // the value/threshold that was firing.
+    let (current_value, threshold) = state
+        .alert_engine
+        .get_all_states()
+        .into_iter()
+        .find(|s| s.key == key)
+        .map(|s| (s.current_value, s.threshold))
+        .unwrap_or((None, 0.0));
+
     state.alert_engine.reset_state(&key);
+
+    // Persist the acknowledgement as a resolved event: the active-alert view
+    // (latest event per key) stops showing it immediately. The engine
+    // re-evaluates on the next report and re-fires if the condition still
+    // holds — ack silences the current firing, not the rule.
+    let event_id = uuid::Uuid::new_v4().to_string();
+    storage::alert_queries::insert_alert_event(
+        state.database.pool(),
+        &event_id,
+        &rule_id,
+        node_id,
+        gpu_uuid,
+        "firing",
+        "resolved",
+        current_value,
+        threshold,
+        Some("acknowledged"),
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::OK)
 }
@@ -764,8 +1384,12 @@ pub async fn acknowledge_alert(
 
 pub async fn create_user(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
+    Extension(claims): Extension<Claims>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
+    let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
     let username = req
         .get("username")
         .and_then(|v| v.as_str())
@@ -775,37 +1399,56 @@ pub async fn create_user(
         .and_then(|v| v.as_str())
         .ok_or(StatusCode::BAD_REQUEST)?;
     let role = req.get("role").and_then(|v| v.as_str()).unwrap_or("viewer");
-    let email = req.get("email").and_then(|v| v.as_str());
-
-    if username.len() < 3 || password.len() < 6 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
     if !matches!(role, "viewer" | "operator" | "admin") {
         return Err(StatusCode::BAD_REQUEST);
     }
+    let email = req.get("email").and_then(|v| v.as_str());
+
+    // Column caps (VARCHAR(100)/VARCHAR(255)): reject up front so an
+    // oversized value returns 400 instead of a DB error -> 500, and matches
+    // the login-path checks.
+    if username.chars().count() > MAX_USERNAME_CHARS || username.trim().is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(email) = email
+        && (email.chars().count() > MAX_EMAIL_CHARS || email.is_empty())
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if password.len() > MAX_PASSWORD_BYTES {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Same strength policy as every other password-setting path.
+    auth::validate_password_strength(password).map_err(|_| StatusCode::BAD_REQUEST)?;
 
     let hash = auth::hash_password(password).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let user_id = match storage::user_queries::create_user(
+    let user_id =
+        storage::user_queries::create_user(state.database.pool(), username, email, role, &hash)
+            .await
+            .map_err(|e| {
+                // Duplicate username: the users.username column is UNIQUE; report it
+                // as a 409 Conflict instead of a misleading 500.
+                if is_unique_violation(&e) {
+                    StatusCode::CONFLICT
+                } else {
+                    StatusCode::INTERNAL_SERVER_ERROR
+                }
+            })?;
+
+    storage::audit_queries::insert_audit_log(
         state.database.pool(),
-        username,
-        email,
-        role,
-        &hash,
+        &audit_username(&state, &claims).await,
+        "create_user",
+        Some(&user_id),
+        Some("user"),
+        Some(&format!("Created user '{}' with role {}", username, role)),
+        "success",
+        Some(&client_ip),
     )
     .await
-    {
-        Ok(id) => id,
-        Err(e)
-            if e.downcast_ref::<sqlx::Error>()
-                .and_then(|e| e.as_database_error())
-                .is_some_and(|e| e.is_unique_violation()) =>
-        {
-            // Duplicate username: report the real conflict instead of 500.
-            return Err(StatusCode::CONFLICT);
-        }
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-    };
+    .ok();
 
     Ok(Json(serde_json::json!({
         "user_id": user_id,
@@ -852,30 +1495,199 @@ pub async fn get_user(
 
 pub async fn update_user(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
+    Extension(claims): Extension<Claims>,
     Path(id): Path<String>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<StatusCode, StatusCode> {
+    let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
     let role = req.get("role").and_then(|v| v.as_str());
     let enabled = req.get("enabled").and_then(|v| v.as_bool());
-
-    if role.is_some_and(|r| !matches!(r, "viewer" | "operator" | "admin")) {
+    if let Some(r) = role
+        && !matches!(r, "viewer" | "operator" | "admin")
+    {
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    storage::user_queries::update_user(state.database.pool(), &id, role, enabled)
+    // 404 up front (also lets the audit trail resolve the current role).
+    storage::user_queries::get_user_by_id(state.database.pool(), &id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Admin may reset a user's password (new hash, counter cleared).
+    let password_hash = match req.get("password").and_then(|v| v.as_str()) {
+        Some("") => return Err(StatusCode::BAD_REQUEST),
+        Some(pw) if pw.len() > MAX_PASSWORD_BYTES => return Err(StatusCode::BAD_REQUEST),
+        Some(pw) => {
+            auth::validate_password_strength(pw).map_err(|_| StatusCode::BAD_REQUEST)?;
+            Some(auth::hash_password(pw).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?)
+        }
+        None => None,
+    };
+
+    // Atomic last-admin guard: the admin count and the UPDATE are one
+    // transaction (FOR UPDATE), so two concurrent demotions can never both
+    // pass and leave the cluster without any enabled admin.
+    let applied = storage::user_queries::update_user_guarded(
+        state.database.pool(),
+        &id,
+        role,
+        enabled,
+        password_hash.as_deref(),
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if !applied {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // An admin password reset must invalidate the target's existing
+    // sessions, exactly like a self-service password change: otherwise the
+    // old refresh tokens keep minting access tokens for a user whose
+    // password was rotated (e.g. a compromised account).
+    if password_hash.is_some()
+        && let Err(e) =
+            storage::user_queries::revoke_all_refresh_tokens(state.database.pool(), &id).await
+    {
+        warn!(error = %e, user_id = %id, "Failed to revoke refresh tokens after admin password reset");
+    }
+
+    storage::audit_queries::insert_audit_log(
+        state.database.pool(),
+        &audit_username(&state, &claims).await,
+        "update_user",
+        Some(&id),
+        Some("user"),
+        Some("User updated (role/enabled/password)"),
+        "success",
+        Some(&client_ip),
+    )
+    .await
+    .ok();
 
     Ok(StatusCode::OK)
 }
 
 pub async fn delete_user(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
+    Extension(claims): Extension<Claims>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
-    storage::user_queries::delete_user(state.database.pool(), &id)
+    let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
+
+    // 404 up front.
+    storage::user_queries::get_user_by_id(state.database.pool(), &id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Atomic last-admin guard (admin count + delete in one transaction, with
+    // the refresh-token cleanup inside the same tx).
+    let applied = storage::user_queries::delete_user_guarded(state.database.pool(), &id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if !applied {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    storage::audit_queries::insert_audit_log(
+        state.database.pool(),
+        &audit_username(&state, &claims).await,
+        "delete_user",
+        Some(&id),
+        Some("user"),
+        Some("User deleted"),
+        "success",
+        Some(&client_ip),
+    )
+    .await
+    .ok();
+
+    Ok(StatusCode::OK)
+}
+
+/// Self-service password change: requires the current password, so a stolen
+/// access token alone cannot be used to take over the account permanently.
+pub async fn change_my_password(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
+    Extension(claims): Extension<Claims>,
+    Json(req): Json<serde_json::Value>,
+) -> Result<StatusCode, StatusCode> {
+    let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
+    let old_password = req
+        .get("old_password")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let new_password = req
+        .get("new_password")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if new_password.len() > MAX_PASSWORD_BYTES {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    // Same strength policy as every other password-setting path.
+    auth::validate_password_strength(new_password).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    let user = storage::user_queries::get_user_by_id(state.database.pool(), &claims.sub)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    // A disabled or locked account must not be able to use a still-valid
+    // access token to change its own password (same gate as login/refresh).
+    if !user.enabled {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    if let Some(locked_until) = user.locked_until
+        && locked_until > Utc::now()
+    {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    if auth::verify_password(old_password, &user.password_hash).is_err() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let new_hash =
+        auth::hash_password(new_password).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    storage::user_queries::update_user(
+        state.database.pool(),
+        &user.user_id,
+        None,
+        None,
+        Some(&new_hash),
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Rotate all refresh tokens for this user: password change invalidates
+    // every existing session except the current access token.
+    if let Err(e) =
+        storage::user_queries::revoke_all_refresh_tokens(state.database.pool(), &user.user_id).await
+    {
+        // The password itself was already rotated; failing the session
+        // revoke only leaves old sessions live until expiry.
+        warn!(error = %e, user_id = %user.user_id, "Failed to revoke refresh tokens after password change");
+    }
+
+    storage::audit_queries::insert_audit_log(
+        state.database.pool(),
+        &user.username,
+        "change_password",
+        Some(&claims.sub),
+        Some("user"),
+        Some("User changed own password"),
+        "success",
+        Some(&client_ip),
+    )
+    .await
+    .ok();
 
     Ok(StatusCode::OK)
 }
@@ -902,8 +1714,9 @@ pub async fn get_cluster_info(
     let total_gpus: u32 = nodes.iter().map(|n| n.gpu_count).sum();
 
     // Real values from the latest metrics report per node. `None` when no
-    // metrics have arrived yet — reported as JSON null, never as fake 0s.
-    // Busy = GPU with utilization >= 1% in its latest report.
+    // metrics have arrived yet — reported as JSON null, never as fake 0s
+    // (README:442 promises exactly that). Busy = GPU with utilization
+    // >= 1% in its latest report.
     let gpu_summary = storage::queries::get_gpu_utilization_summary(state.database.pool())
         .await
         .ok()
@@ -913,16 +1726,19 @@ pub async fn get_cluster_info(
         None => (None, None),
     };
 
-    // Count running jobs
+    // Count running jobs (the count comes from the query's total — the row
+    // list is fetched with page_size=1, so the rows themselves would cap the
+    // result at 0/1).
     let running_jobs =
         storage::job_queries::list_jobs(state.database.pool(), None, Some("running"), None, 0, 1)
             .await
-            .map(|(jobs, _)| jobs.len())
+            .map(|(_, total)| total)
             .unwrap_or(0);
 
-    // Active (pending/firing) alerts from the latest event per target.
-    let active_alerts = storage::alert_queries::count_active_alerts(state.database.pool())
+    // Count currently active alerts (latest event per key is pending/firing).
+    let active_alerts = storage::alert_queries::get_active_alert_events(state.database.pool())
         .await
+        .map(|events| events.len())
         .unwrap_or(0);
 
     Ok(Json(serde_json::json!({
@@ -932,7 +1748,7 @@ pub async fn get_cluster_info(
         "offline_nodes": offline,
         "total_gpus": total_gpus,
         "idle_gpus": idle_gpus,
-        "avg_gpu_utilization": avg_gpu_utilization,
+        "avg_gpu_utilization": avg_gpu_utilization.map(|v| (v * 10.0).round() / 10.0),
         "running_jobs": running_jobs,
         "active_alerts": active_alerts,
     })))
@@ -944,28 +1760,41 @@ pub async fn list_audit_logs(
     State(state): State<Arc<AppState>>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
+    // Parse timestamps strictly: an unparseable/out-of-range value is a
+    // client error (400), not a silently wrong filter (the previous
+    // `unwrap_or(Utc::now())` turned a bad end_time into "nothing after
+    // now" and a bad start_time into "nothing before now").
+    let start_time = match params.get("start_time_ms") {
+        Some(s) => {
+            let t: i64 = s.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+            Some(chrono::DateTime::from_timestamp_millis(t).ok_or(StatusCode::BAD_REQUEST)?)
+        }
+        None => None,
+    };
+    let end_time = match params.get("end_time_ms") {
+        Some(s) => {
+            let t: i64 = s.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+            Some(chrono::DateTime::from_timestamp_millis(t).ok_or(StatusCode::BAD_REQUEST)?)
+        }
+        None => None,
+    };
+
     let (logs, total) = storage::audit_queries::list_audit_logs(
         state.database.pool(),
         params.get("user").map(|s| s.as_str()),
         params.get("action").map(|s| s.as_str()),
-        params
-            .get("start_time_ms")
-            .and_then(|s| s.parse().ok())
-            .map(|t: i64| chrono::DateTime::from_timestamp_millis(t).unwrap_or(Utc::now())),
-        params
-            .get("end_time_ms")
-            .and_then(|s| s.parse().ok())
-            .map(|t: i64| chrono::DateTime::from_timestamp_millis(t).unwrap_or(Utc::now())),
+        start_time,
+        end_time,
         params
             .get("page")
             .and_then(|s| s.parse().ok())
             .unwrap_or(0)
-            .max(0),
+            .clamp(0, 1_000_000),
         params
             .get("page_size")
             .and_then(|s| s.parse().ok())
             .unwrap_or(50)
-            .clamp(1, 200),
+            .clamp(1, 500),
     )
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -978,37 +1807,238 @@ pub async fn list_audit_logs(
 
 // ===== Prometheus Metrics =====
 
-pub async fn get_prometheus_metrics(
-    State(state): State<Arc<AppState>>,
-) -> Result<String, StatusCode> {
-    use prometheus_client::metrics::counter::Counter;
+/// Render the Prometheus text exposition of cluster metrics. Shared by the
+/// authenticated `/api/prometheus/metrics` endpoint and the optional
+/// standalone `prometheus_addr` listener (see `prometheus_enabled`).
+pub fn render_prometheus_metrics(state: &AppState) -> String {
     use prometheus_client::metrics::gauge::Gauge;
     use prometheus_client::registry::Registry;
 
     let mut registry = Registry::default();
 
-    let nodes_counter: Counter = Counter::default();
-    nodes_counter.inc_by(state.node_registry.list().len() as u64);
-    registry.register("nodes_total", "Total nodes", nodes_counter);
+    let nodes_total: Gauge = Gauge::default();
+    nodes_total.set(state.node_registry.list().len() as i64);
+    registry.register(
+        "nodes_total",
+        "Total number of registered nodes (any status)",
+        nodes_total,
+    );
 
-    let online_gauge: Gauge = Gauge::default();
-    online_gauge.set(state.node_registry.list_online().len() as i64);
-    registry.register("nodes_online", "Online nodes", online_gauge);
+    let nodes_online: Gauge = Gauge::default();
+    nodes_online.set(state.node_registry.list_online().len() as i64);
+    registry.register("nodes_online", "Nodes currently online", nodes_online);
 
     let mut buffer = String::new();
     let _ = prometheus_client::encoding::text::encode(&mut buffer, &registry);
-    let metrics_text = buffer;
-    Ok(metrics_text)
+    buffer
+}
+
+pub async fn get_prometheus_metrics(
+    State(state): State<Arc<AppState>>,
+) -> Result<String, StatusCode> {
+    Ok(render_prometheus_metrics(&state))
 }
 
 // ===== Helpers =====
 
-/// Role-based authorization helper used by the auth middleware.
-pub fn check_role(claims: &Claims, allowed: &[&str]) -> Result<(), StatusCode> {
-    let role = claims.role.parse::<UserRole>().unwrap_or(UserRole::Viewer);
-    if allowed.contains(&role.to_str()) {
-        Ok(())
-    } else {
-        Err(StatusCode::FORBIDDEN)
+/// True when a sqlx error (wrapped in anyhow) is a Postgres unique-violation
+/// (23505) — e.g. a duplicate username on user creation. Mapped to HTTP 409
+/// by callers.
+fn is_unique_violation(e: &anyhow::Error) -> bool {
+    e.downcast_ref::<sqlx::Error>()
+        .map(|db| matches!(db, sqlx::Error::Database(d) if d.code().as_deref() == Some("23505")))
+        .unwrap_or(false)
+}
+/// Set a job to `stopping` only while it is still active (starting/running).
+/// Returns the status to report: "stopping" when the update applied,
+/// otherwise the current persisted status (a concurrent cancellation or
+/// completion won the race).
+async fn stop_active_job(
+    pool: &sqlx::PgPool,
+    job_id: &str,
+    force: bool,
+) -> Result<String, StatusCode> {
+    match storage::job_queries::mark_stopping_if_active(pool, job_id).await {
+        Ok(true) => {
+            if force {
+                storage::job_queries::mark_force_cancel(pool, job_id)
+                    .await
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            }
+            Ok("stopping".to_string())
+        }
+        Ok(false) => {
+            let status = storage::job_queries::get_job(pool, job_id)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .map(|r| r.status)
+                .unwrap_or_default();
+            Ok(status)
+        }
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+/// Acceptance tests for `features/merge_m6_auth_hardening.feature` (login
+/// rate limiting / client-address resolution, F-08) and
+/// `features/merge_m6_job_safety.feature` (submission caps, F-11).
+///
+/// The scenario names are the test function names verbatim. The limiter and
+/// the submission validator are driven directly (the feature file allows
+/// extracting them for exactly this reason): the handlers themselves only
+/// forward to `LoginLimiter` / `validate_job_request`.
+#[cfg(test)]
+mod merge_m6_acceptance_tests {
+    use super::*;
+    use axum::http::HeaderMap;
+
+    fn job_request(arguments: Vec<String>) -> JobCreateRequest {
+        JobCreateRequest {
+            node_id: "m6-node".to_string(),
+            name: "m6-job".to_string(),
+            executable: "/bin/true".to_string(),
+            arguments,
+            working_directory: "/tmp".to_string(),
+            environment: serde_json::Map::new(),
+            resource_quota: String::new(),
+            max_retries: 0,
+        }
+    }
+
+    #[test]
+    fn repeated_failed_logins_from_one_client_address_are_capped() {
+        let limiter = LoginLimiter::new();
+        let ip = "m6-ip-a";
+        let account = "m6-ratelimit";
+
+        // The first LOGIN_MAX_ATTEMPTS failures are allowed; the 11th attempt
+        // for the same account from the same address is refused *before* any
+        // password work (the handler checks the limiter first).
+        for attempt in 1..=10 {
+            assert!(
+                limiter.allowed(ip, account),
+                "failed attempt {attempt} must still be allowed"
+            );
+            limiter.record_failure(ip, account);
+        }
+        assert!(
+            !limiter.allowed(ip, account),
+            "the 11th attempt from the same address must be refused before the password check"
+        );
+    }
+
+    #[test]
+    fn the_login_attempt_cap_is_tracked_per_client_address() {
+        let limiter = LoginLimiter::new();
+        let capped = "m6-ip-a";
+        for _ in 0..10 {
+            limiter.record_failure(capped, "m6-ratelimit");
+        }
+        assert!(
+            !limiter.allowed(capped, "m6-ratelimit"),
+            "the capped address stays refused"
+        );
+
+        // A different source address has its own, untouched window.
+        assert!(
+            limiter.allowed("m6-ip-b", "m6-ratelimit"),
+            "the budget must be tracked per client address"
+        );
+        // And the burst against one account must not lock other accounts out
+        // from the same address (NAT: a brute force on one user must not take
+        // the whole office offline).
+        assert!(
+            limiter.allowed(capped, "m6-admin"),
+            "another account from the same address keeps its own window"
+        );
+        for _ in 0..10 {
+            assert!(limiter.allowed(capped, "m6-admin"));
+            limiter.record_failure(capped, "m6-admin");
+        }
+        assert!(
+            !limiter.allowed(capped, "m6-admin"),
+            "the second account gets its own cap within the same window"
+        );
+    }
+
+    #[test]
+    fn the_global_login_budget_bounds_attempts_across_all_client_addresses() {
+        let limiter = LoginLimiter::new();
+
+        // 300 attempts from 300 distinct addresses: every attempt counts
+        // (success or failure) against the global budget.
+        for attempt in 0..300 {
+            let ip = format!("m6-global-{attempt}");
+            assert!(
+                limiter.global_allowed(),
+                "attempt {attempt} must be inside the global budget"
+            );
+            assert!(
+                limiter.allowed(&ip, "m6-global"),
+                "a fresh address is under its own cap"
+            );
+            limiter.record_attempt();
+        }
+
+        assert!(
+            !limiter.global_allowed(),
+            "the 301st attempt must be refused even from a brand-new address"
+        );
+    }
+
+    #[test]
+    fn the_client_address_used_for_the_budget_follows_the_forwarded_header_when_the_proxy_is_trusted()
+     {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-forwarded-for",
+            "203.0.113.9, 10.0.0.1".parse().expect("header value"),
+        );
+        let addr: SocketAddr = "127.0.0.1:50000".parse().expect("socket addr");
+
+        assert_eq!(
+            effective_client_ip(&headers, addr, true),
+            "203.0.113.9",
+            "with a trusted proxy the first forwarded entry is the client"
+        );
+        assert_eq!(
+            effective_client_ip(&headers, addr, false),
+            "127.0.0.1",
+            "without trust the header is ignored and the socket address is used"
+        );
+    }
+
+    #[test]
+    fn a_job_submission_with_too_many_arguments_is_rejected() {
+        let too_many = job_request(vec!["m6-arg".to_string(); MAX_ARGS + 1]);
+        let rejected = validate_job_request(&too_many);
+        assert!(rejected.is_err(), "257 arguments must be rejected");
+        assert!(
+            rejected.unwrap_err().1.contains("too many arguments"),
+            "the rejection names the argument-count cap"
+        );
+
+        let at_the_limit = job_request(vec!["m6-arg".to_string(); MAX_ARGS]);
+        assert!(
+            validate_job_request(&at_the_limit).is_ok(),
+            "exactly {MAX_ARGS} arguments are still accepted"
+        );
+    }
+
+    #[test]
+    fn a_job_submission_with_an_argument_over_the_length_limit_is_rejected() {
+        let too_long = job_request(vec!["x".repeat(MAX_ARG_LEN + 1)]);
+        let rejected = validate_job_request(&too_long);
+        assert!(rejected.is_err(), "a 4097-byte argument must be rejected");
+        assert!(
+            rejected.unwrap_err().1.contains("argument too long"),
+            "the rejection names the per-argument limit"
+        );
+
+        let at_the_limit = job_request(vec!["x".repeat(MAX_ARG_LEN)]);
+        assert!(
+            validate_job_request(&at_the_limit).is_ok(),
+            "exactly {MAX_ARG_LEN} bytes are still accepted"
+        );
     }
 }

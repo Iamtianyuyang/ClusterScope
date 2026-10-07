@@ -115,6 +115,12 @@ pub fn validate_transition(from: JobStatus, to: JobStatus) -> Result<(), AppErro
     }
 }
 
+/// Value the server writes into `jobs.error_message` when the operator asked
+/// for a forced cancellation (`?force=true`): the agent answers it with
+/// SIGKILL instead of waiting out the automatic SIGTERM grace period.
+/// Shared between server and agent so both sides agree on the wording.
+pub const FORCE_CANCEL_MARKER: &str = "force cancel requested";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobDefinition {
     pub job_id: String,

@@ -1,0 +1,14 @@
+{
+  "title": "F-28 复验 — 清掉 9 条「等待期持锁」告警后，storage 验收测试仍然严格串行（收窄 guard 的反证）",
+  "cwd": "..",
+  "steps": [
+    { "say": "判据：clippy 在 --all-targets（含被 exclude 的测试目标）下用 -D warnings 也要 rc=0、0 条告警；round 2 在这里打印 9 条 await_holding_lock" },
+    { "run": "sh qa/harness/m6-demo-f28.sh clippy", "timeoutSec": 900 },
+    { "say": "为什么只能用 async-aware 锁：4 条验收测试共用同一批 m6- 夹具行（同一张 audit_logs、同一个用户名 m6-audit），断言依赖「表里只有我这批行」——所以串行化的 guard 必须覆盖整个测试体（含 DB 的 await）" },
+    { "run": "sh qa/harness/m6-demo-f28.sh serial", "timeoutSec": 120 },
+    { "say": "当前实现（tokio::sync::Mutex，guard 从测试体第一条语句持有到函数结束）在 8 线程并行下依然严格串行：3 次全绿" },
+    { "run": "sh qa/harness/m6-demo-f28.sh parallel", "timeoutSec": 300 },
+    { "say": "反证（对拍变体，只在 gauntlet-out 的源码快照里改，工作树不碰）：把 guard 收窄成同步块 —— std 锁下唯一能让 clippy 闭嘴的写法 —— 串行化就没了，同样的 8 线程并行立刻互相踩，3 条测试挂掉" },
+    { "run": "sh qa/harness/m6-demo-f28.sh narrowed", "timeoutSec": 900 }
+  ]
+}

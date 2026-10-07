@@ -1,0 +1,13 @@
+{
+  "title": "M6 返工复验 — F-23 锁定账号应答 429；F-24 cluster/info 无数据时 idle_gpus / avg_gpu_utilization 为 null",
+  "cwd": "..",
+  "steps": [
+    { "say": "起一个只读模式（auth_required:false）的 server，连本机 PostgreSQL 16.4" },
+    { "run": "sh qa/harness/server-up.sh false", "timeoutSec": 90 },
+    { "say": "① F-23：5 次错误口令把专用账号锁上，再用【正确】口令登录 —— 合流时这里回归成 401，返工后在 3230e8b 恢复成 429（agent 不参与这条路径）" },
+    { "say": "② F-24：同一脚本后半段对比 cluster/info 的两种状态 —— 有 6 张 GPU 指标时是真实数字，清空 node_metrics 后 idle_gpus / avg_gpu_utilization 必须是 JSON null（README:442 的承诺，合流时一度是假的 0）" },
+    { "run": "sh qa/harness/m6-demo-lockout-cluster.sh", "timeoutSec": 240 },
+    { "say": "收尾：只按 PID 文件停自己起的 agent（脚本已停）与 server —— 这台机器是共享的，不用 pkill" },
+    { "run": "sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh" }
+  ]
+}

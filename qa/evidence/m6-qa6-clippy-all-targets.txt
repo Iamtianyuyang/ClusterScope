@@ -1,0 +1,19 @@
+    Checking common v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/common)
+   Compiling protocol v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/protocol)
+    Checking tui v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/tui)
+    Checking scheduler v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/scheduler)
+    Checking storage v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage)
+    Checking agent v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent)
+    Checking server v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/server)
+crates/storage/tests/audit_queries_acceptance.rs:142:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/user_queries_acceptance.rs:99:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/audit_queries_acceptance.rs:165:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/audit_queries_acceptance.rs:179:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/user_queries_acceptance.rs:145:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/user_queries_acceptance.rs:172:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/audit_queries_acceptance.rs:223:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/user_queries_acceptance.rs:215:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/user_queries_acceptance.rs:247:9: warning: this `MutexGuard` is held across an await point
+warning: `storage` (test "audit_queries_acceptance") generated 4 warnings
+warning: `storage` (test "user_queries_acceptance") generated 5 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.91s

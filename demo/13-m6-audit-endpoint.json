@@ -1,0 +1,16 @@
+{
+  "title": "M6 — 审计端点（F-01 恒 500 → 200、F-16 COUNT 绑参）：筛选条件与 total 一致",
+  "cwd": "..",
+  "steps": [
+    { "say": "起一个只读模式（auth_required:false）的 server，连本机 PostgreSQL 16.4" },
+    { "run": "sh qa/harness/server-up.sh false", "timeoutSec": 90 },
+    { "say": "20 条 REST 安全矩阵：DOC-GET-AUDIT-LOGS 已从 500 翻成 200；SEC-LOGIN-LOCKOUT 在返工后回到 429（F-23 已闭合，见 qa/qa-report.json）——矩阵里唯一剩下的 FAIL 是 DOC-GET-USERS-READONLY（F-07 的取舍），所以退出码仍是 1" },
+    { "run": "sh qa/harness/api-checks.sh", "timeoutSec": 180, "expectCode": 1 },
+    { "say": "核心判据：任何筛选条件都要让 total 等于实回条数（F-16 的 COUNT 语句必须绑上自己的参数），并与 psql 的计数对齐" },
+    { "run": "sh qa/harness/m6-demo-audit.sh", "timeoutSec": 120 },
+    { "say": "坏参数是 400 而不是 500；空结果是 total=0 的正常形状" },
+    { "run": "curl -s -o /dev/null -w 'start_time_ms=abc -> HTTP %{http_code}\\n' 'http://127.0.0.1:8080/api/audit-logs?start_time_ms=abc'", "timeoutSec": 30 },
+    { "say": "收尾：只按 PID 文件停自己起的 server（这台机器是共享的）" },
+    { "run": "sh qa/harness/server-down.sh" }
+  ]
+}

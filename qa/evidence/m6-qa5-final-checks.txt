@@ -1,0 +1,64 @@
+
+===== MRG6-04：12 个 graft 文件的逐文件提交与残留差异证据 =====
+  提交序列（8601ac9..HEAD）：
+    e8fd233 [merge] runtime fixes found by the full M6 harness (M6-12 / M6-14 now PASS: 15/15)
+    3fb511a [merge] harness-compatibility fixes found by qa/harness/merge-m6-checks.sh
+    40b97f5 [code] F-05 follow-up: the documented force option (README:439) now exists end to end
+    4eee91e [merge] step3: bring back A unique assets (common::metrics, storage::conversions, ported integration test)
+    98d316d [code] M6 acceptance tests: login limits/client IP (F-08) + submission caps (F-11) + config keys (F-06)
+    180f416 [merge] graft B handlers.rs + main.rs + manifests (F-08 login limits, F-10 audit coverage, F-11 caps, F-06 config keys)
+    3fc86c3 [merge] graft B grpc.rs (F-11 input caps, transition validation, batched job logs, heartbeat pending count)
+    6c19f90 [merge] graft B ws_handler.rs (per-IP WS cap, global soft limit, config-driven backlog, ping heartbeat)
+    cae6509 [merge] graft B job_executor.rs (F-05 SIGTERM->SIGKILL escalation, pid+starttime bookkeeping, orphan cleanup)
+    2bf62ce [merge] graft B agent/metrics.rs: keep C NVML/per-core version, take B collect_process_details gate (F-06)
+    ec49e53 [merge] graft B alert.rs (time-based pending->firing, relative-tolerance eq/neq, remove_rule_instances)
+    eb5d07b [merge] graft B auth_middleware.rs (F-09 request side: live user/role re-check per request)
+    6b504be [merge] graft B user_queries.rs (F-09 revocation, digest tokens, guarded admin ops)
+    8100441 [code] M6 step1 acceptance tests: 4 audit-listing scenarios on the real DB (F-01/F-16)
+    f766c41 [merge] step1: F-01+F-16 audit endpoint (cherry-pick eac070e)
+    2f48b20 [spec] M6 判据程序与文档收尾：M6-11/M6-12 的判据文案改成「实测值 + 要求」；qa/merge-m6.qa.md 补「检查咬得住」的反向证据（合流前全量实跑 11 PASS/4 FAIL，四条 FAIL 逐条对应合流要修的事）与旧口径 F12 的确切失败项；constraints 追加 MRG6-22 勘误（纯插入 363/0）
+    397b56c [spec] M6 规格修订（追加式）：场景数 22→23 / 合计 28→29（最后一个管理员的拒绝路径移出自动化判据）；constraints 追加 MRG6-21 记录勘误（纯插入 352/0），文档与 qa/mrg6-errata.json 同步
+    348d057 [spec] M6 场景修订：把「最后一个启用管理员」的拒绝路径移出自动化判据（共享库里无法构造唯一管理员前置），改为锁允许路径 + 令牌级联删除两条可测场景；QA 文档补人工核验说明
+    ffd706d [spec] M6 合流规格（第 1 阶段）：22 个验收场景（审计查询/登录限速与令牌吊销/任务上限与SIGKILL升级与配置键/A 的指标类型）+ qa/merge-m6.qa.md（步骤 1/2/3/5 判据 + M9/M10 + 翻转登记表 + 决策记录）+ qa/harness/merge-m6-checks.sh（M6-01..15）+ qa/constraints.json 追加 MRG6-01..20（纯插入 341/0）；同批修 harness 两处假证据风险：树定位自解析（env.sh/no-root-checks.sh/nr-verify*.sh）、F12 轮次口径（no-root 轮口径原样保留，M6 轮用 m6_in_scope + 新负例自检）。均需 Leader 追认
+  逐文件 graft 残留差异证据（gauntlet-out/qa/evidence/merge-m6-graft-*.diff）：
+    merge-m6-graft-alert.rs.diff
+    merge-m6-graft-auth_middleware.rs.diff
+    merge-m6-graft-grpc.rs.diff
+    merge-m6-graft-grpc-vs-C.diff
+    merge-m6-graft-handlers.rs.diff
+    merge-m6-graft-job_executor.rs.diff
+    merge-m6-graft-main.rs.diff
+    merge-m6-graft-metrics.rs.diff
+    merge-m6-graft-user_queries.rs.diff
+    merge-m6-graft-ws_handler.rs.diff
+
+===== MRG6-16：树定位自解析 + doc-claims 的实测计数 =====
+    12:    REPO="$(cd "$HERE/../.." && pwd)"
+    no-root-checks.sh: 15:R="${R:-$(cd "$(dirname "$0")/../.." && pwd)}"
+    nr-verify.sh: 16:R="${R:-$(cd "$(dirname "$0")/../.." && pwd)}"
+    nr-verify2.sh: 19:R="${R:-$(cd "$(dirname "$0")/../.." && pwd)}"
+    nr-verify3.sh: 18:R="${R:-$(cd "$(dirname "$0")/../.." && pwd)}"
+  merge-m6 树里 doc-claims: PASS=73 FAIL=7（合流前基线 9 FAIL；两条翻转后应更少）
+  73
+  gh-line 树是另一棵树（本阶段没有在它上面跑任何命令）
+
+===== MRG6-17：默认口令的取舍 =====
+  代码默认值: 85:    pub default_admin_password: String, 147:            default_admin_password: "admin".to_string(), 
+  README 的安全提示:
+    267:default_admin_password: "admin123"
+
+===== MRG6-18：约束只追加 + 范围纪律 =====
+  git diff --numstat 7ca587a -- qa/constraints.json -> 363	0	qa/constraints.json（第二列必须是 0）
+  git diff --numstat 8601ac9 -- qa/constraints.json -> 223	0	qa/constraints.json
+  web/ 与 deploy/nginx.conf 的改动: []
+  quality-accepted.json / mutation-accepted.json: 
+  F-02 / F-07 的取舍记录: 3 处命中（qa/merge-m6.qa.md §9）
+
+===== MRG6-19：共享机器纪律 =====
+  常驻 agent PID 266643:  266643 Wed Sep  2 12:59:26 2026 /public/tianyuyang/.local/bin/clusterscope-agent -c /public/tianyuyang/.config/clusterscope/agent.yaml
+  本阶段启动过的 clusterscope 进程（应已全部停掉）: []
+  Linger: Linger=yes
+  分支状态: ## gauntlet/merge-m6 ?? demo/13-m6-audit-endpoint.json ?? demo/14-m6-force-cancel.json 
+  远端有没有被推送（本地分支 vs origin）: ; refs: b/master 
+
+qa5-final-checks: 完成（/public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence/phase5/qa5-final-checks.txt）

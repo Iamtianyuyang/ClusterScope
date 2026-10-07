@@ -1,0 +1,24 @@
+# 返工轮的提交审计（第 5 阶段 round 2）
+## date -u
+2026-10-07T17:26:33Z
+## git rev-list --count 25f475a..5ceee91（编码阶段的返工提交数）
+3
+## git log --oneline 25f475a..5ceee91
+5ceee91 [merge] rework-round gate evidence: coder PASS (98/29), M6 harness 15/15, no-root 12/12 (+ old-calibration 11/12 with the two F12 items), api-checks 19 PASS with SEC-LOGIN-LOCKOUT 429, doc-claims 6 FAIL, quality warnings=0 duplication=0
+d26ada0 [merge] constraints append reworked as a pure insertion (F11: no deleted lines) - MRG6-23/24 text unchanged, closing bracket kept on its own line
+3230e8b [merge] rework round: F-23 lockout 429, F-24 cluster/info null, MRG6-17 README admin note, F-25 two warnings + the duplication clone
+## git reflog --date=iso（看有没有 amend/reset/rebase 痕迹）
+7eedb2c HEAD@{2026-10-08 01:24:58 +0800}: commit: [qa] M6 round 2 (rework verification @5ceee91): verdict=pass - F-23 429 + F-24 null + MRG6-17 README closed; MRG6-22 superseded by the MRG6-23 erratum (two F12 items reproduced); F-25 warnings=0/duplication=0; F-26/F-27 closed; new F-28 (clippy --all-targets 9 MutexGuard warnings are NOT at baseline 8601ac9) and F-29 (M7 residual distance 592.706)
+5ceee91 HEAD@{2026-10-08 00:46:50 +0800}: commit: [merge] rework-round gate evidence: coder PASS (98/29), M6 harness 15/15, no-root 12/12 (+ old-calibration 11/12 with the two F12 items), api-checks 19 PASS with SEC-LOGIN-LOCKOUT 429, doc-claims 6 FAIL, quality warnings=0 duplication=0
+d26ada0 HEAD@{2026-10-08 00:36:52 +0800}: commit: [merge] constraints append reworked as a pure insertion (F11: no deleted lines) - MRG6-23/24 text unchanged, closing bracket kept on its own line
+3230e8b HEAD@{2026-10-08 00:29:50 +0800}: commit: [merge] rework round: F-23 lockout 429, F-24 cluster/info null, MRG6-17 README admin note, F-25 two warnings + the duplication clone
+25f475a HEAD@{2026-10-08 00:02:20 +0800}: commit: [qa] M6 round: fix stale cross-references in the two new check entries (Q512 ops-checks fixture note, Q518 -> Q528)
+3fc31d5 HEAD@{2026-10-07 23:53:19 +0800}: commit: [qa] M6 round: independent rerun of every gate on the merged tree + adversarial re-derivation (MRG6-01..22 paired, F-23..F-27 recorded; verdict=fail on 3 unmet expectations)
+## 合流提交是否仍在原地（哈希不变）
+e8fd233 [merge] runtime fixes found by the full M6 harness (M6-12 / M6-14 now PASS: 15/15)
+3fb511a [merge] harness-compatibility fixes found by qa/harness/merge-m6-checks.sh
+40b97f5 [code] F-05 follow-up: the documented force option (README:439) now exists end to end
+4eee91e [merge] step3: bring back A unique assets (common::metrics, storage::conversions, ported integration test)
+## git rev-list --count 25f475a..HEAD（含本阶段自己的 QA 提交）
+4
+## 结论：任务书说编码阶段『4 个提交』，分支上实为 3 个（reflog 无 amend/reset/rebase：合流提交与 25f475a 的哈希都未变，没有重做合流）；第 4 个疑为口径计数，不影响任何判据。

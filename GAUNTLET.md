@@ -503,3 +503,99 @@ F12 PASS  改动范围合规（storage/server 零改动）
 （都在远端、未入库；复跑命令见 `qa/README.md`）。
 
 
+
+## 第 1 阶段（本轮）：三线合流 M6 的规格（2026-10-07）
+
+> 分支 `gauntlet/merge-m6`，工作树 `/public/tianyuyang/code/ClusterScope-review/merge-m6`，
+> **合流基线 = `master` @ `8601ac9`**（审查产物 PR #2 + 无 root 修复 PR #3 都已进主线；`b/master` = `19d8fbc`，
+> merge-base = `f8ac726`；A 的素材在 `../local-wip/`，B 的 12 个未提交文件在冻结副本 `../backup-b-wip/b-wip.tar.gz`）。
+>
+> **本轮范围**：严格按 `report/merge-plan.md` 的 **M6 步骤 1 / 2 / 3 / 5** ——
+> ① cherry-pick B 的 `eac070e`（F-01 审计端点恒 500 + F-16 审计 COUNT 零绑定）；
+> ② 按文件 graft B 的 12 个未提交文件（F-08/F-09/F-10/F-11/F-05/F-06 与 F-03 的一部分，每文件一次构建+测试+提交）；
+> ③ 接回 A 的独有资产（M5 裁决 = 先 TUI-only：`common/src/metrics.rs`、`storage/src/conversions.rs`、`tests/integration_test.rs`）；
+> ⑤ 合流后的全量验证（M9 + M10）。
+> **不做**：步骤 4（`web/`、`deploy/nginx.conf` —— M5 说 web 走独立分支）；**M7 质量口径不动**（不还 97 项欠账、不重算成 PASS、不开棘轮）；
+> `F-02`（天级历史）与 `F-07`（read-only 鉴权边界）**本次不合入**，取舍理由与后续路径写在 `qa/merge-m6.qa.md` §9。
+
+**本轮产出（第 1 阶段）**
+
+| 文件 | 内容 |
+|---|---|
+| `features/merge_m6_audit_queries.feature` | **4 个场景**：审计查询的筛选/总数/分页/组合筛选（F-01 + F-16 的库上判据） |
+| `features/merge_m6_auth_hardening.feature` | **9 个场景**：按 IP 与全局登录限速、代理头取客户端地址、令牌批量吊销、单次消费、摘要存储、令牌级联删除、管理员的降级/删除允许路径（F-08/F-09；「最后一个启用管理员」的拒绝路径见 `qa/merge-m6.qa.md` §3 的人工核验项） |
+| `features/merge_m6_job_safety.feature` | **6 个场景**：`MAX_ARGS`/`MAX_ARG_LEN` 边界、SIGTERM→SIGKILL 升级与正对照、死配置键生效、TLS 缺证书的明确报错（F-11/F-05/F-06） |
+| `features/merge_m6_legacy_assets.feature` | **4 个场景**：A 的 `MetricsAggregation` 与 `node_metrics_to_proto` 的类型行为（M6 步骤 3） |
+| `qa/merge-m6.qa.md` | M6 步骤 1/2/3/5 的**执行程序与判据**：合流前基线表、逐文件 graft 的验收表、M9 行为等价清单、M10 不变量、PASS/FAIL **翻转登记表**、F12 的轮次口径、决策记录 |
+| `qa/harness/merge-m6-checks.sh` | 本轮判据程序 **M6-01…M6-15**（`--static` 跳过需要 server/agent 的 5 段；自己按 PID 文件起停） |
+| `qa/constraints.json` | **追加 20 条** `MRG6-01`…`MRG6-20`（全部 `must-hold`）；既有 118 条（104 审计 + `FIX-01`…`FIX-14`）**逐字节未动**，合计 **138** 条；追加是**纯插入**（`git diff --numstat 7ca587a -- qa/constraints.json` → `341 0`） |
+
+**场景名 ↔ 测试名的硬契约**：与上一轮相同（`matchAcceptance`：小写 + 折叠空白的**子串**匹配，`_` ≠ 空格）——
+本轮 23 个新场景一律写成 snake_case，编码阶段把场景名照抄成测试函数名；加上上一轮的 6 条，验收场景共 **29** 条（勘误记录见 `qa/constraints.json` 的 `MRG6-21`）。
+
+**合流前实测基线（2026-10-07，本工作树；判据的对照面只能是这张表）**
+
+| 面 | 实测 |
+|---|---|
+| 构建 / 测试 | `cargo build --workspace --all-targets --offline` exit 0；`cargo test --workspace --offline` → **59 passed / 0 failed** |
+| REST 矩阵（`api-checks.sh`） | **18 PASS / 2 FAIL**（`DOC-GET-USERS-READONLY` 401、`DOC-GET-AUDIT-LOGS` **500**） |
+| 文档一致性（`doc-claims-checks.sh`） | **71 PASS / 9 FAIL**（其中 `DOC-CODE-SIGKILL-EXISTS`、`DOC-CODE-FORCE-OPTION` 合流后**必须**转 PASS） |
+| 无 root 四项修复（`no-root-fixes-checks.sh`） | **PASS=12 FAIL=0**（M6 轮口径；⚠️ **修脚本前**实测是 11/12，见下） |
+| NRM3 / NRM5 | 系统路径默认值实质 3 处（全部可覆盖）、全部命中 7 行；特权原语 0 处（进程组 `pre_exec`+`setsid` 2 行） |
+| schema | `public` 下 **11 张表**、`admin` 1 行 |
+
+**⚠️ 两处与任务书字面不符的实测，已如实记录（详见 `qa/merge-m6.qa.md` §1/§8）**
+
+1. **「`no-root-fixes-checks.sh` 必须仍然 12/12」在任务书的基线上本来就不成立**：未改脚本时，本工作树跑出来是
+   **PASS=11 FAIL=1**，F12 唯一失败项是 `report/no-root-fixes-comment.md` / `report/no-root-fixes.html`
+   （上一轮报告阶段的产物，旧允许集里没有 `report/*`）。
+2. **`F12` 是「范围 vs 某一轮基线」的检查**，而 M6 合流**注定**要改 `crates/server/**` 与 `crates/storage/**`
+   ——这两处在 no-root 轮的允许集里是「越界」。所以 F12 改成**按轮次选允许集**：no-root 轮口径原样保留
+   （`NR_FIX_BASE=7ca587a` 可复跑），M6 轮用 `m6_in_scope()` + 新的 5 条负例自检与 2 条正例自检。
+   这是沿用 `FIX-14`/`FIX-15` 的先例（spec 阶段改 harness + 负例不放松 + 追加约束记录），**需 Leader 追认**。
+
+**同批修的另一个假证据风险**：`qa/harness/env.sh`（以及 `no-root-checks.sh`、`nr-verify*.sh`）把仓库根**硬编码**成
+`.../gh-line` —— 在 `merge-m6` 里跑会静默地测**旧树**。已改成按脚本位置自解析（`${REPO:-$HERE/../..}`），
+断言集合一行未动（约束 `MRG6-16`）。
+
+**判据入口（一条命令）**
+
+```sh
+cd /public/tianyuyang/code/ClusterScope-review/merge-m6
+node .gauntlet/gauntlet.mjs gate --profile specifier     # 本轮阶段闸门
+sh qa/harness/merge-m6-checks.sh --static                # 合流前：10 PASS / 1 FAIL（唯一 FAIL 是等合流来修的 M6-08）
+sh qa/harness/merge-m6-checks.sh                         # 合流后：要求 0 FAIL
+sh qa/harness/no-root-fixes-checks.sh --no-slow           # 12/12（全量版：M6_FULL_NOROOT=1 或去掉 --no-slow）
+```
+
+**当前状态**：`gate --profile specifier` = **PASS**（`spec: 5 feature(s), 29 scenario(s)`）。
+`ACCEPTANCE` 在写完这 23 个测试前必然不完整（`missing=23`），这是预期，不是坏了。
+
+## 第 6 阶段（本轮）：三线合流 M6 的报告与证据包（2026-10-08）
+
+> 分支 `gauntlet/merge-m6` @ **`9817ae9`**，基线 `master` @ **`8601ac9`**；**未 push、未开 PR**。
+> 报告阶段只写 `report/**` 与本节：**没碰**产品代码 / 测试 / `features/` / `deploy/` / `proto/` / `README.md`，
+> 也没改 `.gauntlet/`、`gauntlet.config.json`、`qa/constraints.json` 的既有条目与任何既有 verdict。
+
+**本阶段现场复跑（2026-10-08 02:47–02:56 CST，`9817ae9` 上）**
+
+| 判据 | 命令 | 结果 |
+|---|---|---|
+| 阶段闸门 | `node .gauntlet/gauntlet.mjs gate --profile coder` | **PASS**（spec 29 场景 / 98 tests / 0 failed / acceptance 29/29） |
+| 本轮判据程序 | `sh qa/harness/merge-m6-checks.sh` | **PASS=15 FAIL=0**（rc=0） |
+| 可回放演示 | `node .gauntlet/gauntlet.mjs demo demo/{13,14,15,16}-m6-*.json` | **4/4 exit 0** → `gauntlet-out/evidence/demos/*.html` |
+
+**没跑的（如实列出）**：`gate --profile full`（quality 三闸门在 master 上就是 ❌，本轮 M7 明确不还债 → full 必然 FAIL 且原因与合流无关；
+按任务书口径跑 coder 档 + 判据程序，quality/coverage 的实测值沿用 round 3 记录）、`mutation`（上一轮跑到 `[22/736]` 被人工停止，原样留证）、
+`no-root-fixes-checks.sh` 全量（**共享机器**：全量 F5 会覆盖常驻 agent PID 266643 的 unit，本机口径恒为 `--no-slow`）、Archify 架构图（远端无外网）。
+
+**交付物**
+
+| 文件 | 内容 |
+|---|---|
+| `report/m6-merge.html` | **证据包（单文件、离线可看）**：① 结论 → ② 8 项修复（前/后 + 证据指针 + 最小复现）→ ③ 3 个 B 代码 bug → ④ 三轮 QA（含 round 1 的安全回归与「声称已修、实际只改注释」）→ ⑤ 闸门面板（跑了什么/没跑什么，❌ 原样）→ ⑥ 开口项 F-02/F-03/F-07/F-12/F-27/F-29 → ⑦ 5 分钟审阅路线 → ⑧ 可复现性与共享机器安全前提 |
+| `report/m6-merge-comment.md` | PR 正文（目标分支 `master`）：合并后 `master` 即为三线合流终态 |
+
+**给下一轮（M7 质量还债）的接口**：`node .gauntlet/gauntlet.mjs next --profile quality`（当前 **CONTINUE，117 项 / 距离 592.706**；
+master 基线 97 项 / 409.505）。TOP 三处：`crates/tui/src/ui.rs:599 node_panel`（CRAP 552）、`crates/server/src/main.rs:544 run_background_tasks`（380）、
+`crates/tui/src/ui.rs:1024 draw_process`（342）。覆盖率 31.2%（阈值 0.9）、complexity 34 项（maxCC 23）、CRAP 56 项（maxCRAP 552）。

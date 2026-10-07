@@ -89,6 +89,33 @@ pub struct ServerConfig {
     /// Shared secret agents must present on every gRPC call.
     /// Empty = gRPC accepts any caller (insecure; trusted network only).
     pub agent_token: String,
+    /// Trust `X-Forwarded-For` when resolving the client address used by the
+    /// login/refresh rate limiter. Only enable this when the server is
+    /// reachable *exclusively* through a proxy that overwrites the header:
+    /// otherwise a client can spoof the header and bypass the per-IP budget.
+    pub trust_proxy_headers: bool,
+}
+
+impl ServerConfig {
+    /// Pre-start sanity check for values that cannot be defaulted: enabling
+    /// TLS requires both the certificate and its private key.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.tls_enabled {
+            if self.tls_cert_path.is_none() {
+                return Err(
+                    "tls_enabled requires tls_cert_path (missing tls_cert_path / tls_key_path)"
+                        .to_string(),
+                );
+            }
+            if self.tls_key_path.is_none() {
+                return Err(
+                    "tls_enabled requires tls_key_path (missing tls_cert_path / tls_key_path)"
+                        .to_string(),
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Default for ServerConfig {
@@ -120,6 +147,7 @@ impl Default for ServerConfig {
             default_admin_password: "admin".to_string(),
             auth_required: true,
             agent_token: String::new(),
+            trust_proxy_headers: false,
         }
     }
 }

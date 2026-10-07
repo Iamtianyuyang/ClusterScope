@@ -1,0 +1,44 @@
+
+===== A 资产的生产调用点（product code = 去掉 tests/、去掉文件自身） =====
+--- MetricsAggregation（common::metrics）引用点 ---
+crates/common/tests/integration_test.rs:15:use common::metrics::MetricsAggregation;
+crates/common/tests/integration_test.rs:159:    let agg = MetricsAggregation::new("gpu_util".to_string(), &values, 0, 1000);
+crates/common/tests/metrics_acceptance.rs:2://! `MetricsAggregation`); the scenario names are the test function names
+crates/common/tests/metrics_acceptance.rs:5:use common::metrics::MetricsAggregation;
+crates/common/tests/metrics_acceptance.rs:10:    let agg = MetricsAggregation::new("m6-gpu_util".to_string(), &values, 1_000, 2_000);
+crates/common/tests/metrics_acceptance.rs:28:    let agg = MetricsAggregation::new("m6-empty".to_string(), &[], 1_000, 2_000);
+crates/common/src/metrics.rs:118:pub struct MetricsAggregation {
+crates/common/src/metrics.rs:129:impl MetricsAggregation {
+crates/common/src/metrics.rs:178:        let agg = MetricsAggregation::new("gpu_utilization".to_string(), &values, 0, 1000);
+crates/common/src/metrics.rs:188:        let agg = MetricsAggregation::new("test".to_string(), &[], 0, 1000);
+--- node_metrics_to_proto / storage::conversions 引用点 ---
+crates/storage/tests/conversions_acceptance.rs:2://! `node_metrics_to_proto`); the scenario names are the test function names
+crates/storage/tests/conversions_acceptance.rs:7:use storage::conversions::node_metrics_to_proto;
+crates/storage/tests/conversions_acceptance.rs:49:    let report: NodeMetricsReport = node_metrics_to_proto(&row);
+crates/storage/tests/conversions_acceptance.rs:72:    let report: NodeMetricsReport = node_metrics_to_proto(&row);
+crates/storage/src/conversions.rs:5:pub fn node_metrics_to_proto(m: &NodeMetricsRow) -> NodeMetricsReport {
+--- agent 自己的 MetricsCollector（同名文件，勿混淆）---
+crates/agent/src/main.rs:96:    let collector = metrics::MetricsCollector::new();
+crates/agent/src/metrics.rs:29:pub struct MetricsCollector {
+crates/agent/src/metrics.rs:46:impl MetricsCollector {
+crates/agent/src/metrics.rs:508:impl MetricsCollector {
+crates/agent/src/metrics.rs:693:        let mut collector = MetricsCollector::new();
+
+===== MRG6-07 的字面路径核对（约束文本写的是 tests/integration_test.rs） =====
+**不存在**: tests/integration_test.rs
+存在: crates/common/tests/integration_test.rs
+crates/common/src/lib.rs 的模块声明: 1:pub mod alert; 2:pub mod auth; 3:pub mod config; 4:pub mod error; 5:pub mod job; 6:pub mod metrics; 7:pub mod node_registry; 
+crates/storage/src/lib.rs 的 conversions 声明: 9:pub mod conversions; 
+git log 里这三样资产的提交: 4eee91e [merge] step3: bring back A unique assets (common::metrics, storage::conversions, ported integration test)
+
+===== H3 终端任务再取消 = 409（文档契约）；未知名 = 404 =====
+H3  status=succeeded  job=f10c0fdb-b99a-4d75-997f-a668d9578da6 -> DELETE 409   [期望 409]
+H3  status=cancelled  job=26e377a2-4b98-4202-b891-44b77eae0cd8 -> DELETE 409   [期望 409]
+H3  status=failed  库里没有这种状态的任务
+H3  不存在的 job -> 404   [期望 404]
+
+===== H4 任务状态机：queued 任务取消（不需要 agent） =====
+H4  提交 queued 任务 adec0cb5-0366-47db-bff7-a90e86d83d65 -> 状态 queued
+H4  DELETE -> 200   取消后状态 cancelled
+
+qa5-assets-and-409: 完成（/public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence/phase5/qa5-assets-and-409.txt）

@@ -1,0 +1,81 @@
+CHECK DOC-LICENSE-FILE: FAIL expected=0 actual=1
+CHECK DOC-LICENSE-DECLARED: PASS expected=1 actual=1
+CHECK DOC-LICENSE-LINK: PASS expected=1 actual=1
+CHECK DOC-CODE-RAW-RETENTION-24H: PASS expected=1 actual=1
+CHECK DOC-CODE-HOURLY-RETENTION-7D: PASS expected=1 actual=1
+CHECK DOC-CODE-DAILY-CLEANUP-90: PASS expected=1 actual=1
+CHECK DOC-CODE-JOBLOG-RETENTION-30D: PASS expected=1 actual=1
+CHECK DOC-README-RETENTION-TABLE: PASS expected=1 actual=1
+CHECK DOC-ARCH-RETENTION-MATCHES-CODE: FAIL expected=0 actual=1
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_login_: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_refresh_token_: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_nodes_: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_nodes__node_id__: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_nodes__node_id__metrics_: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_metrics_history_: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_jobs_: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_jobs__job_id__: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_jobs__job_id__logs_: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_alerts_rules_: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_alerts_rules__rule_id__: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_alerts_events_: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_cluster_info_: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_users_: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _api_audit_logs_: PASS expected=11 actual=11
+CHECK DOC-API-EP-DOCUMENTED-AND-ROUTED _ws_: PASS expected=11 actual=11
+CHECK DOC-API-EP-IN-DOC _api_health_: PASS expected=1 actual=1
+CHECK DOC-API-EP-IN-DOC _api_users__id__: FAIL expected=1 actual=0
+CHECK DOC-API-EP-IN-DOC _api_alerts_rules__rule_id__state_: FAIL expected=1 actual=0
+CHECK DOC-API-EP-IN-DOC _api_prometheus_metrics_: FAIL expected=1 actual=0
+CHECK DOC-TUI-KEY 'j': PASS expected=0 actual=0
+CHECK DOC-TUI-KEY 'k': PASS expected=0 actual=0
+CHECK DOC-TUI-KEY 'p': PASS expected=0 actual=0
+CHECK DOC-TUI-KEY 'h': PASS expected=0 actual=0
+CHECK DOC-TUI-KEY 'l': PASS expected=0 actual=0
+CHECK DOC-TUI-KEY KeyCode::Tab: PASS expected=0 actual=0
+CHECK DOC-TUI-KEY '1': PASS expected=0 actual=0
+CHECK DOC-TUI-KEY '2': PASS expected=0 actual=0
+CHECK DOC-TUI-KEY '3': PASS expected=0 actual=0
+CHECK DOC-TUI-KEY '4': PASS expected=0 actual=0
+CHECK DOC-TUI-KEY 'r': PASS expected=0 actual=0
+CHECK DOC-TUI-KEY '?': PASS expected=0 actual=0
+CHECK DOC-TUI-KEY 'q': PASS expected=0 actual=0
+CHECK DOC-TUI-FLAG-DEFAULT-SERVER: PASS expected=1 actual=1
+CHECK DOC-TUI-FLAG-DEFAULT-INTERVAL: PASS expected=1 actual=1
+CHECK DOC-TUI-FLAGS-U-P: PASS expected=1 actual=1
+CHECK DOC-README-SIGKILL-CLAIM: PASS expected=1 actual=1
+CHECK DOC-CODE-SIGKILL-EXISTS: PASS expected=1 actual=1
+CHECK DOC-CODE-FORCE-OPTION: PASS expected=1 actual=1
+CHECK DOC-ENV-READ POSTGRES_URL: PASS expected=0 actual=0
+CHECK DOC-ENV-READ JWT_SECRET: PASS expected=0 actual=0
+CHECK DOC-ENV-READ AUTH_REQUIRED: PASS expected=0 actual=0
+CHECK DOC-ENV-READ AGENT_TOKEN: PASS expected=0 actual=0
+CHECK DOC-ENV-READ HTTP_ADDR: PASS expected=0 actual=0
+CHECK DOC-ENV-READ GRPC_ADDR: PASS expected=0 actual=0
+CHECK DOC-AGENT-YAML-KEY server_addr: PASS expected=0 actual=0
+CHECK DOC-AGENT-YAML-KEY node_id: PASS expected=0 actual=0
+CHECK DOC-AGENT-YAML-KEY node_id_file: PASS expected=0 actual=0
+CHECK DOC-AGENT-YAML-KEY report_interval_secs: PASS expected=0 actual=0
+CHECK DOC-AGENT-YAML-KEY log_dir: PASS expected=0 actual=0
+CHECK DOC-AGENT-YAML-KEY log_level: PASS expected=0 actual=0
+CHECK DOC-AGENT-YAML-KEY disk_mounts: PASS expected=0 actual=0
+CHECK DOC-AGENT-YAML-KEY collect_process_details: PASS expected=0 actual=0
+CHECK DOC-AGENT-YAML-KEY agent_token: PASS expected=0 actual=0
+CHECK DOC-SERVER-YAML-KEY grpc_addr: PASS expected=0 actual=0
+CHECK DOC-SERVER-YAML-KEY http_addr: PASS expected=0 actual=0
+CHECK DOC-SERVER-YAML-KEY postgres_url: PASS expected=0 actual=0
+CHECK DOC-SERVER-YAML-KEY jwt_secret: PASS expected=0 actual=0
+CHECK DOC-SERVER-YAML-KEY default_admin_username: PASS expected=0 actual=0
+CHECK DOC-SERVER-YAML-KEY default_admin_password: PASS expected=0 actual=0
+CHECK DOC-SERVER-YAML-KEY auth_required: PASS expected=0 actual=0
+CHECK DOC-SERVER-YAML-KEY agent_token: PASS expected=0 actual=0
+CHECK DOC-ADMIN-PASSWORD-DEFAULT: PASS expected=1 actual=1
+CHECK DOC-ADMIN-PASSWORD-CODE-DEFAULT: PASS expected=1 actual=1
+CHECK DOC-COMPOSE-PG16: PASS expected=1 actual=1
+CHECK DOC-DOCKERFILE-EXPOSE-DEAD-PORTS: PASS expected=1 actual=1
+CHECK DOC-INSTALL-AGENT-USES-C: FAIL expected=1 actual=0
+CHECK DOC-AGENT-UNIT-USES-CONFIG-FLAG: PASS expected=1 actual=1
+CHECK DOC-SERVER-UNIT-PASSES-CONFIG: PASS expected=1 actual=1
+CHECK DOC-INSTALL-AGENT-REPORT-INTERVAL: PASS expected=1 actual=1
+----
+DOC-CHECKS: FAILURES PRESENT

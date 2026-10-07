@@ -1,0 +1,121 @@
+== 环境 ==
+repo=/public/tianyuyang/code/ClusterScope-review/merge-m6  branch=gauntlet/merge-m6  head=e8fd233  m6base=8601ac9  uid=3000
+M6-01 PASS - cargo build --workspace --all-targets --offline 退出码 0（离线，不得引入新依赖）
+rc=0 passed=98 failed=0
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.56s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.01s
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.53s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+== 相对 8601ac9 被删掉的 #[test] 行 ==
+<none>
+M6-02 PASS - cargo test：rc=0、failed=0、passed=98（要求 0 失败）
+M6-03 PASS - 通过数 98 ≥ 基线 59，且没有删除既有 #[test] 行
+== 改动/新增的文件（相对 8601ac9）==
+Cargo.lock
+Cargo.toml
+crates/agent/src/grpc_client.rs
+crates/agent/src/job_executor.rs
+crates/agent/src/main.rs
+crates/agent/src/metrics.rs
+crates/common/Cargo.toml
+crates/common/src/alert.rs
+crates/common/src/auth.rs
+crates/common/src/config.rs
+crates/common/src/job.rs
+crates/common/src/lib.rs
+crates/common/src/metrics.rs
+crates/common/tests/config_keys_acceptance.rs
+crates/common/tests/integration_test.rs
+crates/common/tests/metrics_acceptance.rs
+crates/scheduler/src/lib.rs
+crates/server/Cargo.toml
+crates/server/src/auth_middleware.rs
+crates/server/src/grpc.rs
+crates/server/src/handlers.rs
+crates/server/src/main.rs
+crates/server/src/ws_handler.rs
+crates/storage/Cargo.toml
+crates/storage/src/alert_queries.rs
+crates/storage/src/audit_queries.rs
+crates/storage/src/conversions.rs
+crates/storage/src/job_queries.rs
+crates/storage/src/lib.rs
+crates/storage/src/models.rs
+crates/storage/src/queries.rs
+crates/storage/src/user_queries.rs
+crates/storage/tests/audit_queries_acceptance.rs
+crates/storage/tests/conversions_acceptance.rs
+crates/storage/tests/user_queries_acceptance.rs
+features/merge_m6_audit_queries.feature
+features/merge_m6_auth_hardening.feature
+features/merge_m6_job_safety.feature
+features/merge_m6_legacy_assets.feature
+GAUNTLET.md
+qa/constraints.json
+qa/harness/apply-mrg6-entries.py
+qa/harness/env.sh
+qa/harness/merge-m6-checks.sh
+qa/harness/no-root-checks.sh
+qa/harness/no-root-fixes-checks.sh
+qa/harness/nr-verify2.sh
+qa/harness/nr-verify3.sh
+qa/harness/nr-verify.sh
+qa/merge-m6.qa.md
+qa/mrg6-errata2.json
+qa/mrg6-errata.json
+qa/README.md
+== 允许集之外的 ==
+<none>
+== 冻结面（web/、deploy/nginx.conf、.gauntlet/、gauntlet.config.json、gauntlet-baseline.json）==
+<none>
+M6-04 PASS - 改动全部落在 M6 允许集内、冻结面零改动（越界：无；冻结面：无）
+M6-05 PASS - NRM3：系统路径默认值 3 处 ≤ 基线 3（全部命中 7 ≤ 7）
+M6-06 PASS - NRM5：提权原语 0 处（必须 0）；特权/进程组族命中 2 ≤ 基线 2（其中 pre_exec 旁有 setsid 1 处）
+NOTE M6-07 用 no-root-fixes-checks.sh --no-slow（F1 动态探针与 F5 真装真启默认跳过，理由见脚本注释/qa/merge-m6.qa.md）
+M6-07 PASS - no-root-fixes-checks.sh（--no-slow）：PASS=12 FAIL=0（要求 12/0）
+M6-08 PASS - doc-claims：FAIL=7 ≤ 基线 9；SIGKILL 断言 PASS=1、force 断言 PASS=1（合流后必须由 FAIL 转 PASS）
+M6-09 PASS - TUI 快捷键 13/13 PASS（实际 13）
+M6-10 PASS - 配置键 17/17 PASS（实际 17）
+M6-11 PASS - api-checks：PASS=18（要求 ≥ 基线 18）；DOC-GET-AUDIT-LOGS 已 PASS=1（要求 1 = F-01 修好了）
+audit rows since 2026-10-07 23:02:08.254214+08: 4, distinct actions: 4, GET /api/audit-logs total: 199
+action histogram:
+create_job|1
+create_user|1
+login|1
+stop_job|1
+M6-12 PASS - 审计覆盖：新动作种类 4（要求 ≥3，合流前是 2）；GET /api/audit-logs 的 total=199（要求非空 = 端点可用）
+12 次同源登录尝试的状态码：
+401
+401
+401
+401
+401
+401
+401
+401
+401
+401
+429
+429
+429 出现次数：2
+（对照：extra-checks.sh 的 SEC-13 是**合流前**的 finding 判据——它要求 429 出现次数为 0；
+  合流后它必然翻转为 FAIL，这正是 F-08 修好的证据，不是回归。）
+M6-13 PASS - 登录限速：12 次同源失败登录里出现 2 次 429（F-08 的正判据）
+M6-14 PASS - job-e2e（任务生命周期 + 告警 + WebSocket 广播）：PASS=15 FAIL=0
+M6-15 PASS - 重启后 /api/health=200、public 表 11 张（基线 11）、admin 行 1（要求 1）
+----
+M6-CHECKS: PASS=15 FAIL=0   证据目录: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence

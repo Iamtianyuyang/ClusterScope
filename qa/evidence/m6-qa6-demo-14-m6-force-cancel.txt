@@ -1,0 +1,6 @@
+$ sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01  -> exit 0
+$ sh qa/harness/m6-demo-cancel.sh  -> exit 0
+$ grep -E 'SIGTERM ignored|Forced cancellation' gauntlet-out/qa/agent.log | tail -2  -> exit 0
+$ sh qa/harness/m6-demo-terminal-409.sh  -> exit 0
+$ sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/evidence/demos/14-m6-force-cancel.html

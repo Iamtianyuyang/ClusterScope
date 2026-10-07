@@ -1,0 +1,13 @@
+探针任务（日志最多）= f10c0fdb-b99a-4d75-997f-a668d9578da6，job_logs 行数 = 2
+limit=0 -> 1 行
+limit=1 -> 1 行
+limit=5 -> 2 行
+limit=1000 -> 2 行
+limit=1001 -> 2 行
+limit=99999 -> 2 行
+对照 extra-checks.sh 的探针（GET /api/jobs 第一条）：
+  .jobs[0] = 8152f589-19f1-4ba7-8ef6-df96511ccce4  它自己的日志行数 = 1
+  → extra-checks 的 SEC-17-LOGS-LIMIT-CLAMPED 要求 limit=0 仍返回 >=1 行，前提是这条探针任务**有日志**；
+    探针任务没有日志时它必然 FAIL —— 因此本阶段的结论是「夹具依赖」，不是钳位回归。
+
+qa5-sec17-logs: 完成（/public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence/phase5/qa5-sec17-logs.txt）

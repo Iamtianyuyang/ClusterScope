@@ -1,0 +1,138 @@
+M6 rework round (第 2 阶段返工) — 判据实跑记录
+================================================================
+工作树 : /public/tianyuyang/code/ClusterScope-review/merge-m6
+分支   : gauntlet/merge-m6
+起点   : 25f475a（第 5 阶段 QA 的 FAIL 结论）
+结果   : d26ada0
+日期   : 2026-10-08
+执行者 : Gauntlet 第 2 阶段（Coder）返工；全部命令在本工作树内、离线执行
+
+本文件只记录**实测数字**；每条判据的原始输出留在 gauntlet-out/qa/evidence/ 与
+/tmp/api-r2.txt 之类的临时文件里（gauntlet-out/ 不入库，故关键结论抄录于此）。
+
+------------------------------------------------------------------
+1) 静态闸门
+------------------------------------------------------------------
+cargo fmt --all --check
+  → 干净（无 diff 输出）
+
+cargo clippy --workspace --all-targets --offline --message-format=short
+  → 产品代码 0 条告警（合流后新增的两条已修：auth.rs 的
+    items-after-test-module、job_executor.rs 的 field-reassign-with-default）
+  → 仅剩 9 条**既有** `MutexGuard is held across an await point`，
+    全部位于 crates/storage/tests/{audit,user}_queries_acceptance.rs，
+    该路径在 gauntlet.config.json 的 exclude 里（`**/tests/**`），
+    因此不进入 quality 闸门的 warnings 计数（实测 warnings=0）。
+
+cargo clippy --workspace --all-targets --offline -- -D warnings
+  → **仍会失败**（9 条既有告警来自 crates/storage/tests/**）。本轮任务书要求
+    「clippy 干净」与「不得改测试」在此处冲突，按「不得改测试」优先：测试文件
+    一行未动，产品代码侧 0 告警。这是既有欠账，不是本轮引入。
+
+------------------------------------------------------------------
+2) node .gauntlet/gauntlet.mjs gate --profile coder   → PASS
+------------------------------------------------------------------
+  spec       ✅ {"scenarios":29,"undefinedSteps":0,"ambiguous":0}
+  build      ✅
+  tests      ✅ {"total":98,"failed":0}
+  acceptance ✅ {"scenarios":29,"passed":29,"failed":0,"missing":0}
+
+------------------------------------------------------------------
+3) sh qa/harness/merge-m6-checks.sh   → 15/15 PASS（要求 15/15）
+------------------------------------------------------------------
+  M6-01 PASS  构建（离线）退出码 0
+  M6-02 PASS  cargo test：rc=0、failed=0、passed=98
+  M6-03 PASS  98 ≥ 基线 59，且没有删除既有 #[test] 行
+  M6-04 PASS  改动全部落在 M6 允许集内、冻结面零改动
+  M6-05 PASS  NRM3：系统路径默认值 3 处 ≤ 3（全部命中 7 ≤ 7）
+  M6-06 PASS  NRM5：提权原语 0 处；特权/进程组族 2 ≤ 2
+  M6-07 PASS  no-root-fixes-checks.sh --no-slow：PASS=12 FAIL=0
+  M6-08 PASS  doc-claims：FAIL=6 ≤ 基线 9；SIGKILL / force 断言 PASS=1
+  M6-09 PASS  TUI 快捷键 13/13
+  M6-10 PASS  配置键 17/17
+  M6-11 PASS  api-checks：PASS=19 ≥ 基线 18；DOC-GET-AUDIT-LOGS PASS
+  M6-12 PASS  审计覆盖：新动作 4 种（≥3）
+  M6-13 PASS  登录限速：12 次同源失败登录出现 2 次 429
+  M6-14 PASS  job-e2e：PASS=15 FAIL=0
+  M6-15 PASS  重启后 health=200、表 11 张、admin 行 1
+
+  （前提：target/release/ 的二进制必须先 `cargo build --release --workspace
+   --offline` 重建 —— harness 用的是 release 二进制，本轮的 server 修复若不重建
+   会读到旧行为，第一次跑 M6-11 时就是这样得到 18 PASS 的。重建后复跑为 19。）
+
+------------------------------------------------------------------
+4) sh qa/harness/no-root-fixes-checks.sh --no-slow
+------------------------------------------------------------------
+  M6 轮口径（默认，BASE=8601ac9）：PASS=12 FAIL=0        ✅ 要求 12/12
+  旧口径（NR_FIX_BASE=7ca587a）：PASS=11 FAIL=1
+     F12 的失败项**恰好两条**（这是 F-26 的实测结论，已落账 MRG6-23）：
+       FAIL 改动文件全部落在 nr-fixes 轮允许集内
+       FAIL crates/storage 与 crates/server 零改动
+     其余：负例自检 5/5 判越界、正例 demo/* 判允许 —— 断言集合一字未动。
+
+------------------------------------------------------------------
+5) 运行时段判据（server 由 qa/harness/server-up.sh false 起）
+------------------------------------------------------------------
+sh qa/harness/api-checks.sh
+  → PASS=19 / FAIL=1（基线 18 / 2）
+  → SEC-LOGIN-LOCKOUT: PASS expected=429 actual=429   ← F-23 修复
+  → 剩余唯一 FAIL：DOC-GET-USERS-READONLY expected=200 actual=401
+    （F-07 已记录的取舍，本轮任务书明确不修）
+
+sh qa/harness/doc-claims-checks.sh
+  → FAIL=6（基线 9；M6-08 的上限 9、任务书上限 7）—— 未新增任何 FAIL
+  → 仍为：DOC-LICENSE-FILE、DOC-ARCH-RETENTION-MATCHES-CODE、
+    DOC-API-EP-IN-DOC ×3、DOC-INSTALL-AGENT-USES-C（全部为合流前既有）
+
+sh qa/harness/ops-checks.sh
+  → CLUSTER-INFO-NULL-IDLE-AND-AVG: PASS expected=1 actual=1   ← F-24 修复
+  → CLUSTER-INFO-NULL-ACTIVE-ALERTS: FAIL expected=1 actual=0
+    （既有的 F-12 记录：active_alerts 恒为 0，不在本轮清单内）
+
+F-24 的直接证据（手跑，同一 server）：
+  有指标数据时  curl /api/cluster/info → {"idle_gpus":6,"avg_gpu_utilization":0.0,"total_gpus":6}
+  删空 node_metrics 后              → {"idle_gpus":null,"avg_gpu_utilization":null,"total_gpus":6}
+  （total_gpus 取节点注册表求和，与 master 8601ac9 的语义一致；README:442 只承诺
+   idle_gpus / avg_gpu_utilization / active_alerts 三项，total_gpus 不在承诺内。）
+
+------------------------------------------------------------------
+6) node .gauntlet/gauntlet.mjs gate --profile quality
+------------------------------------------------------------------
+  ✅ build        {}                            （98 tests / 0 failed）
+  ✅ scope        35 files, failedUnits=0
+  ❌ complexity   offenders=34（合流后 36 → 34；既有欠账）
+  ✅ warnings     {"warnings":0}                 ← 本轮要求：回到 0
+  ✅ tidy         findings=0
+  ✅ duplication  {"ratio":0,"clones":0}         ← 本轮要求：回到 0%
+  ❌ crap         maxCrap=552, offenders=56（既有欠账）
+  ❌ coverage     31.2%（既有欠账）
+  GATE quality: FAIL —— 与上一轮同样的三个既有 ❌，但 warnings/duplication
+  已从「变差」回到基线水平；M7 的欠账本轮按任务书不还、不重算成 PASS。
+
+------------------------------------------------------------------
+7) 本轮改了哪些文件（相对 25f475a）
+------------------------------------------------------------------
+  README.md                             MRG6-17 默认管理员口令提示（纯插入）
+  crates/agent/src/job_executor.rs      F-25（Default::default() + 赋值合并）
+  crates/common/src/auth.rs             F-25（新增项移到 #[cfg(test)] 之前）
+  crates/common/src/metrics.rs          F-27（模块头写明「资产已就位、暂无消费者」）
+  crates/server/src/handlers.rs         F-23（锁定分支 429）+ F-24（null 语义）
+  crates/storage/src/conversions.rs     F-27（同上）
+  crates/storage/src/user_queries.rs    F-25（孪生守卫块提取为一个函数）
+  qa/constraints.json                   追加 MRG6-23 / MRG6-24（纯插入：+21/-0）
+  qa/mrg6-errata3.json                  新增，落账 MRG6-23 / MRG6-24
+
+  冻结面（web/、deploy/nginx.conf、.gauntlet/、gauntlet.config.json、
+  gauntlet-baseline.json）：零改动。
+  qa/constraints.json 相对 7ca587a 是 +384/-0（只追加，既有条目一字未动）。
+
+------------------------------------------------------------------
+8) 未闭合 / 需人知情的项
+------------------------------------------------------------------
+  * `cargo clippy ... -- -D warnings` 仍因 9 条**既有**测试告警失败（见 §1）。
+  * GATE quality 仍 FAIL（complexity / crap / coverage 三项既有欠账，任务书
+    明确本轮不还）。
+  * api-checks 仍 1 FAIL（DOC-GET-USERS-READONLY，F-07 的取舍）。
+  * doc-claims 仍 6 FAIL（全部为合流前既有，未新增）。
+  * ops-checks 的 CLUSTER-INFO-NULL-ACTIVE-ALERTS 仍 FAIL（F-12 既有）。
+  * 第 5 阶段 QA 需要对以上每一条重新独立复核（本轮只改清单内的六项）。

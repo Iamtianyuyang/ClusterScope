@@ -1,0 +1,21 @@
+NOTE job1=920ab7db-e7e0-4e2e-9f25-5bf92f503c9e
+CHECK JOB-SUCCEEDED: PASS expected=succeeded actual=succeeded
+CHECK JOB-LOGS-CAPTURED: PASS expected=2 actual=2
+NOTE job2=a61c9692-5e36-493b-aa56-97526fc00156
+CHECK JOB-RUNNING: PASS expected=running actual=running
+CHECK JOB-CANCELLED: PASS expected=cancelled actual=cancelled
+CHECK JOB-PROC-GONE: PASS expected=0 actual=0
+CHECK JOB-STOP-TERMINAL-409: PASS expected=409 actual=409
+CHECK JOB-STOP-UNKNOWN-404: PASS expected=404 actual=404
+NOTE rule=724a2068-05ce-468c-8232-ec00dd23dfdd
+CHECK ALERT-EVENT-FIRED: PASS expected=1 actual=1
+CHECK ALERT-CLUSTER-COUNT: PASS expected=1 actual=1
+CHECK ALERT-RULE-DELETE-CASCADE: PASS expected=200 actual=200
+CHECK ALERT-RULE-DELETED: PASS expected=0 actual=0
+NOTE RESULT connected=1 subscribed=1 metrics=12 alerts=2 jobs=4
+CHECK WS-CONNECTED: PASS expected=1 actual=1
+CHECK WS-SUBSCRIBED: PASS expected=1 actual=1
+CHECK WS-METRICS-PUSH: PASS expected=1 actual=1
+CHECK WS-JOB-UPDATE-PUSH: PASS expected=1 actual=1
+----
+JOB-E2E: ALL PASS

@@ -268,6 +268,10 @@ default_admin_password: "admin123"
 auth_required: false           # false = 只读 API 免密码(GET 开放,写操作仍需 JWT)
 ```
 
+> **默认管理员口令**:代码默认 `default_admin_password` 是 **`admin`**(上表示例值 `admin123` 只是模板,
+> 改成它才会生效)。**首次启动后必须立刻修改**:用 `admin` + 该默认口令登录,再调
+> `POST /api/users/{id}/password` 换成强口令;对外暴露的实例还要同时设 `auth_required: true`。
+
 ### agent.yaml(可多机共享)
 
 ```yaml

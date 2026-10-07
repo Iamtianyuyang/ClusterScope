@@ -1,0 +1,50 @@
+server already running (pid 3843298)
+agent already running (pid 3843449)
+== independent lockout probe: user=m6qa6-lock-1791392592 (created via REST) ==
+create user http_code=200
+bad login #1 -> 401
+bad login #2 -> 401
+bad login #3 -> 401
+bad login #4 -> 401
+bad login #5 -> 401
+correct password while locked -> 429   (expect 429)
+-- db row --
+m6qa6-lock-1791392592|5|2026-10-08 01:08:12.488313+08
+-- source branch (handlers.rs login) --
+248-    // attempt, success or failure.
+249-    if !global_login_allowed(&state) {
+250:        return Err(StatusCode::TOO_MANY_REQUESTS);
+251-    }
+252-    record_global_login_attempt(&state);
+--
+266-    let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
+267-    if !login_allowed(&state, &client_ip, &req.username) {
+268:        return Err(StatusCode::TOO_MANY_REQUESTS);
+269-    }
+270-    // The username column is VARCHAR(100) (characters); reject oversized
+--
+344-        .ok();
+345-        login_failed(&state, &client_ip, &req.username);
+346:        return Err(StatusCode::TOO_MANY_REQUESTS);
+347-    }
+348-
+--
+439-    const REFRESH_BUCKET: &str = "<refresh-token>";
+440-    if !login_allowed(&state, &client_ip, REFRESH_BUCKET) {
+441:        return Err(StatusCode::TOO_MANY_REQUESTS);
+442-    }
+443-
+-- response body of the locked login --
+
+== node_metrics rows: 122 ==
+-- GET /api/cluster/info (with metrics) raw body --
+
+no agent.pid — nothing to stop
+DELETE 122
+-- node_metrics rows now: 0 ==
+-- GET /api/cluster/info (no data) raw body --
+
+-- jq view --
+agent started (pid 3852630), config /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/agent.yaml, log /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/agent.log
+agent stopped (pid 3852630)
+server stopped (pid 3853317)

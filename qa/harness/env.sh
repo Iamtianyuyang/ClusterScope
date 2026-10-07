@@ -1,8 +1,21 @@
 # ClusterScope QA harness — shared environment (POSIX sh, run on node 172.19.133.164).
-# Source it:  . /public/tianyuyang/code/ClusterScope-review/gh-line/qa/harness/env.sh
+# Source it:  . <repo>/qa/harness/env.sh
 # Every path is absolute on purpose: the QA runner must not depend on cwd or PATH.
-
-REPO=/public/tianyuyang/code/ClusterScope-review/gh-line
+#
+# 树定位（2026-10-07 M6 合流轮修正，理由见 qa/merge-m6.qa.md「harness 的树定位」）：
+# REPO 此前**硬编码**成 gh-line 的绝对路径 —— 在任何别的工作树（如 .../merge-m6）里跑，
+# 脚本会静默地测**旧树**（拿旧树的二进制与源码当证据），对合流验证是致命的。
+# 现在按脚本自身位置解析（调用方都已定义 HERE），仍可用环境变量显式覆盖：
+#   REPO=/public/tianyuyang/code/ClusterScope-review/gh-line sh qa/harness/api-checks.sh
+if [ -z "${REPO:-}" ]; then
+  if [ -n "${HERE:-}" ]; then
+    REPO="$(cd "$HERE/../.." && pwd)"
+  else
+    echo "env.sh: 无法确定仓库根：HERE 与 REPO 都未定义（\$0=$0 不在 qa/harness 下）。" >&2
+    echo "        用法：. <repo>/qa/harness/env.sh（由 qa/harness/*.sh 调用），或 REPO=<repo> sh qa/harness/<script>.sh" >&2
+    return 2
+  fi
+fi
 QA_DIR="$REPO/gauntlet-out/qa"          # gitignored scratch space (configs, logs, pids)
 BIN="$REPO/target/release"              # release binaries built by `cargo build --release`
 PG_BIN=/public/tianyuyang/code/ClusterScope-review/pg16/bin

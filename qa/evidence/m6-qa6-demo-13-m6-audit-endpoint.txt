@@ -1,0 +1,6 @@
+$ sh qa/harness/server-up.sh false  -> exit 0
+$ sh qa/harness/api-checks.sh  -> exit 1
+$ sh qa/harness/m6-demo-audit.sh  -> exit 0
+$ curl -s -o /dev/null -w 'start_time_ms=abc -> HTTP %{http_code}\n' 'http://127.0.0.1:8080/api/audit-logs?start_time_ms=abc'  -> exit 0
+$ sh qa/harness/server-down.sh  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/evidence/demos/13-m6-audit-endpoint.html

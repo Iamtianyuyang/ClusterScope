@@ -140,7 +140,8 @@ pub struct UserRow {
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct AuditLogRow {
     pub log_id: String,
-    pub user: String,
+    /// DB column is `username` (the audit trail stores usernames, not ids).
+    pub username: String,
     pub action: String,
     pub target: Option<String>,
     pub target_type: Option<String>,

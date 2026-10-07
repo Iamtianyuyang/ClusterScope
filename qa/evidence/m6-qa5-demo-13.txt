@@ -1,0 +1,56 @@
+# 起一个只读模式（auth_required:false）的 server，连本机 PostgreSQL 16.4
+$ sh qa/harness/server-up.sh false
+server up (pid 3651500), config /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/server.yaml, log /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/server.log
+
+# 20 条 REST 安全矩阵：DOC-GET-AUDIT-LOGS 已从 500 翻成 200；同一矩阵里还能看到新引入的 SEC-LOGIN-LOCKOUT 回归（429 → 401，见 qa/qa-report.json 的 F-23）
+$ sh qa/harness/api-checks.sh
+NOTE login ok (token len 268)
+CHECK SEC-HEALTH-OPEN: PASS expected=200 actual=200
+CHECK SEC-NODES-READONLY-OPEN: PASS expected=200 actual=200
+CHECK SEC-METRICS-READONLY-OPEN: PASS expected=200 actual=200
+CHECK SEC-JOB-POST-NOTOKEN: PASS expected=401 actual=401
+CHECK SEC-USER-POST-NOTOKEN: PASS expected=401 actual=401
+CHECK SEC-RULE-POST-NOTOKEN: PASS expected=401 actual=401
+CHECK DOC-GET-USERS-READONLY: FAIL expected=200 actual=401
+CHECK DOC-GET-AUDIT-LOGS: PASS expected=200 actual=200
+CHECK DOC-GET-PROMETHEUS: PASS expected=200 actual=200
+CHECK SEC-JWT-FORGED: PASS expected=401 actual=401
+CHECK SEC-JWT-EXPIRED: PASS expected=401 actual=401
+CHECK SEC-JWT-VALID: PASS expected=200 actual=200
+CHECK SEC-JWT-VIEWER-CANNOT-POST-JOB: PASS expected=403 actual=403
+CHECK SEC-GARBAGE-TOKEN: PASS expected=401 actual=401
+CHECK SEC-VIEWER-GET-USERS-403: PASS expected=403 actual=403
+CHECK SEC-REFRESH-ROTATION: PASS expected=401 actual=401
+CHECK SEC-REFRESH-NEW-TOKEN-OK: PASS expected=200 actual=200
+CHECK SEC-LOGIN-LOCKOUT: FAIL expected=429 actual=401
+CHECK SEC-CREATE-USER-SHORT-PASSWORD: PASS expected=400 actual=400
+CHECK SEC-CREATE-USER-BAD-ROLE: PASS expected=400 actual=400
+----
+API-CHECKS: FAILURES PRESENT
+[exit 1]
+
+# 核心判据：任何筛选条件都要让 total 等于实回条数（F-16 的 COUNT 语句必须绑上自己的参数），并与 psql 的计数对齐
+$ sh qa/harness/m6-demo-audit.sh
+admin 登录: token len=268
+GET /api/audit-logs?page_size=500
+    -> {"total":354,"rows":354}
+GET /api/audit-logs?page_size=500&user=admin
+    -> {"total":130,"rows":130}
+GET /api/audit-logs?page_size=500&action=login
+    -> {"total":215,"rows":215}
+GET /api/audit-logs?page_size=500&start_time_ms=0
+    -> {"total":354,"rows":354}
+GET /api/audit-logs?page_size=500&user=admin&action=login&start_time_ms=0
+    -> {"total":41,"rows":41}
+psql 对照: select count(*) from audit_logs; -> 354
+坏参数 start_time_ms=abc -> HTTP 400  （400 = 客户端错误，不再是 500）
+不存在的 user -> {"total":0,"rows":0}
+分页 page=1&page_size=5 -> {"total":354,"rows":5}
+
+# 坏参数是 400 而不是 500；空结果是 total=0 的正常形状
+$ curl -s -o /dev/null -w 'start_time_ms=abc -> HTTP %{http_code}\n' 'http://127.0.0.1:8080/api/audit-logs?start_time_ms=abc'
+start_time_ms=abc -> HTTP 400
+
+# 收尾：只按 PID 文件停自己起的 server（这台机器是共享的）
+$ sh qa/harness/server-down.sh
+server stopped (pid 3651500)

@@ -253,6 +253,30 @@ impl AgentService for AgentServiceImpl {
         let job_def = request.into_inner();
         info!(job_id = %job_def.job_id, "Job submitted");
 
+        // Same input caps as the HTTP create_job path: the jobs columns have
+        // no DB-side length limits, and a misbehaving agent must not be able
+        // to insert a gigantic row.
+        if job_def.name.trim().is_empty() || job_def.executable.trim().is_empty() {
+            return Err(Status::invalid_argument("name and executable are required"));
+        }
+        if job_def.name.len() > crate::handlers::MAX_JOB_NAME_LEN
+            || job_def.executable.len() > crate::handlers::MAX_EXECUTABLE_LEN
+            || job_def.working_directory.len() > crate::handlers::MAX_WORKDIR_LEN
+            || job_def.resource_quota.len() > crate::handlers::MAX_QUOTA_LEN
+            // node_id and created_by feed VARCHAR(255) columns; an oversized
+            // value would fail the insert at the DB layer (500) instead of
+            // being rejected up front (invalid_argument).
+            || job_def.node_id.len() > 255
+            || job_def.created_by.len() > 255
+            || job_def.arguments.len() > crate::handlers::MAX_ARGS
+            || job_def.arguments.iter().any(|a| a.len() > crate::handlers::MAX_ARG_LEN)
+            || job_def.environment.len() > crate::handlers::MAX_ENV_ENTRIES
+            || job_def.environment.keys().any(|k| k.len() > crate::handlers::MAX_ENV_KEY_LEN)
+            || job_def.environment.values().any(|v| v.len() > crate::handlers::MAX_ENV_VALUE_LEN)
+        {
+            return Err(Status::invalid_argument("job fields exceed size limits"));
+        }
+
         let job_row = storage::models::JobRow {
             job_id: job_def.job_id.clone(),
             node_id: job_def.node_id.clone(),
@@ -371,6 +395,10 @@ impl AgentService for AgentServiceImpl {
         let (tx, rx) = mpsc::channel(10);
 
         tokio::spawn(async move {
+            // Batch entries and flush on size or stream end: the agent sends
+            // one gRPC call per log line, so inserting row-by-row would mean
+            // one DB round-trip per line under a chatty job.
+            let mut batch: Vec<JobLogEntry> = Vec::with_capacity(LOG_BATCH_SIZE);
             while let Some(entry_result) = stream.next().await {
                 let entry = match entry_result {
                     Ok(e) => e,
@@ -379,15 +407,20 @@ impl AgentService for AgentServiceImpl {
                         break;
                     }
                 };
-                if let Err(e) = save_job_log(&state, &entry).await {
-                    warn!(error = %e, "Failed to save job log");
+                batch.push(entry);
+                if batch.len() >= LOG_BATCH_SIZE {
+                    if let Err(e) = save_job_logs(&state, &batch).await {
+                        warn!(error = %e, "Failed to save job logs");
+                    }
+                    ack_log_batch(&tx, &batch).await;
+                    batch.clear();
                 }
-                let _ = tx
-                    .send(Ok(LogAck {
-                        job_id: entry.job_id.clone(),
-                        acknowledged_offset: entry.log_offset,
-                    }))
-                    .await;
+            }
+            if !batch.is_empty() {
+                if let Err(e) = save_job_logs(&state, &batch).await {
+                    warn!(error = %e, "Failed to save job logs");
+                }
+                ack_log_batch(&tx, &batch).await;
             }
         });
 
@@ -416,21 +449,70 @@ impl AgentService for AgentServiceImpl {
                         break;
                     }
                 };
-                let status_str = status_int_to_str(update.status).unwrap_or("unknown");
+                let Some(to_str) = status_int_to_str(update.status) else {
+                    warn!(job_id = %update.job_id, status = update.status, "Ignoring unknown job status");
+                    continue;
+                };
+                let Some(to) = status_from_str(to_str) else {
+                    continue;
+                };
+
+                // Same transition gate as the unary path: validate against the
+                // persisted state so a misbehaving client cannot rewrite
+                // history (e.g. mark a queued job succeeded).
+                let Some(row) =
+                    storage::job_queries::get_job(state.database.pool(), &update.job_id)
+                        .await
+                        .ok()
+                        .flatten()
+                else {
+                    warn!(job_id = %update.job_id, "Job not found");
+                    continue;
+                };
+                let Some(from) = status_from_str(&row.status) else {
+                    continue;
+                };
+                if let Err(e) = common::job::validate_transition(from, to) {
+                    warn!(
+                        job_id = %update.job_id,
+                        from = %row.status,
+                        to = %to_str,
+                        error = %e,
+                        "Rejected invalid job status transition"
+                    );
+                    continue;
+                }
+
+                let error_message = if update.message.is_empty() {
+                    None
+                } else {
+                    Some(update.message.as_str())
+                };
+                // M6 adaptation: this tree's JobStatusUpdate carries neither
+                // `pid` nor `exit_code` (the proto is outside this round's
+                // change set), so both columns keep their previous value; the
+                // agent records them in its own log instead.
+                let pid: Option<i32> = None;
+                let finished = to.is_terminal();
+                let exit_code: Option<i32> = None;
                 if let Err(e) = storage::job_queries::update_job_status(
                     state.database.pool(),
                     &update.job_id,
-                    status_str,
+                    to_str,
+                    pid,
+                    exit_code,
+                    error_message,
                     None,
-                    None,
-                    Some(&update.message),
-                    None,
-                    None,
+                    finished.then(chrono::Utc::now),
                 )
                 .await
                 {
                     warn!(error = %e, "Failed to update job status");
                 }
+                if to.is_terminal() {
+                    state.scheduler.complete_job(&update.job_id, to).await;
+                }
+                state.ws_manager.push_job_update(&update.job_id).await;
                 let _ = tx
                     .send(Ok(JobStatusUpdate {
                         job_id: update.job_id.clone(),
@@ -494,12 +576,16 @@ impl AgentService for AgentServiceImpl {
         } else {
             Some(update.message.as_str())
         };
+        // M6 adaptation: no `pid` / `exit_code` on this tree's
+        // JobStatusUpdate, so both columns keep their previous value.
+        let pid: Option<i32> = None;
+        let exit_code: Option<i32> = None;
         if let Err(e) = storage::job_queries::update_job_status(
             self.state.database.pool(),
             &update.job_id,
             to_str,
-            None,
-            None,
+            pid,
+            exit_code,
             error_message,
             None,
             finished.then(chrono::Utc::now),
@@ -541,11 +627,20 @@ impl AgentService for AgentServiceImpl {
                 state
                     .node_registry
                     .update_last_seen(&heartbeat.node_id, chrono::Utc::now());
+                // Report how many jobs are active on this node so the server
+                // side has a cheap liveness/load signal.
+                let pending = sqlx::query_scalar::<_, i64>(
+                    "SELECT COUNT(*) FROM jobs WHERE node_id = $1 AND status IN ('starting','running','stopping')",
+                )
+                .bind(&heartbeat.node_id)
+                .fetch_one(state.database.pool())
+                .await
+                .unwrap_or(0);
                 let _ = tx
                     .send(Ok(HeartbeatAck {
                         node_id: heartbeat.node_id.clone(),
                         timestamp_ms: heartbeat.timestamp_ms,
-                        pending_job_count: 0,
+                        pending_job_count: pending as u32,
                     }))
                     .await;
             }
@@ -632,11 +727,13 @@ async fn evaluate_alerts(state: &AppState, report: &NodeMetricsReport) {
                     },
                     _ => continue,
                 };
-                if let Some(event) =
-                    state
-                        .alert_engine
-                        .evaluate(rule, &report.node_id, &gpu.uuid, value)
-                {
+                if let Some(event) = state.alert_engine.evaluate(
+                    rule,
+                    &report.node_id,
+                    &gpu.uuid,
+                    value,
+                    chrono::Utc::now(),
+                ) {
                     persist_alert_event(state, &event).await;
                 }
             }
@@ -653,9 +750,10 @@ async fn evaluate_alerts(state: &AppState, report: &NodeMetricsReport) {
                 "load_1" => report.load_1,
                 _ => continue,
             };
-            if let Some(event) = state
-                .alert_engine
-                .evaluate(rule, &report.node_id, "", value)
+            if let Some(event) =
+                state
+                    .alert_engine
+                    .evaluate(rule, &report.node_id, "", value, chrono::Utc::now())
             {
                 persist_alert_event(state, &event).await;
             }
@@ -817,23 +915,68 @@ fn job_to_proto(job: &storage::models::JobRow) -> Job {
     }
 }
 
-async fn save_job_log(state: &AppState, entry: &JobLogEntry) -> anyhow::Result<()> {
+/// Flush batch size for job log inserts (log lines arrive one gRPC call per
+/// line from the agent; batching avoids a DB round-trip per line).
+const LOG_BATCH_SIZE: usize = 50;
+
+/// Ack the last entry of a flushed batch (best effort — the agent ignores
+/// the response, but a receiver that stops reading would otherwise let the
+/// channel fill and stall the stream).
+async fn ack_log_batch(tx: &mpsc::Sender<Result<LogAck, Status>>, batch: &[JobLogEntry]) {
+    if let Some(last) = batch.last() {
+        let _ = tx
+            .send(Ok(LogAck {
+                job_id: last.job_id.clone(),
+                acknowledged_offset: last.log_offset,
+            }))
+            .await;
+    }
+}
+
+/// Hard cap on a single log line accepted from an agent (bytes). The agent
+/// already truncates at the same size, but the gRPC endpoint must not trust
+/// a misbehaving caller: without a cap here, one RPC could grow a DB row
+/// without bound. Over-long lines are cut at a UTF-8 boundary.
+const MAX_LOG_LINE_BYTES: usize = 64 * 1024;
+
+/// Truncate a log line to `MAX_LOG_LINE_BYTES` bytes at a UTF-8 boundary,
+/// appending a visible marker so operators can tell the line was cut.
+fn cap_log_line(mut line: String) -> String {
+    if line.len() <= MAX_LOG_LINE_BYTES {
+        return line;
+    }
+    let mut cut = MAX_LOG_LINE_BYTES;
+    while cut > 0 && !line.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    line.truncate(cut);
+    line.push_str(" ...[truncated]");
+    line
+}
+
+/// Persist a batch of job log entries in one multi-row INSERT. Over-long
+/// lines are capped (see [`cap_log_line`]); duplicates are dropped
+/// (UNIQUE(job_id, log_offset)) so re-sends from the agent are idempotent.
+async fn save_job_logs(state: &AppState, entries: &[JobLogEntry]) -> anyhow::Result<()> {
+    if entries.is_empty() {
+        return Ok(());
+    }
     let pool = state.database.pool();
-    let timestamp = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(entry.timestamp)
-        .unwrap_or(chrono::Utc::now());
 
-    sqlx::query(
-        "INSERT INTO job_logs (job_id, log_offset, log_data, is_stderr, timestamp) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING"
-    )
-    .bind(&entry.job_id)
-    .bind(entry.log_offset)
-    .bind(&entry.log_data)
-    .bind(entry.is_stderr)
-    .bind(timestamp)
-    .execute(pool)
-    .await
-    .ok();
-
+    let mut qb = sqlx::QueryBuilder::new(
+        "INSERT INTO job_logs (job_id, log_offset, log_data, is_stderr, timestamp) ",
+    );
+    qb.push_values(entries, |mut b, e| {
+        let timestamp = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(e.timestamp)
+            .unwrap_or_else(chrono::Utc::now);
+        b.push_bind(&e.job_id)
+            .push_bind(e.log_offset)
+            .push_bind(cap_log_line(e.log_data.clone()))
+            .push_bind(e.is_stderr)
+            .push_bind(timestamp);
+    });
+    qb.push(" ON CONFLICT DO NOTHING");
+    qb.build().execute(pool).await?;
     Ok(())
 }
 

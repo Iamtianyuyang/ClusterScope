@@ -1,0 +1,16 @@
+{
+  "title": "M6 — 取消升级：普通取消 SIGTERM（被忽略）→ 5s SIGKILL 升级；?force=true 直接 SIGKILL",
+  "cwd": "..",
+  "steps": [
+    { "say": "起 server 与 agent（只读模式；agent 用 qa-node-01 注册）" },
+    { "run": "sh qa/harness/server-up.sh false && sh qa/harness/agent-up.sh qa-node-01", "timeoutSec": 120 },
+    { "say": "提交两个忽略 SIGTERM 的任务（trap '' TERM; sleep 180），分别用普通取消与 ?force=true 取消，量进程组何时真的消失" },
+    { "run": "sh qa/harness/m6-demo-cancel.sh", "timeoutSec": 240 },
+    { "say": "两条路径在 agent 端都留了痕：普通取消是 5s 升级，force 是立即 SIGKILL" },
+    { "run": "grep -E 'SIGTERM ignored|Forced cancellation' gauntlet-out/qa/agent.log | tail -2", "timeoutSec": 30 },
+    { "say": "再取消一个已经结束的任务，应当得到 409（文档契约），而不是静默 200" },
+    { "run": "sh qa/harness/m6-demo-terminal-409.sh", "timeoutSec": 60 },
+    { "say": "收尾：只按 PID 文件停自己起的 agent 与 server" },
+    { "run": "sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh" }
+  ]
+}

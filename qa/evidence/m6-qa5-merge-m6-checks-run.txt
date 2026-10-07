@@ -1,0 +1,20 @@
+== 环境 ==
+repo=/public/tianyuyang/code/ClusterScope-review/merge-m6  branch=gauntlet/merge-m6  head=e8fd233  m6base=8601ac9  uid=3000
+M6-01 PASS - cargo build --workspace --all-targets --offline 退出码 0（离线，不得引入新依赖）
+M6-02 PASS - cargo test：rc=0、failed=0、passed=98（要求 0 失败）
+M6-03 PASS - 通过数 98 ≥ 基线 59，且没有删除既有 #[test] 行
+M6-04 PASS - 改动全部落在 M6 允许集内、冻结面零改动（越界：无；冻结面：无）
+M6-05 PASS - NRM3：系统路径默认值 3 处 ≤ 基线 3（全部命中 7 ≤ 7）
+M6-06 PASS - NRM5：提权原语 0 处（必须 0）；特权/进程组族命中 2 ≤ 基线 2（其中 pre_exec 旁有 setsid 1 处）
+NOTE M6-07 用 no-root-fixes-checks.sh --no-slow（F1 动态探针与 F5 真装真启默认跳过，理由见脚本注释/qa/merge-m6.qa.md）
+M6-07 PASS - no-root-fixes-checks.sh（--no-slow）：PASS=12 FAIL=0（要求 12/0）
+M6-08 PASS - doc-claims：FAIL=7 ≤ 基线 9；SIGKILL 断言 PASS=1、force 断言 PASS=1（合流后必须由 FAIL 转 PASS）
+M6-09 PASS - TUI 快捷键 13/13 PASS（实际 13）
+M6-10 PASS - 配置键 17/17 PASS（实际 17）
+M6-11 PASS - api-checks：PASS=18（要求 ≥ 基线 18）；DOC-GET-AUDIT-LOGS 已 PASS=1（要求 1 = F-01 修好了）
+M6-12 PASS - 审计覆盖：新动作种类 4（要求 ≥3，合流前是 2）；GET /api/audit-logs 的 total=199（要求非空 = 端点可用）
+M6-13 PASS - 登录限速：12 次同源失败登录里出现 2 次 429（F-08 的正判据）
+M6-14 PASS - job-e2e（任务生命周期 + 告警 + WebSocket 广播）：PASS=15 FAIL=0
+M6-15 PASS - 重启后 /api/health=200、public 表 11 张（基线 11）、admin 行 1（要求 1）
+----
+M6-CHECKS: PASS=15 FAIL=0   证据目录: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence
