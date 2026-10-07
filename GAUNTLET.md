@@ -570,3 +570,32 @@ sh qa/harness/no-root-fixes-checks.sh --no-slow           # 12/12（全量版：
 
 **当前状态**：`gate --profile specifier` = **PASS**（`spec: 5 feature(s), 29 scenario(s)`）。
 `ACCEPTANCE` 在写完这 23 个测试前必然不完整（`missing=23`），这是预期，不是坏了。
+
+## 第 6 阶段（本轮）：三线合流 M6 的报告与证据包（2026-10-08）
+
+> 分支 `gauntlet/merge-m6` @ **`9817ae9`**，基线 `master` @ **`8601ac9`**；**未 push、未开 PR**。
+> 报告阶段只写 `report/**` 与本节：**没碰**产品代码 / 测试 / `features/` / `deploy/` / `proto/` / `README.md`，
+> 也没改 `.gauntlet/`、`gauntlet.config.json`、`qa/constraints.json` 的既有条目与任何既有 verdict。
+
+**本阶段现场复跑（2026-10-08 02:47–02:56 CST，`9817ae9` 上）**
+
+| 判据 | 命令 | 结果 |
+|---|---|---|
+| 阶段闸门 | `node .gauntlet/gauntlet.mjs gate --profile coder` | **PASS**（spec 29 场景 / 98 tests / 0 failed / acceptance 29/29） |
+| 本轮判据程序 | `sh qa/harness/merge-m6-checks.sh` | **PASS=15 FAIL=0**（rc=0） |
+| 可回放演示 | `node .gauntlet/gauntlet.mjs demo demo/{13,14,15,16}-m6-*.json` | **4/4 exit 0** → `gauntlet-out/evidence/demos/*.html` |
+
+**没跑的（如实列出）**：`gate --profile full`（quality 三闸门在 master 上就是 ❌，本轮 M7 明确不还债 → full 必然 FAIL 且原因与合流无关；
+按任务书口径跑 coder 档 + 判据程序，quality/coverage 的实测值沿用 round 3 记录）、`mutation`（上一轮跑到 `[22/736]` 被人工停止，原样留证）、
+`no-root-fixes-checks.sh` 全量（**共享机器**：全量 F5 会覆盖常驻 agent PID 266643 的 unit，本机口径恒为 `--no-slow`）、Archify 架构图（远端无外网）。
+
+**交付物**
+
+| 文件 | 内容 |
+|---|---|
+| `report/m6-merge.html` | **证据包（单文件、离线可看）**：① 结论 → ② 8 项修复（前/后 + 证据指针 + 最小复现）→ ③ 3 个 B 代码 bug → ④ 三轮 QA（含 round 1 的安全回归与「声称已修、实际只改注释」）→ ⑤ 闸门面板（跑了什么/没跑什么，❌ 原样）→ ⑥ 开口项 F-02/F-03/F-07/F-12/F-27/F-29 → ⑦ 5 分钟审阅路线 → ⑧ 可复现性与共享机器安全前提 |
+| `report/m6-merge-comment.md` | PR 正文（目标分支 `master`）：合并后 `master` 即为三线合流终态 |
+
+**给下一轮（M7 质量还债）的接口**：`node .gauntlet/gauntlet.mjs next --profile quality`（当前 **CONTINUE，117 项 / 距离 592.706**；
+master 基线 97 项 / 409.505）。TOP 三处：`crates/tui/src/ui.rs:599 node_panel`（CRAP 552）、`crates/server/src/main.rs:544 run_background_tasks`（380）、
+`crates/tui/src/ui.rs:1024 draw_process`（342）。覆盖率 31.2%（阈值 0.9）、complexity 34 项（maxCC 23）、CRAP 56 项（maxCRAP 552）。

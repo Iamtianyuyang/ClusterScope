@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>证据包 · 三线合流 M6 合流（gauntlet/merge-m6 @ 9817ae9 → master 8601ac9）</title>
+<style>
+  :root{
+    --bg:#f5f5f1;--paper:#fdfdfb;--ink:#16181d;--ink2:#4b5260;--ink3:#8b929e;
+    --line:#1d2026;--line2:#d6dae1;--fill:#f2f4f7;--accent:#1d5fbf;--accentbg:#e4ecf8;
+    --ok:#1f7a4d;--okbg:#e3f3ea;--err:#c62828;--errbg:#fbeaea;--warn:#a8620a;--warnbg:#fdf3e2;
+    --mono:ui-monospace,SFMono-Regular,"JetBrains Mono","Cascadia Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",Roboto,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{--bg:#0b1220;--paper:#101a2c;--ink:#e6edf7;--ink2:#a9b8cc;--ink3:#6b7f99;
+      --line:#c9d6e8;--line2:#23385a;--fill:#152540;--accent:#6ea8ff;--accentbg:#16305a;
+      --ok:#5fd39a;--okbg:#0f3326;--err:#ff7070;--errbg:#3b1620;--warn:#f0b14a;--warnbg:#3a2a10;}
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font:14px/1.62 var(--sans);-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 22px 64px}
+  header.head{border:1.5px solid var(--line);background:var(--paper);padding:20px 22px;margin-bottom:18px}
+  .eyebrow{font:12px/1.4 var(--mono);color:var(--ink3);letter-spacing:.03em}
+  h1{margin:6px 0 4px;font-size:25px;line-height:1.25;letter-spacing:-.01em}
+  .sub{color:var(--ink2);font-size:13px}
+  .meta{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:14px;font-size:12.5px;color:var(--ink2)}
+  .meta b{font:400 12px var(--mono);color:var(--ink3);margin-right:6px}
+  code,pre,kbd{font-family:var(--mono)}
+  nav.toc{border:1px solid var(--line2);background:var(--paper);padding:12px 16px;margin-bottom:22px;font-size:13px}
+  nav.toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media (max-width:760px){nav.toc ol{columns:1}}
+  nav.toc a{color:var(--accent);text-decoration:none}
+  nav.toc a:hover{text-decoration:underline}
+  section{margin:0 0 26px;border:1.5px solid var(--line);background:var(--paper);overflow:hidden}
+  section>h2{margin:0;padding:10px 16px;font-size:16px;background:#16181d;color:#fdfdfb;border-bottom:1.5px solid var(--line)}
+  @media (prefers-color-scheme: dark){section>h2{background:#e6edf7;color:#0b1220}}
+  section .body{padding:16px 18px}
+  h3{margin:20px 0 8px;font-size:14.5px}
+  h3:first-child{margin-top:2px}
+  h4{margin:16px 0 6px;font-size:13.5px;color:var(--ink2)}
+  p{margin:0 0 10px;max-width:86ch}
+  ul,ol{margin:0 0 10px;padding-left:22px}
+  li+li{margin-top:4px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0 14px}
+  th,td{border:1px solid var(--line2);padding:6px 9px;text-align:left;vertical-align:top}
+  th{background:var(--fill);font:11.5px/1.35 var(--mono);color:var(--ink2);font-weight:400;white-space:nowrap}
+  tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--fill) 55%,transparent)}
+  td.mono,span.mono,code{font-family:var(--mono);font-size:12.4px}
+  pre{margin:8px 0 14px;padding:11px 13px;background:var(--fill);border:1px solid var(--line2);overflow-x:auto;font-size:12.4px;line-height:1.5}
+  .ok{color:var(--ok);font-weight:600;white-space:nowrap}
+  .bad{color:var(--err);font-weight:600;white-space:nowrap}
+  .wa{color:var(--warn);font-weight:600;white-space:nowrap}
+  .na{color:var(--ink3);white-space:nowrap}
+  .tag{display:inline-block;padding:1px 7px;border:1px solid var(--line2);border-radius:2px;font:11.5px var(--mono);color:var(--ink2);white-space:nowrap}
+  .callout{border-left:3px solid var(--accent);background:var(--accentbg);padding:10px 14px;margin:10px 0 14px}
+  .callout.bad{border-left-color:var(--err);background:var(--errbg)}
+  .callout.ok{border-left-color:var(--ok);background:var(--okbg)}
+  .callout.wa{border-left-color:var(--warn);background:var(--warnbg)}
+  .callout p:last-child{margin-bottom:0}
+  .verdict{display:inline-block;padding:4px 12px;border:1.5px solid currentColor;font-weight:700;margin:8px 0 2px}
+  .verdict.ok{color:var(--ok);background:var(--okbg)}
+  .verdict.bad{color:var(--err);background:var(--errbg)}
+  details{border:1px solid var(--line2);padding:8px 12px;margin:8px 0 14px;background:var(--paper)}
+  details>summary{cursor:pointer;font-size:13px;color:var(--ink2)}
+  details[open]>summary{margin-bottom:8px;color:var(--ink)}
+  hr{border:0;border-top:1px solid var(--line2);margin:18px 0}
+  .muted{color:var(--ink2);font-size:12.6px}
+  .files li{font-family:var(--mono);font-size:12.4px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:820px){.grid2{grid-template-columns:1fr}}
+  footer{border-top:1px solid var(--line2);margin-top:26px;padding-top:12px;font-size:12.4px;color:var(--ink2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="head">
+  <div class="eyebrow">Gauntlet 第 6 阶段（Reporter）· 证据包 · 单文件离线可看</div>
+  <h1>三线合流 M6：把 B 线的修复与 A 线的独有资产合进主线</h1>
+  <div class="sub">分支 <span class="mono">gauntlet/merge-m6</span> @ <span class="mono">9817ae9</span>　→　目标分支 <span class="mono">master</span> @ <span class="mono">8601ac9</span>　（<b>未 push、未开 PR</b>：由 Leader 在用户审阅通过后做）</div>
+  <div class="meta">
+    <span><b>本轮范围</b>合流方案 report/merge-plan.md 的 M6 步骤 1 / 2 / 3 / 5</span>
+    <span><b>分支提交</b>30 个提交、0 个 merge 提交、116 文件（+14923 / −902）</span>
+    <span><b>复验时间</b>2026-10-08 02:47–02:56（CST，远端 node <span class="mono">lyy-node03</span>）</span>
+    <span><b>结论</b><span class="ok">可进主线</span>（带 3 条开口项，见第 ⑥ 节）</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <ol>
+    <li><a href="#s1">先看结论：这个合流能不能进主线</a></li>
+    <li><a href="#s2">合进去的每一项修复（F-01 … F-06）</a></li>
+    <li><a href="#s3">测试咬出的 3 个 B 代码真 bug</a></li>
+    <li><a href="#s4">三轮 QA：抓到的安全回归与「声称已修、实际只改注释」</a></li>
+    <li><a href="#s5">闸门面板（跑了什么、没跑什么，❌ 原样）</a></li>
+    <li><a href="#s6">未纳入本轮与开口项（F-02/F-03/F-07/F-12/F-27/F-29）</a></li>
+    <li><a href="#s7">5 分钟人类审阅路线</a></li>
+    <li><a href="#s8">可复现性（分支、提交、复跑命令、共享机器安全前提）</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ ① -->
+<section id="s1">
+  <h2>① 先看结论：这个合流能不能进主线</h2>
+  <div class="body">
+    <div class="verdict ok">结论：能进主线（master），但有 3 条开口项随 PR 一起交给人拍板</div>
+    <p class="muted">判读口径：本节的每一句都由第 ⑤ 节的机器闸门支撑；三条开口项在第 ⑥ 节逐条给理由与后续路径。</p>
+
+    <h3>一句话</h3>
+    <p><b>B 线（离线工作树的 12 个未提交文件 + 1 个提交）与 A 线的独有资产已经被逐文件、可追溯地合进主线</b>：合流后 <span class="mono">gate --profile coder</span> <span class="ok">PASS</span>（98 个测试 / 0 失败、29 个验收场景全绿），本轮判据程序 <span class="mono">merge-m6-checks.sh</span> <span class="ok">15/15</span>，四项无 root 修复 <span class="ok">12/12</span> 不回归。合流期间被测试咬出 <b>3 个 B 未提交代码的真 bug</b>（第 ③ 节），全部已修。</p>
+
+    <h3>为什么能进</h3>
+    <ul>
+      <li><b>三线合流的「可合」这件事本身被证伪过一轮</b>：整体 <span class="mono">git merge 19d8fbc</span> 会炸 35 个文件（方案 E-1 已勘误记录），所以本轮改成 <b>逐文件 graft</b>；30 个提交里 <b>0 个 merge 提交</b>，每个 graft 都是三方合并后的产物，可逐个 review、可单独回退。</li>
+      <li><b>行为面只增不减</b>：测试 59 → 98 个（<span class="ok">0 失败</span>），验收场景 6 → 29 个（<span class="ok">29/29 通过、missing 0</span>），REST 矩阵 18 → 19 PASS（唯一 FAIL 是 <span class="mono">DOC-GET-USERS-READONLY</span>，属 F-07 的取舍，第 ⑥ 节），文档一致性 FAIL 9 → 6。</li>
+      <li><b>三个「端到端承诺」真的兑现了</b>：审计端点 <span class="mono">GET /api/audit-logs</span> 从恒 500 变 200（demo 13 实跑）；<span class="mono">SIGTERM → SIGKILL</span> 升级与 README:439 承诺的 <span class="mono">?force=true</span> 两条路径都有 agent 日志与演示佐证（demo 14）；任务提交上限 256 参数 / 4096 字节的两侧边界都实测（恰好过、超一个就 400）。</li>
+      <li><b>无 root 这条不变量没被合流破坏</b>：<span class="mono">no-root-fixes-checks.sh --no-slow</span> 12/12；NRM3（硬编码系统路径）3 ≤ 基线 3、NRM5（特权原语）0 处、进程组族 2 ≤ 2 —— 合流没引入新的 root 依赖。</li>
+    </ul>
+
+    <h3>什么不能从这份证据包里读出来（如实标注）</h3>
+    <ul>
+      <li><b>硬阈值质量三闸门仍是 ❌</b>（complexity 34 项 / maxCC 23、CRAP 56 项 / maxCRAP 552、行覆盖率 31.2%）。这是 <span class="mono">master</span> 上就有的既有欠账 + 合流新增的部分，<b>M6 明确不还</b>（方案 M7 留给后续轮次）。所以 <b>本轮的「结论」不等于「full 档全绿」</b>。</li>
+      <li><b>合并后 master 的终态</b>：本 PR 合并后，<span class="mono">master</span> 即为三线合流的终态；A 线未提交的 Web 工作与 <span class="mono">deploy/nginx.conf</span> <b>不在</b>这条线上（M5 裁决：web 走独立分支）。</li>
+      <li><b>F-29 的欠账数字变大了</b>（残差 592.706 / 117 项 vs master 409.505 / 97 项）——不是合流引入的 bug，是本轮把 A 的资产与 B 的代码搬进来后 <b>被测到的代码变多了</b>；口径与归因在第 ⑥ 节，不美化。</li>
+    </ul>
+
+    <div class="callout wa">
+      <p><b>需要人拍板的三件事</b>（第 ⑥ 节有完整路径）：① F-07 只读账号能不能看到用户列表（<b>改代码 = 改安全边界</b>，机器判不出对错）；② F-02 天级 90 天历史的历史修法归属；③ F-03 <span class="mono">jobs.pid</span> 落库要不要动冻结的 <span class="mono">proto/**</span>。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ ② -->
+<section id="s2">
+  <h2>② 合进去的每一项修复：一句话 · 修复前 vs 修复后 · 证据指针 · 最小复现</h2>
+  <div class="body">
+    <p class="muted">下面 8 项是 M6 的交付内容。每一项都给出「机器能自己看」的证据指针（仓库内路径）与「你自己能跑」的最小复现命令。命令一律在远端工作树 <span class="mono">/public/tianyuyang/code/ClusterScope-review/merge-m6</span> 里跑，先 <span class="mono">export PATH=$HOME/.cargo/bin:$PATH</span>，cargo 一律 <span class="mono">--offline</span>。</p>
+
+    <h3>F-01 <span class="tag">审计端点恒 500</span></h3>
+    <table>
+      <tr><th style="width:120px">一句话</th><td><span class="mono">GET /api/audit-logs</span> 曾经 100% 返回 HTTP 500（任何筛选、任何分页都一样），因为 SQL 把占位符号算错，PG 直接拒。</td></tr>
+      <tr><th>修复前 → 后</th><td><span class="bad">HTTP 500</span> → <span class="ok">HTTP 200</span>；坏参数从 500 变 <b>400</b>（客户端错误，不再是服务端崩）；不存在的用户 → <span class="mono">{"total":0,"rows":0}</span>。</td></tr>
+      <tr><th>证据指针</th><td class="mono">qa/evidence/m6-qa6-api-checks.txt（CHECK DOC-GET-AUDIT-LOGS: PASS expected=200 actual=200）<br>demo/13-m6-audit-endpoint.json → gauntlet-out/evidence/demos/13-m6-audit-endpoint.html<br>qa/merge-m6.qa.md §2</td></tr>
+      <tr><th>最小复现</th><td>
+<pre>sh qa/harness/server-up.sh false
+curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:8080/api/audit-logs'
+curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:8080/api/audit-logs?start_time_ms=abc'   # 期望 400
+sh qa/harness/server-down.sh</pre></td></tr>
+    </table>
+
+    <h3>F-16 <span class="tag">审计 COUNT 零绑定</span></h3>
+    <table>
+      <tr><th style="width:120px">一句话</th><td>F-01 的 500 把 <b>第二个缺陷</b>盖住了：<span class="mono">SELECT COUNT(*)</span> 一个参数都没绑，筛选条件只作用在取行、不作用在计数——<span class="mono">total</span> 永远是全表数。</td></tr>
+      <tr><th>修复前 → 后</th><td>筛选时 <span class="mono">total</span> 与 <span class="mono">rows</span> 对不上 → 现在 <b>任何筛选组合下 total = 实回条数 = psql 直接计数</b>。</td></tr>
+      <tr><th>证据指针</th><td class="mono">demo/13 的实跑输出（单条件 total=359/rows=359；三条件 total=120/rows=120；psql 全表 848）<br>qa/evidence/m6-qa5-adversarial.txt（6 组筛选矩阵）</td></tr>
+      <tr><th>最小复现</th><td>
+<pre>sh qa/harness/server-up.sh false
+sh qa/harness/m6-demo-audit.sh          # 打印每组筛选的 total/rows 与 psql 对照
+sh qa/harness/server-down.sh</pre></td></tr>
+    </table>
+
+    <h3>F-08 <span class="tag">登录限速 + 锁定语义</span></h3>
+    <table>
+      <tr><th style="width:120px">一句话</th><td>补上按「源地址 + 账号」的失败窗口与全局预算（10 次/60s/地址、300 次/60s 全局），并保证<b>爆破一个账号不会把同一 NAT 后面的其它账号一起锁死</b>。</td></tr>
+      <tr><th>修复前 → 后</th><td>连续失败无上限 → 12 次同源失败里出现 <b>2 次 429</b>；同源其它账号仍 200；被爆账号在窗口内正确口令也是 429（锁定语义 = 客户端应退避）。</td></tr>
+      <tr><th>证据指针</th><td class="mono">qa/evidence/m6-qa6-api-checks.txt（CHECK SEC-LOGIN-LOCKOUT: PASS expected=429 actual=429）<br>demo/15-m6-lockout-and-cluster-info.json → 同目录 .html<br>qa/merge-m6.qa.md §3</td></tr>
+      <tr><th>最小复现</th><td>
+<pre>sh qa/harness/server-up.sh false
+sh qa/harness/m6-demo-lockout-cluster.sh    # ① 5 次错口令 + 正确口令 → 429
+sh qa/harness/server-down.sh</pre></td></tr>
+    </table>
+
+    <h3>F-09 <span class="tag">令牌批量吊销 / 单次消费 / 摘要存储 / 级联删除</span></h3>
+    <table>
+      <tr><th style="width:120px">一句话</th><td>刷新令牌从「明文存、可反复用、删用户不清理」改成 <b>摘要存储 + 单次消费 + 随用户级联删除</b>；改口令/吊销后旧令牌立即失效。</td></tr>
+      <tr><th>修复前 → 后</th><td>旧刷新令牌可重放 → <span class="mono">SEC-REFRESH-ROTATION</span> <span class="ok">PASS expected=401</span>；新令牌 200；删用户后令牌行随之消失。</td></tr>
+      <tr><th>证据指针</th><td class="mono">qa/evidence/m6-qa6-api-checks.txt（SEC-REFRESH-ROTATION / SEC-REFRESH-NEW-TOKEN-OK）<br>features/merge_m6_auth_hardening.feature（9 个场景）</td></tr>
+      <tr><th>最小复现</th><td>
+<pre>sh qa/harness/server-up.sh false &amp;&amp; sh qa/harness/api-checks.sh   # 看 SEC-REFRESH-* 三条
+sh qa/harness/server-down.sh</pre></td></tr>
+    </table>
+
+    <h3>F-10 <span class="tag">审计覆盖面</span></h3>
+    <table>
+      <tr><th style="width:120px">一句话</th><td>用户/令牌/规则等写操作开始落审计；审计「动作种类」从合流前的 2 种扩到 <b>4 种</b>（本轮判据要求 ≥3）。</td></tr>
+      <tr><th>修复前 → 后</th><td>动作种类 2 → <span class="ok">4</span>；审计端点可用（<span class="mono">total</span> 非空）。</td></tr>
+      <tr><th>证据指针</th><td class="mono">qa/harness/merge-m6-checks.sh 的 M6-12 输出（今日复跑：新动作种类 4）<br>qa/evidence/merge-m6-*.txt</td></tr>
+      <tr><th>最小复现</th><td><pre>sh qa/harness/merge-m6-checks.sh 2>&1 | grep M6-12</pre></td></tr>
+    </table>
+
+    <h3>F-11 <span class="tag">任务提交上限 MAX_ARGS / MAX_ARG_LEN</span></h3>
+    <table>
+      <tr><th style="width:120px">一句话</th><td>给 gRPC 任务提交加硬边界：参数个数 ≤ <b>256</b>、单个参数 ≤ <b>4096 字节</b>，越界列表在服务端日志里点名原因。</td></tr>
+      <tr><th>修复前 → 后</th><td>无上限（一次提交可以打爆队列/日志） → <span class="mono">257 个参数</span> <span class="ok">400</span>、<span class="mono">恰好 256 个</span> <span class="ok">200</span>；<span class="mono">4097 字节</span> <span class="ok">400</span>、<span class="mono">恰好 4096</span> <span class="ok">200</span>。</td></tr>
+      <tr><th>证据指针</th><td class="mono">qa/evidence/m6-qa5-adversarial.txt（G 段：两侧边界 + server 原始拒绝日志）<br>features/merge_m6_job_safety.feature</td></tr>
+      <tr><th>最小复现</th><td class="mono">按 qa/evidence/m6-qa5-adversarial.txt 的 G 段重放（需要 server + 已注册节点）</td></tr>
+    </table>
+
+    <h3>F-05 <span class="tag">SIGTERM → SIGKILL 升级 + ?force=true</span></h3>
+    <table>
+      <tr><th style="width:120px">一句话</th><td>取消任务时先发 SIGTERM，宽限期内没退就升级 SIGKILL；并补上 README:439 已经承诺、代码里却不存在的 <span class="mono">?force=true</span>（立即 SIGKILL）。</td></tr>
+      <tr><th>修复前 → 后</th><td>取消路径<b>从不发信号</b>（见第 ③ 节的 starttime 下标 bug） → 现在有 <span class="mono">SIGTERM ignored</span> 与 <span class="mono">Forced cancellation</span> 两条 agent 日志；已终结任务再取消 = <span class="mono">409</span>，不存在的任务 = <span class="mono">404</span>。</td></tr>
+      <tr><th>证据指针</th><td class="mono">demo/14-m6-force-cancel.json → gauntlet-out/evidence/demos/14-m6-force-cancel.html<br>qa/evidence/m6-qa5-cancel-e2e.txt（H/H3 段）<br>doc-claims 的 DOC-CODE-SIGKILL-EXISTS / DOC-CODE-FORCE-OPTION 由 FAIL 翻 PASS</td></tr>
+      <tr><th>最小复现</th><td>
+<pre>node .gauntlet/gauntlet.mjs demo demo/14-m6-force-cancel.json
+grep -E 'SIGTERM ignored|Forced cancellation' gauntlet-out/qa/agent.log | tail -2</pre></td></tr>
+    </table>
+
+    <h3>F-06 <span class="tag">死配置键激活</span></h3>
+    <table>
+      <tr><th style="width:120px">一句话</th><td>配置文件里写着但代码从不读的键（如 <span class="mono">ws_heartbeat_interval_secs</span>、<span class="mono">max_concurrent_ws_clients</span>、<span class="mono">ws_max_backlog</span>）现在真的生效；同时新增的配置键全部有验收测试（17/17 PASS）。</td></tr>
+      <tr><th>修复前 → 后</th><td>配了不生效（文档骗人） → 死键数下降；配置键断言 <span class="ok">17/17 PASS</span>。</td></tr>
+      <tr><th>证据指针</th><td class="mono">qa/evidence/m6-qa5-adversarial.txt（F 段：每个键在非 config.rs 文件的命中计数）<br>qa/harness/merge-m6-checks.sh 的 M6-10 输出</td></tr>
+      <tr><th>最小复现</th><td><pre>sh qa/harness/merge-m6-checks.sh 2>&1 | grep M6-10</pre></td></tr>
+    </table>
+
+    <h3>附带：每 IP 的 WebSocket 连接上限</h3>
+    <table>
+      <tr><th style="width:120px">一句话</th><td>单个来源地址的 WS 连接数封顶 + 全局软上限 + 可配 backlog + ping 心跳（心跳间隔现在真的读配置）。</td></tr>
+      <tr><th>修复前 → 后</th><td>无上限 → 有上限；<span class="mono">job-e2e.sh</span> 的 WS 四条（连接/订阅/指标推送/任务更新推送）全绿。</td></tr>
+      <tr><th>证据指针</th><td class="mono">qa/evidence/m6-qa7-gates.txt（job-e2e：PASS=15 FAIL=0）<br>qa/harness/job-e2e.sh</td></tr>
+      <tr><th>最小复现</th><td><pre>sh qa/harness/server-up.sh false &amp;&amp; sh qa/harness/agent-up.sh qa-node-01 &amp;&amp; sh qa/harness/job-e2e.sh</pre></td></tr>
+    </table>
+
+    <h3>附带：A 线独有资产接回主线</h3>
+    <table>
+      <tr><th style="width:120px">一句话</th><td><span class="mono">crates/common/src/metrics.rs</span>、<span class="mono">crates/storage/src/conversions.rs</span>、<span class="mono">crates/common/tests/integration_test.rs</span>（7 例）三样搬回主线；依赖 <span class="mono">dedup</span>/<span class="mono">sequence</span> 的 2 例按 M3 裁决不移植。</td></tr>
+      <tr><th>修复前 → 后</th><td>A 的资产只在本地（未提交、可能丢） → 现在在主线里、测试全绿；文档头逐字写明「<b>已就位、暂无产品消费者</b>」（MRG6-24 / F-27），不假装它已经被接进运行时。</td></tr>
+      <tr><th>证据指针</th><td class="mono">qa/evidence/m6-qa6-static-probes.txt（Q530：资产是否真的被用）<br>qa/mrg6-errata3.json（MRG6-24）<br>crates/common/src/metrics.rs 文件头注释</td></tr>
+      <tr><th>最小复现</th><td><pre>cargo test --workspace --offline --test integration_test   # 7 passed</pre></td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ ③ -->
+<section id="s3">
+  <h2>③ 测试咬出的 3 个 B 代码真 bug（含 QA 的独立复现证据）</h2>
+  <div class="body">
+    <p>这 3 个都是 <b>B 线未提交代码</b>里就存在的真 bug —— 不是合流写坏的，是合流把它们搬进主线后、被新写的测试与真实运行咬出来的。三个都由 QA 在真实构建产物上<b>独立复现</b>（不是只看代码）：复现命令与原始输出在 <span class="mono">qa/evidence/m6-qa5-*.txt</span>。</p>
+
+    <h3>Bug ① <span class="tag">最后管理员守卫从未运行</span></h3>
+    <table>
+      <tr><th style="width:120px">症状</th><td><span class="mono">SELECT COUNT(*) … FOR UPDATE</span> 被 PostgreSQL <b>逐字拒绝</b>（聚合 + 行锁在 PG 里不合法），于是「最后一个启用管理员不得被停用/降级/删除」这条守卫<b>一次都没跑到</b>：请求在 SQL 层就报错，守卫的 400 分支是死代码。</td></tr>
+      <tr><th>为什么测试才咬得到</th><td>编译期完全合法；单元测试用的假事务不校验 SQL；只有连真 PG 才炸。</td></tr>
+      <tr><th>QA 独立复现</th><td class="mono">qa/evidence/m6-qa5-last-admin-guard.txt：在专属库 clusterscope_qa5_guard 上跑「拒绝路径」——PATCH enabled=false → <b>400</b>、PATCH role=viewer → <b>400</b>、DELETE → <b>400</b>，三次拒绝后 DB 仍是 admin:admin:enabled=true；再建第二个 admin，守卫立刻放行（降级 → 200），删掉唯一管理员仍是 400。</td></tr>
+      <tr><th>现状态</th><td><span class="ok">已修</span>（合流提交里改成先锁行再计数）。<b>注意</b>：这条守卫的自动化判据在规格阶段被<b>移出</b>（共享库里无法构造「只剩一个启用管理员」的前置），改由 QA 在专属库上人工核验 —— 记录在 <span class="mono">qa/merge-m6.qa.md</span> 与 <span class="mono">qa/mrg6-errata.json</span>，不是静默跳过。</td></tr>
+    </table>
+
+    <h3>Bug ② <span class="tag">读错 /proc/&lt;pid&gt;/stat 下标 → 取消路径从不发信号</span></h3>
+    <table>
+      <tr><th style="width:120px">症状</th><td><span class="mono">process_starttime()</span> 取的是 <span class="mono">/proc/&lt;pid&gt;/stat</span> 的<b>下标 20</b>，那其实是 <span class="mono">vsize</span>（虚拟内存字节数），不是 starttime（下标 19）。于是「进程是否被回收」的比对必然不等 → 走「pid 已被回收」分支 → <b>取消任务时永远不发 SIGTERM/SIGKILL</b>。</td></tr>
+      <tr><th>为什么测试才咬得到</th><td>只在 Linux 真进程上错，且 <span class="mono">vsize</span> 在两次采样之间只要进程分配过内存就会变——单测里跑得快反而可能碰巧相等。</td></tr>
+      <tr><th>QA 独立复现</th><td class="mono">qa/evidence/m6-qa5-cancel-e2e.txt（I/J 段）：<br>I 段：同一 pid 同时读三个值 —— 下标 19 = 375446910（÷CLK_TCK 后正是「存活 ~0s 的启动时刻」，与 <span class="mono">ps etimes</span> 对得上）、下标 20 = 226271232（÷1024 = 220968 kB，与 <span class="mono">/proc/&lt;pid&gt;/status</span> 的 VmSize <b>逐字节相同</b>）。<br>J 段：连续 4 次采样，下标 20 从 233541632 → 434880512 一路随分配变化，下标 19 全程不变 —— 结论行：<i>「只要作业进程在 spawn 与取消之间分配过内存，比较就必然不等 → 走 pid-recycled 分支 → 不发信号。」</i></td></tr>
+      <tr><th>现状态</th><td><span class="ok">已修</span>。修复后 <span class="mono">SIGTERM ignored</span> / <span class="mono">Forced cancellation</span> 两条日志都能在 demo 14 里看到。</td></tr>
+    </table>
+
+    <h3>Bug ③ <span class="tag">路由重复注册 → 启动即 panic</span></h3>
+    <table>
+      <tr><th style="width:120px">症状</th><td>把 B 的 <span class="mono">handlers.rs</span> 与 <span class="mono">main.rs</span> graft 进主线后，<span class="mono">/audit-logs</span> 被<b>注册两次</b>（admin_routes 与 read_routes 各一次，两个 Router 之后 <span class="mono">merge</span> 到一起）→ axum 0.7 在启动时直接 panic。</td></tr>
+      <tr><th>为什么测试才咬得到</th><td>能编译、能过单测（单测不起真的 Router）；只有把 server 真启一次才炸。</td></tr>
+      <tr><th>QA 独立复现</th><td class="mono">qa/evidence/m6-qa5-route-dup.txt：<br>静态面：<span class="mono">8601ac9</span> 1 处注册 / <span class="mono">180f416</span> <b>2 处</b>（main.rs:486 与 :520）/ <span class="mono">3fb511a</span> 起回到 1 处；<br>动态面：把 <span class="mono">180f416</span> 检出到 scratch worktree、构建后连临时库启动 —— 进程 <b>退出码 101</b>，日志逐字：<br><span class="mono">thread 'main' (3615765) panicked at crates/server/src/main.rs:526:10:<br>Overlapping method route. Handler for `GET /audit-logs` already exists</span></td></tr>
+      <tr><th>现状态</th><td><span class="ok">已修</span>（<span class="mono">3fb511a</span> 起只剩 1 处注册；今日 <span class="mono">merge-m6-checks.sh</span> 的 M6-01/M6-02 都是 PASS）。</td></tr>
+    </table>
+
+    <div class="callout">
+      <p><b>这三个 bug 的意义</b>：如果只做「整文件覆盖式合并」或只看编译过不过，它们会原样进主线 —— ① 让一条安全守卫变成死代码，② 让「取消任务」这个核心功能静默失效，③ 让 server 直接起不来。合流的价值恰恰在于：<b>把 B 的代码放进主线的测试与真实运行里，让它们自己暴露出来</b>。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ ④ -->
+<section id="s4">
+  <h2>④ 三轮 QA 的经过（含一次被抓住的安全回归与一次「声称已修、实际只改注释」）</h2>
+  <div class="body">
+    <p class="muted">编码阶段交回后，QA 独立复跑（不采信编码阶段的自述）。三轮的原始记录在 <span class="mono">qa/qa-report.json</span>（检查 Q501–Q553）与 <span class="mono">qa/evidence/m6-qa5-*.txt</span> / <span class="mono">m6-qa6-*.txt</span> / <span class="mono">m6-qa7-*.txt</span>。</p>
+
+    <h3>round 1 —— <span class="bad">FAIL</span>：22 条判据里 3 条与预期不符，其中一条是<b>安全回归</b></h3>
+    <table>
+      <tr><th style="width:120px">F-23（安全回归）</th><td><b>锁定账号的状态码从 429 变成了 401。</b> 合流后新引入的登录限速把「账号已锁定」这条路径的语义改了：401 会把「账号被锁」与「口令错」变成同一种回答，客户端不知道该退避。master（<span class="mono">8601ac9</span>）本来是 429 —— <b>这是相对主线的行为回归，不是新功能</b>。</td></tr>
+      <tr><th>怎么被抓到的</th><td>QA 没用「PASS ≥ 18 就算过」的容差：它逐条比对 <span class="mono">api-checks.sh</span> 的 <b>期望值</b>，发现总数虽够，但 <span class="mono">SEC-LOGIN-LOCKOUT</span> 这条的 <i>expected=429 actual=401</i>。另外自写探针：同一账号 5 次错口令后，用<b>正确</b>口令登录 → 也必须是 429。</td></tr>
+      <tr><th>最刺眼的部分</th><td>上一轮的提交信息<b>声称</b>这条已修（「a locked account answers 429 again」），但实测diff只有注释变了：<br><span class="mono">3fb511a</span> 的该段 diff 里，<span class="mono">- // Locked accounts are reported as a plain 401 …</span> 改成 <span class="mono">+ // A locked account answers 429 …</span>，而紧跟着的 <span class="mono">return Err(StatusCode::UNAUTHORIZED);</span> <b>一个字都没动</b>。</td></tr>
+      <tr><th>其余两条</th><td>MRG6-17（README 的默认口令补强）完全没做；MRG6-22（勘误里的旧口径失败项条数）数字不准。</td></tr>
+      <tr><th>结论</th><td class="bad">verdict = fail</td></tr>
+    </table>
+
+    <h3>返工 —— 3 个提交（无 amend、无 reset）</h3>
+    <ul>
+      <li><span class="mono">3230e8b</span>：F-23 把 <span class="mono">UNAUTHORIZED</span> 改回 <span class="mono">TOO_MANY_REQUESTS</span>，并让注释说明「为什么锁定态与口令错要可区分」；同时修 F-24（<span class="mono">cluster/info</span> 无数据时必须返回 JSON null，不许假装 0 —— 这是 README:442 的承诺）、补 MRG6-17 的 README 插入、修 F-25 的两项（clippy 告警 + 那个重复代码克隆）。</li>
+      <li><span class="mono">d26ada0</span>：把约束文件的追加改成<b>纯插入</b>（F11：零删行）。</li>
+      <li><span class="mono">5ceee91</span>：返工轮的闸门证据提交。</li>
+    </ul>
+
+    <h3>round 2 —— <span class="ok">PASS</span>：逐条独立复跑，不采信自述</h3>
+    <table>
+      <tr><th style="width:120px">F-23 闭合</th><td>release 产物上 <span class="mono">api-checks.sh</span> <span class="mono">PASS=19 FAIL=1</span>，且 <span class="mono">SEC-LOGIN-LOCKOUT PASS expected=429 actual=429</span>；QA 自写探针「5 次错口令后正确口令 = 429」通过；源码与 master 同段逐行对照。</td></tr>
+      <tr><th>F-24 闭合</th><td>原始响应体：有数据 <span class="mono">{"total_gpus":6,"idle_gpus":6,"avg":0.0}</span>；无数据 <span class="mono">{"idle_gpus":null,"avg_gpu_utilization":null}</span>；并证明这是恢复 master 的写法。</td></tr>
+      <tr><th>MRG6-17 闭合</th><td>README.md:271 新增 4 行默认口令提示，代码默认值未动、<span class="mono">doc-claims</span> 的 FAIL 集合与上一轮逐条同名。</td></tr>
+      <tr><th>F-25 闭合</th><td><span class="mono">warnings</span> 由 2 回到 <b>0</b>、<span class="mono">duplication</span> 由 0.4% 回到 <b>0%</b>。</td></tr>
+      <tr><th>新记两条（不掩饰）</th><td><b>F-28</b>：<span class="mono">cargo clippy --all-targets</span> 有 9 条 MutexGuard-across-await 告警，<b>不在基线 8601ac9</b>（<span class="mono">crates/storage/tests/**</span> 是本分支新增），而编码阶段自述为「既有」——口径不符，如实记录；<b>F-29</b>：M7 质量欠账残差从 master 的 409.505 / 97 项变成 592.706 / 117 项。</td></tr>
+      <tr><th>结论</th><td class="ok">verdict = pass</td></tr>
+    </table>
+
+    <h3>F-28 的返工与 round 3 —— <span class="ok">PASS</span>，且 QA 用<b>反证实验</b>裁决了方法争议</h3>
+    <table>
+      <tr><th style="width:120px">改动</th><td><span class="mono">7800865</span>：把 <span class="mono">crates/storage/tests</span> 的串行化锁从 <span class="mono">std::sync::Mutex</span> 换成 <span class="mono">tokio::sync::Mutex</span>，<b>只动锁的管线</b>，断言逐字未动。</td></tr>
+      <tr><th>争议点</th><td>「是不是为了让 lint 闭嘴而把作用域收窄、从而弱化测试？」</td></tr>
+      <tr><th>QA 的裁决</th><td>做了<b>反证实验</b>：把 guard 收窄成同步块（唯一能让 lint 闭嘴的另一种写法）的对拍变体，在同一提交、同一份源码上构建 —— 它对 clippy 确实干净（rc=0），但 <span class="mono">--test-threads=8</span> 并行 <b>5/5 次失败</b>（3 条测试挂）；而工作树版本 8 线程并行 <b>5/5 全绿</b>，墙钟 0.09–0.10s 与串行的 0.11s 同级。<b>结论：收窄与串行化不可兼得，原方法是成立的最小改动</b>。</td></tr>
+      <tr><th>其它判据</th><td><span class="mono">cargo clippy --workspace --all-targets --offline -- -D warnings</span> → <b>rc=0</b>；断言计数 19/19/26 pre=post；<span class="mono">#[allow]</span> 0 处、全域无 lint 抑制。</td></tr>
+      <tr><th>round 3 addendum</th><td>QA 还自曝并修掉了自己 demo 驱动的一个缺陷：上一版按 mtime 选二进制会选到对拍变体的产物，已改为按 cargo 解析 + sha256 钉身份；并把 demo/16 连跑两次验证幂等。</td></tr>
+      <tr><th>结论</th><td class="ok">verdict = pass；F-28 标 closed（Q545 的 round 2 原文原样保留，不回改历史）</td></tr>
+    </table>
+
+    <div class="callout ok">
+      <p><b>这一段为什么值得写进证据包</b>：<br>
+      ① 第 5 阶段的价值不在于「都过了」，而在于<b>它敢判 FAIL、且判得具体</b>（expected=429 actual=401 这种逐字数字，而不是「似乎有问题」）；<br>
+      ② 「提交信息声称已修、实际只改注释」这件事说明<b>自述不可信、必须独立复跑</b> —— 这正是 QA 存在的理由，也是本流水线把「证据」而不是「结论」当交付物的原因；<br>
+      ③ 反证实验（造一个反例、证明它更差）比「我改得对」的说服力高一个量级，round 3 用它裁掉了一场会拖很久的口水。</p>
+    </div>
+
+    <h3>三轮的总账</h3>
+    <table>
+      <tr><th>轮</th><th>入口</th><th>结论</th><th>抓到 / 闭合</th></tr>
+      <tr><td>round 1</td><td class="mono">e8fd233</td><td class="bad">FAIL</td><td>新记 F-23（安全回归）/ F-24 / F-25 / F-26 / F-27；3 条与清单预期不符</td></tr>
+      <tr><td>round 2</td><td class="mono">5ceee91</td><td class="ok">PASS</td><td>闭合 F-23 / F-24 / MRG6-17 / F-25；新记 F-28（口径不符）/ F-29（质量欠账残差）</td></tr>
+      <tr><td>round 3</td><td class="mono">7800865</td><td class="ok">PASS</td><td>闭合 F-28（含反证实验裁决）；新增检查 Q547–Q553</td></tr>
+    </table>
+    <p class="muted">注：<span class="mono">qa-report.json</span> 里 Q525 / Q528 / Q545 三条在<b>历史上</b>是 FAIL，它们是<b>当时那一轮</b>的记录，作为 finding 保留（因而现在仍能在文件里看到 FAIL 字样）。它们的闭合证据分别是 Q531 / Q534 / Q547 —— 不回改历史是这套流程的纪律。</p>
+  </div>
+</section>
+
+<!-- ============================================================ ⑤ -->
+<section id="s5">
+  <h2>⑤ 闸门面板：跑了什么、没跑什么，❌ 原样</h2>
+  <div class="body">
+    <div class="callout">
+      <p><b>本节的闸门口径</b>：带 <span class="tag">本轮复跑</span> 的都在 <b>2026-10-08 02:47–02:56 CST</b>、分支 <span class="mono">gauntlet/merge-m6</span> @ <span class="mono">9817ae9</span> 上现场重跑（原始日志 <span class="mono">gauntlet-out/m6-report/gate-coder.log</span>、<span class="mono">m6-checks.log</span>、<span class="mono">demos.log</span>）；带 <span class="tag">round 3 记录</span> 的是 QA 在 <span class="mono">7800865</span> 上的整跑记录（<span class="mono">qa/evidence/m6-qa7-gates.txt</span>），<b>本轮没有重跑</b>，如实标注来源。</p>
+    </div>
+
+    <h3>本轮现场复跑</h3>
+    <table>
+      <tr><th>闸门 / 判据</th><th>命令</th><th>结果</th><th>来源</th></tr>
+      <tr><td>阶段闸门（coder）</td><td class="mono">node .gauntlet/gauntlet.mjs gate --profile coder</td><td><span class="ok">PASS</span> — spec 29 场景 · build ✅ · tests <b>98/98</b> · acceptance <b>29/29</b>（missing 0）</td><td><span class="tag">本轮复跑</span></td></tr>
+      <tr><td>本轮判据程序 M6-01…M6-15</td><td class="mono">sh qa/harness/merge-m6-checks.sh</td><td><span class="ok">PASS=15 FAIL=0</span>（rc=0）</td><td><span class="tag">本轮复跑</span></td></tr>
+      <tr><td>四项无 root 修复 F1–F12</td><td class="mono">sh qa/harness/no-root-fixes-checks.sh --no-slow</td><td><span class="ok">PASS=12 FAIL=0</span>（F1 动态探针 / F5 真装真启按口径静态跳过）</td><td><span class="tag">本轮间接复跑</span>（由 M6-07 驱动）</td></tr>
+      <tr><td>可回放演示 13/14/15/16</td><td class="mono">node .gauntlet/gauntlet.mjs demo demo/&lt;x&gt;.json</td><td><span class="ok">4/4 exit 0</span> → <span class="mono">gauntlet-out/evidence/demos/*.html</span></td><td><span class="tag">本轮复跑</span></td></tr>
+    </table>
+
+    <h3>既有记录（本轮未重跑，来源已标注）</h3>
+    <table>
+      <tr><th>闸门 / 判据</th><th>结果</th><th>说明</th><th>来源</th></tr>
+      <tr><td>质量闸门（quality）</td><td><span class="bad">FAIL</span> — complexity <b>❌ 34/435</b>（maxCC 23）、crap <b>❌ 56 项</b>（maxCRAP 552）、coverage <b>❌ 31.2%</b>；warnings 0 ✅ / tidy 0 ✅ / duplication 0% ✅ / scope 1.0（35 文件）✅ / arch 跳过</td><td>既有欠账（M7），<b>本轮不还、不重算、不美化</b>。详见第 ⑥ 节 F-29。</td><td><span class="tag">round 3 记录</span></td></tr>
+      <tr><td>REST 安全矩阵</td><td><span class="ok">19 PASS</span> / <span class="bad">1 FAIL</span>（<span class="mono">DOC-GET-USERS-READONLY expected=200 actual=401</span>）</td><td>唯一 FAIL = F-07 的安全边界取舍，需要人拍板（第 ⑥ 节）。</td><td><span class="tag">本轮（由 M6-11 统计）</span></td></tr>
+      <tr><td>文档一致性 doc-claims</td><td><span class="ok">73 PASS</span> / <span class="bad">6 FAIL</span>（基线 9）</td><td>SIGKILL / force-option 两条如期由 FAIL 翻 PASS；剩余 6 条是既有文档欠账。</td><td><span class="tag">本轮（由 M6-08 统计）</span></td></tr>
+      <tr><td>任务生命周期 e2e</td><td><span class="ok">PASS=15 FAIL=0</span></td><td>含 WS 广播四条与告警级联删除。</td><td><span class="tag">本轮（由 M6-14 驱动）</span></td></tr>
+      <tr><td>运维检查 ops-checks</td><td><span class="wa">20 PASS / 3 FAIL</span></td><td>三条 FAIL 全是<b>既有 finding</b>（与上一轮同名），比上一轮少一条。</td><td><span class="tag">round 2 记录</span></td></tr>
+      <tr><td>无 root 不变量 NR1–NR21（作者口径）</td><td><span class="wa">5 FAIL</span>（NR6 / NR6b / NR8 / NR13 / NR15）</td><td>与上一轮<b>逐条同名</b>，归因「不是合流引入」（含 NR6 那条假阳性已知）；属基线属性。</td><td><span class="tag">round 2 记录</span></td></tr>
+      <tr><td>clippy --all-targets -D warnings</td><td><span class="ok">rc=0</span></td><td>round 2 的 9 条 MutexGuard 告警已在 <span class="mono">7800865</span> 清零（F-28 闭合）。</td><td><span class="tag">round 3 记录</span></td></tr>
+      <tr><td>fmt</td><td><span class="ok">干净</span></td><td><span class="mono">cargo fmt --all --check</span> 无输出。</td><td><span class="tag">round 3 记录</span></td></tr>
+    </table>
+
+    <h3>没跑的（如实列出，不假装跑过）</h3>
+    <table>
+      <tr><th>闸门</th><th>状态</th><th>为什么</th></tr>
+      <tr><td><span class="mono">gate --profile full</span></td><td><span class="na">未在报告阶段整跑</span></td><td>full = quality 六闸门 + coverage + sanitize + mutation + qa + constraints + equivalence。其中 <b>complexity / crap / coverage 三项在 master 上就是 ❌</b>，且本轮方案明确规定 <b>M7 质量口径不动</b>（不还 97 项欠账、不重算成 PASS）——所以 full 必然是 <b>FAIL</b>，且 FAIL 的原因与本次合流无关。本轮按任务书口径跑了 coder 档 + 判据程序；quality/coverage 的<b>实测值</b>沿用 round 3 记录（上一节已原样列出，含三处 ❌）。<br><span class="muted">另：<span class="mono">mutation</span> 在上一轮「无 root」报告里就跑到 <span class="mono">[22/736]</span> 被人工停止（原样留证），本次没有强行启动。</span></td></tr>
+      <tr><td><span class="mono">sanitize</span></td><td><span class="na">未配置</span></td><td><span class="mono">gauntlet.config.json</span> 没有 <span class="mono">commands.sanitize</span>（Rust + PG 的真实运行面由 QA 的 demo/harness 覆盖）。</td></tr>
+      <tr><td><span class="mono">arch</span>（架构依赖检查）</td><td><span class="na">SKIPPED</span></td><td>没有配置 <span class="mono">commands.arch</span>；kit 原样输出「没有配置」。<b>不是</b>「通过」。</td></tr>
+      <tr><td>Archify 架构图</td><td><span class="na">未产出</span></td><td>上一轮已记录：远端无外网，<span class="mono">diagram</span> 需要 <span class="mono">git clone</span> 工具本体 → 拿不到。本轮沿用该结论（<b>需人类确认项</b>之一）。</td></tr>
+      <tr><td>no-root-fixes-checks.sh <b>全量</b>（不带 --no-slow）</td><td><span class="na">按口径不跑</span></td><td><b>共享机器安全</b>：全量的 F5 会<b>真装真启</b>用户级 unit，会覆盖常驻 agent（PID 266643）的 unit 文件；本机口径一直是 <span class="mono">--no-slow</span>。详见第 ⑧ 节。</td></tr>
+    </table>
+
+    <div class="callout bad">
+      <p><b>不要误读这一节</b>：本轮 <span class="ok">coder PASS</span> 与 <span class="ok">15/15</span> 说明的是「<b>合流这件事本身是干净的</b>」；它<b>不代表</b>产品质量达标。硬阈值下 <b>complexity / crap / coverage 三项仍然是红的</b>，且本轮明确不修 —— 谁要把「可以进主线」读成「质量已经过关」，就是误读。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ ⑥ -->
+<section id="s6">
+  <h2>⑥ 未纳入本轮与开口项（逐条：理由 + 后续路径）</h2>
+  <div class="body">
+    <table>
+      <tr><th style="width:74px">编号</th><th style="width:210px">是什么</th><th>为什么本轮不合</th><th style="width:300px">后续路径</th></tr>
+      <tr>
+        <td><b>F-02</b></td>
+        <td>天级 90 天历史永不返回（B 的 <span class="mono">f4a8a31</span> 是另一条修法）</td>
+        <td>B 的修法与 <b>C 侧已有实现</b>冲突：C 侧已经有这条实现 + 4 条测试，硬搬 B 的版本等于用一条没测过的路径替换一条有测试的路径。<b>不是不修，是选哪条修法要人定</b>。</td>
+        <td>把两条修法并排放在 <span class="mono">qa/merge-plan.md</span> 的 M3/M8 里，由人二选一；选定后单独一轮小 PR（只动 history 那条路径）。</td>
+      </tr>
+      <tr>
+        <td><b>F-03</b></td>
+        <td><span class="mono">jobs.pid</span> 从不落库（任务进程 pid 无法从 DB 看到）</td>
+        <td>它需要改 <span class="mono">proto/**</span>（<span class="mono">JobStatusUpdate.pid/exit_code</span>）——而 <span class="mono">proto/**</span> 本轮<b>冻结</b>。冻结是为了不让合流同时改协议，把风险面收在一个维度里。</td>
+        <td>单独一轮：先改 proto（加字段，向后兼容的 optional）→ 重生成 → server/agent 双侧落库 → 加 e2e 判据（<span class="mono">jobs.pid</span> 非空 + 进程消失后置 null）。</td>
+      </tr>
+      <tr>
+        <td><b>F-07</b></td>
+        <td>只读账号看不到用户列表：<span class="mono">GET /api/users</span> 对只读身份返回 <b>401</b>（文档期望 200）</td>
+        <td><b>改代码 = 改安全边界</b>。让只读账号看到用户列表（哪怕不含口令摘要）会扩大信息暴露面；不让看则要继续改文档。机器判不出哪个对 —— 这是产品/安全口径，需要人拍板。<br><span class="muted">这也是 REST 矩阵里唯一的 FAIL（<span class="mono">DOC-GET-USERS-READONLY</span>）。</span></td>
+        <td>给两个选项与代价：(A) 保持 401 → 改 README/docs 的期望值为 401（文档跟随代码）；(B) 放开只读可见 → 明确哪些字段脱敏 + 加 <span class="mono">SEC-USERS-READONLY-MASKED</span> 判据。建议由安全口径负责人拍。</td>
+      </tr>
+      <tr>
+        <td><b>F-12</b></td>
+        <td>产品默认管理员口令 <span class="mono">admin</span> 太弱</td>
+        <td>改默认值会让所有已有部署升级后<b>登不进去</b>（或反之，留下一个更弱的迁移路径）。本轮只做<b>文档补强</b>：README 明写「默认口令是 <span class="mono">admin</span>，首次启动后必须立刻改」，并让 doc-claims 的两条守卫继续盯着代码默认值不被偷偷改。</td>
+        <td>要真正换默认值，需要一轮带迁移方案的改动（首次启动生成随机口令并打印到日志 / 强制改密流程）。单独立项。</td>
+      </tr>
+      <tr>
+        <td><b>F-27</b></td>
+        <td>A 的两样资产（<span class="mono">common::metrics</span> / <span class="mono">storage::conversions</span>）<b>已就位但没有产品消费者</b></td>
+        <td>把它们接进运行时意味着要么重写一条<b>已有测试覆盖的 SQL 聚合</b>，要么改一个<b>已文档化的 REST 响应形状</b> —— 都是行为变更，超出 M6 的「只合流」范围。</td>
+        <td>标为「资产在架、暂无消费者」（模块注释 + 约束 MRG6-24 逐字写明）；等有一轮真正需要它（例如要算 p95 之外的聚合）时再接。测试与 4 个 Gherkin 场景都保留，没删任何东西。</td>
+      </tr>
+      <tr>
+        <td><b>F-29</b></td>
+        <td>M7 质量欠账：残差 <b>592.706 / 117 项</b>（master 是 409.505 / 97 项）</td>
+        <td>本轮是<b>合流</b>不是<b>还债</b>。数字变大有部分原因是「被测到的代码变多了」（A 的资产 + B 的代码进仓后都被纳入了 435 个函数的统计，master 是 316 个）；但 <b>complexity 超标数从 23 升到 34、CRAP 超标从 45 升到 56</b> 也确实包含合流代码的贡献 —— <b>不掩饰这一点</b>。</td>
+        <td>M7 轮：先 <span class="mono">next --profile quality</span> 拿清单，按 CRAP 降序拆（TOP 是 <span class="mono">tui/ui.rs:599 node_panel</span> CRAP 552、<span class="mono">server/main.rs:544 run_background_tasks</span> 380、<span class="mono">tui/ui.rs:1024 draw_process</span> 342）；轮次不限、指标达标才停。</td>
+      </tr>
+    </table>
+
+    <h4>本轮明确「不做」的范围（来自方案，不是临时决定）</h4>
+    <ul>
+      <li><b>步骤 4（<span class="mono">web/</span> 与 <span class="mono">deploy/nginx.conf</span>）</b>：M5 裁决 = 先 TUI-only，web 走<b>独立分支</b>。所以 A 线未提交的 Web 工作<b>不在这次合流里</b>。</li>
+      <li><b><span class="mono">proto/**</span> 冻结</b>：见 F-03。</li>
+      <li><b>M7 质量口径</b>：不还 97 项欠账、不重算成 PASS、不开棘轮（棘轮配置 <span class="mono">enabled: false</span> 一字未动）。</li>
+      <li><b>不 push、不开 PR</b>：由 Leader 在用户审阅通过后做。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================================================ ⑦ -->
+<section id="s7">
+  <h2>⑦ 5 分钟人类审阅路线</h2>
+  <div class="body">
+    <p>按顺序做，5 分钟就够；每一步都写清「看什么、多久、不满意时怎么驳回」。</p>
+    <table>
+      <tr><th style="width:44px">分钟</th><th style="width:230px">看什么</th><th>判读标准</th></tr>
+      <tr><td><b>0:00–1:00</b></td><td>本页 <b>① 结论</b> 与 <b>⑤ 闸门面板</b></td><td>确认两件事：合流本身干净（coder PASS / 15/15 / 12/12），质量三闸门仍是红的且本轮不修。这两点接受 → 继续；不接受 → 直接驳回。</td></tr>
+      <tr><td><b>1:00–2:30</b></td><td>第 <b>② 节</b>的 8 项修复表（只看「修复前 → 后」那一列）</td><td>这 8 项是不是你想要的 8 项？有没有<b>你不想要</b>的行为变更混在里面？（每项都有最小复现命令，可随时自己跑。）</td></tr>
+      <tr><td><b>2:30–3:30</b></td><td>第 <b>③ 节</b>（3 个 B 代码 bug）+ 第 <b>④ 节</b>的 round 1（安全回归那段）</td><td>看两件事：这些 bug 是不是「只有把代码放进真实运行才会暴露」的类型；以及流程是否真的在<b>独立复跑、敢判 FAIL</b>。</td></tr>
+      <tr><td><b>3:30–4:30</b></td><td>第 <b>⑥ 节</b>的开口项表</td><td>尤其 <b>F-07</b>（安全边界，需要你拍 A/B）与 <b>F-03</b>（要不要动 proto）。这两条不定，后续轮次没法排。</td></tr>
+      <tr><td><b>4:30–5:00</b></td><td>演示录像（任选其一，30 秒）</td><td><span class="mono">gauntlet-out/evidence/demos/15-m6-lockout-and-cluster-info.html</span>（看 429 与 null 两条翻转）或 <span class="mono">13-m6-audit-endpoint.html</span>（看审计端点从 500 到 200 + total=rows）。</td></tr>
+    </table>
+    <div class="callout">
+      <p><b>不满意时怎么驳回（三条路，任选）</b>：<br>
+      ① 对某一项修复有异议 → 指名 F 编号，回第 2 阶段重做该项（其余项不动）；<br>
+      ② 认为开口项里的某条<b>必须本轮解决</b> → 指明编号（尤其 F-07），Leader 安排一轮小幅返工；<br>
+      ③ 认为合流范围本身错了 → 回第 1 阶段重写 <span class="mono">qa/merge-m6.qa.md</span> 的判据表。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ ⑧ -->
+<section id="s8">
+  <h2>⑧ 可复现性：分支 / 提交 / 复跑命令 / 共享机器安全前提</h2>
+  <div class="body">
+    <h3>身份</h3>
+    <table>
+      <tr><th style="width:170px">项</th><th>值</th></tr>
+      <tr><td>工作树（远端）</td><td class="mono">/public/tianyuyang/code/ClusterScope-review/merge-m6</td></tr>
+      <tr><td>分支 / HEAD</td><td class="mono">gauntlet/merge-m6 @ 9817ae988476e373363f909cdae4541e365e3298</td></tr>
+      <tr><td>目标分支（基线）</td><td class="mono">master @ 8601ac9cb50a1e1ec568e5a10454b83cdb36d7fa</td></tr>
+      <tr><td>分支内容</td><td>30 个提交（<span class="mono">git rev-list --count master..HEAD</span>）、<b>0 个 merge 提交</b>、116 文件（+14923 / −902）</td></tr>
+      <tr><td>远端</td><td>node <span class="mono">lyy-node03</span>（<span class="mono">tianyuyang@172.19.133.164</span>），uid 3000；<b>无外网</b>（cargo 一律 <span class="mono">--offline</span>）</td></tr>
+      <tr><td>工具链</td><td>Rust 1.97.1（<span class="mono">export PATH=$HOME/.cargo/bin:$PATH</span>）、Node v26、PostgreSQL 16.4（<span class="mono">postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope</span>）</td></tr>
+    </table>
+
+    <h3>复跑（从干净状态开始，按顺序）</h3>
+<pre>cd /public/tianyuyang/code/ClusterScope-review/merge-m6
+export PATH=$HOME/.cargo/bin:$PATH
+
+# 1) 阶段闸门：期望 GATE coder: PASS（spec 29 场景 / 98 tests / 0 failed / acceptance 29/29）
+node .gauntlet/gauntlet.mjs gate --profile coder
+
+# 2) 本轮判据程序：期望 M6-CHECKS: PASS=15 FAIL=0（自己按 PID 文件起停 server/agent）
+sh qa/harness/merge-m6-checks.sh
+
+# 3) 演示（可回放录像 → gauntlet-out/evidence/demos/）
+node .gauntlet/gauntlet.mjs demo demo/13-m6-audit-endpoint.json
+node .gauntlet/gauntlet.mjs demo demo/14-m6-force-cancel.json
+node .gauntlet/gauntlet.mjs demo demo/15-m6-lockout-and-cluster-info.json
+node .gauntlet/gauntlet.mjs demo demo/16-m6-f28-storage-tests-serialized.json
+
+# 4)（可选，慢）四项无 root 修复：本机口径带 --no-slow，期望 PASS=12 FAIL=0
+sh qa/harness/no-root-fixes-checks.sh --no-slow
+
+# 5)（可选，只读）质量现状：complexity / crap / coverage 仍是 ❌（M7 欠账，本轮不修）
+node .gauntlet/gauntlet.mjs gate --profile quality</pre>
+    <p class="muted">「按 PID 文件起停」是刻意的：脚本只停自己启动的进程（<span class="mono">server.pid</span> / <span class="mono">agent.pid</span>），不用 <span class="mono">pkill -f clusterscope</span>。</p>
+
+    <h3 id="shared">共享机器安全前提（<b>先读这段再复跑</b>）</h3>
+    <div class="callout wa">
+      <p>这台机器（<span class="mono">lyy-node03</span>）是<b>多人共用</b>的：</p>
+      <ul>
+        <li><b>有一个不属于本工作的常驻 agent：PID 266643</b>（<span class="mono">systemd --user</span>，<span class="mono">clusterscope-agent.service</span>，启动于 2026-09-02）。<b>任何一步都不得碰它、它的 unit 或它的配置。</b>本轮全程：该 pid 未被重启、<span class="mono">Linger=yes</span> 未变、unit 文件未被改写。</li>
+        <li><b><span class="mono">no-root-fixes-checks.sh</span> 的全量版本（不带 <span class="mono">--no-slow</span>）会覆盖那个常驻 agent 的 unit 文件</b>（F5 段要「真装真启」用户级 unit；脚本会做逐字节还原，但中途被中断就还原不了）。<b>本机口径是 <span class="mono">--no-slow</span></b>：F1 的动态探针与 F5 的真装真启静态跳过。本轮报告阶段<b>没有</b>跑全量。</li>
+        <li>停进程一律<b>只按自己的 PID 文件</b>；不要用 <span class="mono">pkill -f clusterscope</span>（会误杀 266643）。</li>
+        <li>不要动 <span class="mono">/public/tianyuyang/code/ClusterScope</span>（B 的<b>活工作树</b>，mtime 2026-08-12）与 <span class="mono">ClusterScope-review/gh-line</span>（C 线的镜像）。</li>
+        <li>不要把两条 kit 命令（<span class="mono">gate</span> / <span class="mono">test</span>）<b>并发</b>跑：它们共用 <span class="mono">gauntlet-out/junit.xml</span> 与 <span class="mono">lcov.info</span>，会互相覆盖。</li>
+      </ul>
+    </div>
+
+    <h3>原始证据在哪（都在仓库里，可逐个打开）</h3>
+    <ul class="files">
+      <li>qa/qa-report.json —— 185 条检查（Q501–Q553 是本轮），含 verdictRule 与三个轮次的原文</li>
+      <li>qa/merge-m6.qa.md —— 本轮判据表（步骤 1/2/3/5 的验收面、翻转登记表、决策记录）★（表格较大，按需查阅）</li>
+      <li>qa/constraints.json —— 本轮追加 MRG6-01…MRG6-24（+ 勘误），既有 118 条逐字节未动</li>
+      <li>qa/evidence/m6-qa5-*.txt —— round 1 的原始输出（含 3 个 bug 的复现、F-23 的状态码矩阵）</li>
+      <li>qa/evidence/m6-qa6-*.txt / m6-qa7-*.txt —— round 2 / round 3 的原始输出（含 F-28 的反证实验）</li>
+      <li>qa/evidence/m6-qa7-gates.txt —— round 3 的整跑：clippy rc=0 / coder PASS / 15-15 / 12-12 / quality FAIL</li>
+      <li>demo/13…16-*.json —— 本轮 4 个可回放演示（录像在 <span class="mono">gauntlet-out/evidence/demos/</span>，未入库）</li>
+      <li>feature 文件 —— features/merge_m6_{audit_queries,auth_hardening,job_safety,legacy_assets}.feature（共 23 个场景）</li>
+    </ul>
+    <p class="muted">说明：<span class="mono">gauntlet-out/</span> 已被 <span class="mono">.gitignore</span> 忽略（构建产物与本次复跑日志在远端留档，不入库）；仓库内能看到的是<b>判据脚本、证据文本与演示脚本</b>——它们才是可回放的那部分。</p>
+
+    <h3>本轮报告的边界（做了什么 / 没做什么）</h3>
+    <table>
+      <tr><th style="width:150px">项</th><th>状态</th></tr>
+      <tr><td>改了产品代码 / 测试 / features / deploy / proto / README</td><td><span class="bad">没有</span>（Reporter 只写 <span class="mono">report/**</span>）</td></tr>
+      <tr><td>改了 <span class="mono">.gauntlet/</span> / <span class="mono">gauntlet.config.json</span> / 既有约束条目 / 任何既有 verdict</td><td><span class="bad">没有</span></td></tr>
+      <tr><td>美化 ❌</td><td><span class="bad">没有</span>（三处 ❌ 原样列出，并标注「本轮不修」）</td></tr>
+      <tr><td>push / 开 PR</td><td><span class="bad">没有</span>（由 Leader 在用户审阅通过后做）</td></tr>
+      <tr><td>本轮复跑（现场）</td><td><span class="ok">gate coder · merge-m6-checks · 4 个 demo</span></td></tr>
+      <tr><td>本轮未跑（已标注来源）</td><td>quality / full / mutation / 全量 no-root-fixes / archify</td></tr>
+    </table>
+  </div>
+</section>
+
+<footer>
+  证据包产出：Gauntlet 第 6 阶段（Reporter）· 单文件 HTML · 离线可看 · 不依赖外部资源。<br>
+  数据来源：本页每个 <span class="tag">本轮复跑</span> 标记的数字都来自 2026-10-08 02:47–02:56 CST 在 <span class="mono">gauntlet/merge-m6 @ 9817ae9</span> 上的现场运行；<span class="tag">round N 记录</span> 的数字来自 <span class="mono">qa/evidence/</span> 里对应轮次的原始输出。
+</footer>
+
+</div>
+</body>
+</html>
