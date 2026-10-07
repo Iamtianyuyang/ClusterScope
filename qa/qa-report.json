@@ -2190,7 +2190,7 @@
    "title": "审计覆盖面真的扩大（F-10）",
    "action": "sh qa/harness/merge-m6-checks.sh（M6-12 段：记录 T0 → 经 REST 登录/建任务/停任务/建用户/失败登录 → select count(distinct action) from audit_logs where timestamp > T0）",
    "expected": "新出现的 action 种类 ≥ 3，且这些行能通过修好的 GET /api/audit-logs 读出来；夹具只写自己的前缀，不清空共享表",
-   "actual": "M6-12 PASS：一次登录 + 建任务 + 停任务 + 建用户（+ 失败登录）后，`timestamp > T0` 的审计行里出现 **4 种** action（合流前是 2 种），且 `GET /api/audit-logs` 读得到（total 非空）。源码侧独立计数：handlers.rs 产品代码里有 **14 个 insert_audit_log 调用点**，去重后 9 种 action（login / create_job ×2 / stop_job / create_alert_rule / delete_alert_rule / create_user / update_user / delete_user / change_password）。夹具卫生：本轮所有自造账号/任务都带 qa5-/m6- 前缀，M6-12 只按 `timestamp > T0` 计数（没有 TRUNCATE；ops-checks.sh:112 的清空动作另见 Q528）。",
+   "actual": "M6-12 PASS：一次登录 + 建任务 + 停任务 + 建用户（+ 失败登录）后，`timestamp > T0` 的审计行里出现 **4 种** action（合流前是 2 种），且 `GET /api/audit-logs` 读得到（total 非空）。源码侧独立计数：handlers.rs 产品代码里有 **14 个 insert_audit_log 调用点**，去重后 9 种 action（login / create_job ×2 / stop_job / create_alert_rule / delete_alert_rule / create_user / update_user / delete_user / change_password）。夹具卫生：本轮所有自造账号/任务都带 qa5-/m6- 前缀，M6-12 只按 `timestamp > T0` 计数（没有 TRUNCATE；ops-checks.sh:112 本身会清空 node_metrics —— 本阶段那一次实测 before=662 → after=0，属该脚本已知的夹具卫生问题 N9，不是本轮新增行为）。",
    "status": "pass",
    "verdict": "holds",
    "evidence": [
@@ -2280,7 +2280,7 @@
    "title": "范围纪律：只做步骤 1/2/3/5；约束只追加；M7 不重算",
    "action": "git diff --numstat 7ca587a -- qa/constraints.json；git diff --numstat 8601ac9 -- qa/constraints.json；git diff --name-only 8601ac9 -- web deploy/nginx.conf；ls quality-accepted.json mutation-accepted.json；grep -n 'F-02|F-07' qa/merge-m6.qa.md",
    "expected": "约束只追加（第二列 0）；web/ 与 nginx.conf 零改动；不开棘轮、不写 accepted 文件；F-02/F-07 的取舍与后续路径写进 qa/merge-m6.qa.md",
-   "actual": "约束清单：相对 7ca587a 是 `363 0`（纯新增）、相对 8601ac9 是 `223 0`（纯新增，正是 MRG6-01…22）—— 第二列都是 0（零删行）。web/ 与 deploy/nginx.conf 零改动（空 diff）。quality-accepted.json / mutation-accepted.json 都不存在。F-02（天级历史）与 F-07（read-only 鉴权边界）的取舍与后续路径写在 qa/merge-m6.qa.md §9，共 3 处命中。M7 的口径没有重算成 PASS（见 Q529 的原始数字）。",
+   "actual": "约束清单：相对 7ca587a 是 `363 0`（纯新增）、相对 8601ac9 是 `223 0`（纯新增，正是 MRG6-01…22）—— 第二列都是 0（零删行）。web/ 与 deploy/nginx.conf 零改动（空 diff）。quality-accepted.json / mutation-accepted.json 都不存在。F-02（天级历史）与 F-07（read-only 鉴权边界）的取舍与后续路径写在 qa/merge-m6.qa.md §9，共 3 处命中。M7 的口径没有重算成 PASS（见 Q528 的原始数字）。",
    "status": "pass",
    "verdict": "holds",
    "evidence": [
