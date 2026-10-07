@@ -906,7 +906,10 @@ pub async fn update_user(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    storage::user_queries::update_user(state.database.pool(), &id, role, enabled)
+    // B's update_user takes an optional password hash (a fresh password
+    // also clears lockout state). This call site is replaced by
+    // update_user_guarded when handlers.rs is grafted.
+    storage::user_queries::update_user(state.database.pool(), &id, role, enabled, None)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
