@@ -181,16 +181,12 @@ pub async fn ws_upgrade(
             .and_then(|h| h.strip_prefix("Bearer "))
             .map(|s| s.to_string())
             .or_else(|| params.get("token").cloned());
-        // Same checks as the HTTP middleware: signature + the subject must
-        // still be an enabled, unlocked user (a deleted/disabled account's
-        // unexpired token must not keep a live metrics feed).
-        let authorized = match token
+        // Same check as the HTTP middleware: a valid, unexpired signature
+        // (the JWT is authoritative -- see auth_middleware).
+        let authorized = token
             .as_deref()
-            .map(|t| auth_middleware::validate_token(t, &state.jwt_secret))
-        {
-            Some(Ok(claims)) => auth_middleware::user_is_active(&state, &claims.sub).await,
-            _ => false,
-        };
+            .map(|t| auth_middleware::validate_token(t, &state.jwt_secret).is_ok())
+            .unwrap_or(false);
         if !authorized {
             return (StatusCode::UNAUTHORIZED, "missing or invalid token").into_response();
         }

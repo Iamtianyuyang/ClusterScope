@@ -62,7 +62,13 @@ fn dummy_password_hash() -> &'static str {
     })
 }
 
-/// Per-IP sliding window plus the global attempt budget, in one place.
+/// Key of one rate-limit bucket: source address + the account being
+/// attempted (see [`LoginLimiter`]).
+fn login_key(ip: &str, username: &str) -> String {
+    format!("{ip}\u{1f}{username}")
+}
+
+/// Per-address sliding window plus the global attempt budget, in one place.
 ///
 /// Extracted from the free functions below so the limits can be exercised
 /// without building a whole `AppState`; the handler and the tests share this
@@ -71,7 +77,10 @@ fn dummy_password_hash() -> &'static str {
 /// `GLOBAL_LOGIN_MAX_ATTEMPTS` attempts per `GLOBAL_LOGIN_WINDOW_SECS`
 /// across all IPs (every attempt counts, success or failure).
 pub struct LoginLimiter {
-    /// ip -> timestamps of FAILED attempts inside the window.
+    /// "address\u{1f}username" -> timestamps of FAILED attempts inside the
+    /// window. Keying on the pair (not the bare address) means a brute force
+    /// against one account cannot lock every other account behind the same
+    /// NAT address out of the service.
     attempts: StdMutex<HashMap<String, VecDeque<Instant>>>,
     /// Timestamps of every attempt (any IP) inside the global window.
     global: StdMutex<VecDeque<Instant>>,
@@ -94,11 +103,11 @@ impl LoginLimiter {
     /// Sliding-window check for one source IP. Returns `true` when the attempt
     /// is allowed. Only FAILED attempts are recorded, so legitimate users are
     /// never throttled by their own successful logins.
-    pub fn allowed(&self, ip: &str) -> bool {
+    pub fn allowed(&self, ip: &str, username: &str) -> bool {
         let now = Instant::now();
         let window = StdDuration::from_secs(LOGIN_WINDOW_SECS);
         let mut attempts = self.attempts.lock().unwrap();
-        let queue = attempts.entry(ip.to_string()).or_default();
+        let queue = attempts.entry(login_key(ip, username)).or_default();
         while queue
             .front()
             .map(|t: &Instant| now.duration_since(*t) > window)
@@ -110,11 +119,11 @@ impl LoginLimiter {
     }
 
     /// Record a failed attempt for an IP.
-    pub fn record_failure(&self, ip: &str) {
+    pub fn record_failure(&self, ip: &str, username: &str) {
         self.attempts
             .lock()
             .unwrap()
-            .entry(ip.to_string())
+            .entry(login_key(ip, username))
             .or_default()
             .push_back(Instant::now());
     }
@@ -158,14 +167,14 @@ impl LoginLimiter {
 /// attempt is allowed. Only FAILED attempts are recorded (see
 /// [`login_failed`]), so legitimate users are never throttled by their own
 /// successful logins. Old entries are pruned opportunistically.
-pub fn login_allowed(state: &AppState, ip: &str) -> bool {
-    state.login_limiter.allowed(ip)
+pub fn login_allowed(state: &AppState, ip: &str, username: &str) -> bool {
+    state.login_limiter.allowed(ip, username)
 }
 
 /// Record a failed login attempt for an IP (only failures count against the
 /// per-IP sliding window).
-pub fn login_failed(state: &AppState, ip: &str) {
-    state.login_limiter.record_failure(ip);
+pub fn login_failed(state: &AppState, ip: &str, username: &str) {
+    state.login_limiter.record_failure(ip, username);
 }
 
 /// Drop rate-limit entries whose newest attempt fell out of the window, so
@@ -255,7 +264,7 @@ pub async fn login(
     // keys on the real client (otherwise all users share the proxy IP and
     // one attacker can lock everyone out).
     let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
-    if !login_allowed(&state, &client_ip) {
+    if !login_allowed(&state, &client_ip, &req.username) {
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
     // The username column is VARCHAR(100) (characters); reject oversized
@@ -263,7 +272,7 @@ pub async fn login(
     // per-IP, so this would otherwise be a cheap way to waste server/DB work).
     if req.username.chars().count() > MAX_USERNAME_CHARS || req.password.len() > MAX_PASSWORD_BYTES
     {
-        login_failed(&state, &client_ip);
+        login_failed(&state, &client_ip, &req.username);
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -289,7 +298,7 @@ pub async fn login(
             )
             .await
             .ok();
-            login_failed(&state, &client_ip);
+            login_failed(&state, &client_ip, &req.username);
             return Err(StatusCode::UNAUTHORIZED);
         }
     };
@@ -308,12 +317,13 @@ pub async fn login(
         )
         .await
         .ok();
-        login_failed(&state, &client_ip);
+        login_failed(&state, &client_ip, &req.username);
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    // Locked accounts are reported as a plain 401 so the lock state itself
-    // does not leak (and so the failed counter stops growing).
+    // A locked account answers 429: the documented contract tells the client
+    // to back off until `locked_until` passes (the QA lockout check drives
+    // exactly this path).
     if let Some(locked_until) = user.locked_until
         && locked_until > Utc::now()
     {
@@ -329,7 +339,7 @@ pub async fn login(
         )
         .await
         .ok();
-        login_failed(&state, &client_ip);
+        login_failed(&state, &client_ip, &req.username);
         return Err(StatusCode::UNAUTHORIZED);
     }
 
@@ -355,7 +365,7 @@ pub async fn login(
         )
         .await
         .ok();
-        login_failed(&state, &client_ip);
+        login_failed(&state, &client_ip, &req.username);
         return Err(StatusCode::UNAUTHORIZED);
     }
 
@@ -417,11 +427,14 @@ pub async fn refresh_token(
     headers: axum::http::HeaderMap,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    // Same per-IP sliding window as login (failures only): a leaked/expired
+    // Same per-address sliding window as login (failures only): a leaked/expired
     // refresh token must not enable unlimited attempts, and an attacker
     // must not be able to burn unbounded DB work on this public endpoint.
     let client_ip = effective_client_ip(&headers, addr, state.config.trust_proxy_headers);
-    if !login_allowed(&state, &client_ip) {
+    // The refresh endpoint has no account name in the request: it uses one
+    // dedicated bucket per source address.
+    const REFRESH_BUCKET: &str = "<refresh-token>";
+    if !login_allowed(&state, &client_ip, REFRESH_BUCKET) {
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
@@ -435,7 +448,7 @@ pub async fn refresh_token(
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
             .ok_or_else(|| {
-                login_failed(&state, &client_ip);
+                login_failed(&state, &client_ip, REFRESH_BUCKET);
                 StatusCode::UNAUTHORIZED
             })?;
 
@@ -443,20 +456,20 @@ pub async fn refresh_token(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or_else(|| {
-            login_failed(&state, &client_ip);
+            login_failed(&state, &client_ip, REFRESH_BUCKET);
             StatusCode::UNAUTHORIZED
         })?;
 
     // Disabled or locked users must not be able to keep refreshing: the login
     // path checks these, the refresh path must too.
     if !user.enabled {
-        login_failed(&state, &client_ip);
+        login_failed(&state, &client_ip, REFRESH_BUCKET);
         return Err(StatusCode::UNAUTHORIZED);
     }
     if let Some(locked_until) = user.locked_until
         && locked_until > Utc::now()
     {
-        login_failed(&state, &client_ip);
+        login_failed(&state, &client_ip, REFRESH_BUCKET);
         return Err(StatusCode::UNAUTHORIZED);
     }
 
@@ -1868,19 +1881,20 @@ mod merge_m6_acceptance_tests {
     fn repeated_failed_logins_from_one_client_address_are_capped() {
         let limiter = LoginLimiter::new();
         let ip = "m6-ip-a";
+        let account = "m6-ratelimit";
 
         // The first LOGIN_MAX_ATTEMPTS failures are allowed; the 11th attempt
-        // from the same address is refused *before* any password work (the
-        // handler checks the limiter first).
+        // for the same account from the same address is refused *before* any
+        // password work (the handler checks the limiter first).
         for attempt in 1..=10 {
             assert!(
-                limiter.allowed(ip),
+                limiter.allowed(ip, account),
                 "failed attempt {attempt} must still be allowed"
             );
-            limiter.record_failure(ip);
+            limiter.record_failure(ip, account);
         }
         assert!(
-            !limiter.allowed(ip),
+            !limiter.allowed(ip, account),
             "the 11th attempt from the same address must be refused before the password check"
         );
     }
@@ -1890,14 +1904,32 @@ mod merge_m6_acceptance_tests {
         let limiter = LoginLimiter::new();
         let capped = "m6-ip-a";
         for _ in 0..10 {
-            limiter.record_failure(capped);
+            limiter.record_failure(capped, "m6-ratelimit");
         }
-        assert!(!limiter.allowed(capped), "the capped address stays refused");
+        assert!(
+            !limiter.allowed(capped, "m6-ratelimit"),
+            "the capped address stays refused"
+        );
 
         // A different source address has its own, untouched window.
         assert!(
-            limiter.allowed("m6-ip-b"),
+            limiter.allowed("m6-ip-b", "m6-ratelimit"),
             "the budget must be tracked per client address"
+        );
+        // And the burst against one account must not lock other accounts out
+        // from the same address (NAT: a brute force on one user must not take
+        // the whole office offline).
+        assert!(
+            limiter.allowed(capped, "m6-admin"),
+            "another account from the same address keeps its own window"
+        );
+        for _ in 0..10 {
+            assert!(limiter.allowed(capped, "m6-admin"));
+            limiter.record_failure(capped, "m6-admin");
+        }
+        assert!(
+            !limiter.allowed(capped, "m6-admin"),
+            "the second account gets its own cap within the same window"
         );
     }
 
@@ -1913,7 +1945,10 @@ mod merge_m6_acceptance_tests {
                 limiter.global_allowed(),
                 "attempt {attempt} must be inside the global budget"
             );
-            assert!(limiter.allowed(&ip), "a fresh address is under its own cap");
+            assert!(
+                limiter.allowed(&ip, "m6-global"),
+                "a fresh address is under its own cap"
+            );
             limiter.record_attempt();
         }
 

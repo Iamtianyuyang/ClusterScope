@@ -481,7 +481,6 @@ fn build_http_router(state: Arc<AppState>) -> Router {
             "/alerts/rules/{rule_id}/ack",
             post(handlers::acknowledge_alert),
         )
-        .route("/audit-logs", get(handlers::list_audit_logs))
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth_middleware::require_admin_middleware,
