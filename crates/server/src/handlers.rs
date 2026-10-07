@@ -639,14 +639,15 @@ pub async fn create_alert_rule(
     let metric = req.get("metric").and_then(|v| v.as_str()).unwrap_or("");
     let operator = req.get("operator").and_then(|v| v.as_str()).unwrap_or("gt");
     let threshold: f64 = req.get("threshold").and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let duration: i32 = req
-        .get("duration_seconds")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(30) as i32;
-    let severity = req
-        .get("severity")
-        .and_then(|v| v.as_str())
-        .unwrap_or("warning");
+    // Parse duration as i64 first and range-check before narrowing: `as i32`
+    // on an oversized value truncates (e.g. 2^40 -> 0), which would silently
+    // turn a long duration into an instant-firing rule.
+    let duration_secs: i64 = req.get("duration_seconds").and_then(|v| v.as_i64()).unwrap_or(30);
+    let duration: i32 = i32::try_from(duration_secs)
+        .ok()
+        .filter(|d| *d >= 0)
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    let severity = req.get("severity").and_then(|v| v.as_str()).unwrap_or("warning");
     let node_id = req.get("node_id").and_then(|v| v.as_str()).unwrap_or("");
     let gpu_uuids = req
         .get("gpu_uuids")
@@ -661,16 +662,59 @@ pub async fn create_alert_rule(
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    // Whitelist the operator/severity and sanity-check the metric so bad
-    // rules cannot be persisted (they would silently never fire).
-    let valid_operator = matches!(operator, "gt" | "gte" | "lt" | "lte" | "eq" | "neq");
-    let valid_severity = matches!(severity, "info" | "warning" | "critical");
-    if metric.is_empty()
-        || !valid_operator
-        || !valid_severity
-        || !threshold.is_finite()
-        || duration < 0
-    {
+    // Validate against the alert engine's supported inputs; an unknown
+    // operator/severity would otherwise silently disable the rule.
+    if name.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    // Length/size caps so a single rule cannot grow the DB row without bound.
+    if name.len() > 255 || description.len() > 4096 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(arr) = gpu_uuids.as_array()
+        && arr.len() > 256 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    if let Some(obj) = labels.as_object()
+        && obj.len() > 64 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    if !matches!(operator, "gt" | "gte" | "lt" | "lte" | "eq" | "neq") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    // Per-item caps: gpu_uuids entries and node_id feed VARCHAR columns and
+    // end up in per-GPU alert keys, so an oversized string would bloat the
+    // DB row and the in-memory engine without bound.
+    if node_id.len() > 255 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(arr) = gpu_uuids.as_array()
+        && arr.iter().any(|v| v.as_str().map(|s| s.len() > 255).unwrap_or(false)) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    if let Some(obj) = labels.as_object()
+        && (obj.keys().any(|k| k.len() > 255)
+            || obj.values().any(|v| v.as_str().map(|s| s.len() > 4096).unwrap_or(false))) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    if !matches!(severity, "info" | "warning" | "critical") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if !matches!(
+        metric,
+        "cpu_usage_percent"
+            | "memory_usage_percent"
+            | "load_1"
+            | "gpu_temperature"
+            | "gpu_utilization"
+            | "gpu_memory_used_percent"
+            | "gpu_power_watts"
+    ) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    // C-side guard kept alongside B's block: a NaN/inf threshold would make
+    // the comparison in the alert engine never (or always) fire.
+    if !threshold.is_finite() {
         return Err(StatusCode::BAD_REQUEST);
     }
 

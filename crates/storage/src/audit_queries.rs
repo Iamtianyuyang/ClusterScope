@@ -51,17 +51,22 @@ pub async fn list_audit_logs(
 
     let mut conditions = vec!["1=1".to_string()];
 
-    if let Some(_user) = user {
-        conditions.push(format!("username = ${}", conditions.len() + 1));
+    // Bind placeholder index = position in `conditions` (index 0 is the
+    // constant "1=1", so the first filter gets $1). The same bound values
+    // are used for BOTH the count and the page query — forgetting the count
+    // query (as before) makes every filtered request fail with a missing
+    // bind parameter.
+    if user.is_some() {
+        conditions.push(format!("username = ${}", conditions.len()));
     }
-    if let Some(_action) = action {
-        conditions.push(format!("action = ${}", conditions.len() + 1));
+    if action.is_some() {
+        conditions.push(format!("action = ${}", conditions.len()));
     }
-    if let Some(_start) = start_time {
-        conditions.push(format!("timestamp >= ${}", conditions.len() + 1));
+    if start_time.is_some() {
+        conditions.push(format!("timestamp >= ${}", conditions.len()));
     }
-    if let Some(_end) = end_time {
-        conditions.push(format!("timestamp <= ${}", conditions.len() + 1));
+    if end_time.is_some() {
+        conditions.push(format!("timestamp <= ${}", conditions.len()));
     }
 
     let where_clause = conditions.join(" AND ");
@@ -74,11 +79,24 @@ pub async fn list_audit_logs(
         LIMIT ${} OFFSET ${}
         "#,
         where_clause,
+        conditions.len(),
         conditions.len() + 1,
-        conditions.len() + 2,
     );
 
-    let total: Option<(i64,)> = sqlx::query_as(&total_query).fetch_optional(pool).await?;
+    let mut total_q = sqlx::query_as::<_, (i64,)>(&total_query);
+    if user.is_some() {
+        total_q = total_q.bind(user);
+    }
+    if action.is_some() {
+        total_q = total_q.bind(action);
+    }
+    if start_time.is_some() {
+        total_q = total_q.bind(start_time);
+    }
+    if end_time.is_some() {
+        total_q = total_q.bind(end_time);
+    }
+    let total: Option<(i64,)> = total_q.fetch_optional(pool).await?;
     let total = total.map(|(t,)| t).unwrap_or(0);
 
     let mut q = sqlx::query_as::<_, AuditLogRow>(&query);
