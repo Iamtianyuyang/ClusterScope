@@ -45,6 +45,8 @@ td.num{font-family:var(--font-mono);white-space:nowrap}
 .toc a{text-decoration:none;border-bottom:1px dotted var(--ink-3)}
 .small{font-size:12.5px;color:var(--ink-2)}
 .kv{font-family:var(--font-mono);font-size:12.5px}
+.diagram{font-family:var(--font-mono);font-size:12.5px;line-height:1.5;background:var(--fill);border:1px solid var(--line-2);padding:12px;overflow-x:auto;white-space:pre}
+.diagram .n{font-weight:600}
 </style>
 </head>
 <body>
@@ -54,7 +56,8 @@ td.num{font-family:var(--font-mono);white-space:nowrap}
 <div class="head">
   <div class="eyebrow">GAUNTLET · 第 6 阶段证据包 · 需求原文「这个项目是要做一个不用 root 的程序」</div>
   <h1>无 root 修复：安装脚本不再误杀、配置缺失不再静默、用户级 unit 与无 root 文档补齐</h1>
-  <div><span class="verdict is-ok">✅ 本轮交付物通过：coder 闸门 PASS · 59/59 测试 · 6/6 场景 · harness 12/12 · 14/14 FIX-* 约束 met</span></div>
+  <div><span class="verdict is-ok">✅ 本轮交付物通过：coder 闸门 PASS · 59/59 测试 · 6/6 场景 · harness 12/12 · 14/14 FIX-* 约束 met</span>
+  <span class="verdict is-warn">⚠️ full profile 仍会亮 ❌：complexity / crap / coverage / mutation（既有债务，本轮不重算）</span></div>
   <div class="meta">
     <span><b>分支</b>gauntlet/no-root-fixes @ 1279b48</span>
     <span><b>PR 目标</b>gauntlet/audit-gh-line（栈式 PR，本 PR 只含修复）</span>
@@ -346,6 +349,22 @@ systemctl --user show clusterscope-agent.service -p MainPID --value; loginctl sh
   <tr><td>4 文件逐字节复原</td><td class="kv">qa/evidence/no-root-fixes-phase6-restore-verification.txt</td></tr>
   <tr><td>演示重录 rc=0 + 两份转录</td><td class="kv">qa/evidence/no-root-fixes-phase6-demos-rerun.txt · 11-…txt · 12-…txt</td></tr>
 </table>
+
+<h3 id="s56">5.6 架构图（Archify）与模块依赖草图</h3>
+<p><b>Archify 架构图：本轮拿不到（环境限制，已如实记录）。</b>远端无外网，<span class="kv">node .gauntlet/gauntlet.mjs diagram</span> 需要克隆 Archify 工具本体（<span class="kv">git clone --depth 1 --branch v3.0.1 https://github.com/tt-a1i/archify.git</span> 超时），因此无法校验/渲染新的架构图。仓库里已有一份来自上一轮审查的候选文件 <span class="kv">docs/architecture/clusterscope-runtime.architecture.json</span>（其 <span class="kv">meta.repository.revision</span> 还指向旧线 <span class="kv">f9c080b</span>，属父 PR 的产物，本 PR 不动它）。<b>「没有 Archify 架构图」列为需要人确认的项。</b></p>
+<p>作为替代，下面是从 <span class="kv">crates/*/Cargo.toml</span> 与 <span class="kv">Cargo.toml</span> 里<b>逐个</b>读出来的真实 crate 依赖（本轮修复集中在 <span class="kv">agent</span> 与 <span class="kv">deploy/</span>，不新增跨 crate 依赖）：</p>
+<div class="diagram"><span class="n">clusterscope-server (bin, crates/server)</span>  ──▶ common · protocol · storage · scheduler
+<span class="n">clusterscope-agent  (bin, crates/agent) </span>  ──▶ common · protocol
+<span class="n">clusterscope-tui    (bin, crates/tui)   </span>  ──▶ （无内部 crate 依赖：reqwest 走 server 的 HTTP/WS 接口）
+<span class="n">scheduler</span> ──▶ common          <span class="n">storage</span> ──▶ common          <span class="n">protocol</span> ──▶ （无内部依赖，只有 prost/tonic）
+<span class="n">common</span>（叶节点，无内部依赖）
+
+运行时连线（QA 实测）：tui ──HTTP/WS──▶ server ──gRPC:50051──▶ agent ──▶ NVML/6×L20 ──┐
+                                   server ──sqlx──▶ PostgreSQL 16.4（127.0.0.1:5432） ◀─┘
+
+本轮改动落点：deploy/install-agent.sh（安装脚本）· crates/agent/src/{config_loader,node_identity,main}.rs
+              deploy/clusterscope-{agent,server}.service（新增用户级 unit）· README.md</div>
+<p class="small">出处：<span class="kv">Cargo.toml</span> 的 workspace members（7 个 crate）与各 <span class="kv">crates/*/Cargo.toml</span> 的 <span class="kv">[dependencies]</span>（<span class="kv">tui</span> 的源码里没有任何工作区 crate 的 <span class="kv">use</span>，实测贪心 grep 为空）。</p>
 
 <p class="small" style="margin-top:26px">生成：第 6 阶段（Reporter）· 2026-10-07 · 本页为单文件、离线可看；所有引用路径相对仓库根目录。</p>
 </div>

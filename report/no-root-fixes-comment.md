@@ -37,6 +37,7 @@
 - **F-18**：审计里「静默回退」的表述已被本轮修复取代，属历史记录；默认配置路径缺失时「告警 + 继续跑」这条分支仍然成立。
 - **F-22**：F5 会临时把操作者的 `~/.config/systemd/user/clusterscope-agent.service` 换成仓库版，必须逐字节还原；第 5 阶段曾出现一次「看起来一样」被保留，已还原。复跑前请自行留副本（见 `report/no-root-fixes.html` 第 5.3 节）。
 - **F-20**：F12 的范围口径曾因 `demo/*` 新交付物判越界，已由 Leader 裁决修订（`1279b48`），负例自检仍 5/5。
+- **架构图（Archify）本轮拿不到**：远端无外网，`diagram` 需要克隆 Archify 工具本体（`git clone … archify.git` 超时），故没有新增架构图；证据包第 5.6 节给出从 `crates/*/Cargo.toml` 逐条读出的真实 crate 依赖草图，并把「没有 Archify 架构图」列为需要人确认的项。
 
 ## 复跑
 
