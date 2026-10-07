@@ -1,0 +1,181 @@
+$ sh -c "export PATH=$HOME/.cargo/bin:$PATH; cargo build --workspace --all-targets --offline"
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.33s
+$ sh -c "export PATH=$HOME/.cargo/bin:$PATH; node gauntlet-tools/rust-gate.mjs --out gauntlet-out"
+$ cargo test --workspace --offline --no-run   (CARGO_TARGET_DIR=/public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target)
+  build+link of test targets: 0.3s, 14 test binaries (+1 product binary/binaries, built for CARGO_BIN_EXE_*, not run)
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/audit_queries_acceptance-2d04a077a0124632
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/clusterscope_agent-111271eff9ab18e4
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/clusterscope_server-94371fd6df4775f1
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/clusterscope_tui-8016a4e51149779b
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/common-a03f0975af0850ce
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/config_keys_acceptance-27b3581892acfaa9
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/conversions_acceptance-e20f5ca3a8f6907c
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/integration_test-3992251384f32bd0
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/metrics_acceptance-fa3fc5647013618a
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/no_root_agent_config-edda0de4e4926171
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/protocol-b759908bedaf5eb2
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/scheduler-661f5b02c34ac966
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/storage-b583c53242347bde
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/user_queries_acceptance-4f0af94ec9596244
+tests: 98 total, 0 failed, 0 ignored -> /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/junit.xml
+  audit_queries_acceptance (test): 4/4, clusterscope-agent (bin): 16/16, clusterscope-server (bin): 16/16, clusterscope-tui (bin): 3/3, common (lib): 23/23, config_keys_acceptance (test): 2/2, conversions_acceptance (test): 2/2, integration_test (test): 7/7, metrics_acceptance (test): 2/2, no_root_agent_config (test): 6/6, protocol (lib): 0/0, scheduler (lib): 12/12, storage (lib): 0/0, user_queries_acceptance (test): 5/5, Doc-tests common: 0/0, Doc-tests protocol: 0/0, Doc-tests scheduler: 0/0, Doc-tests storage: 0/0
+coverage: 38 instrumented file(s) in lcov.info
+
+STATIC  files=35 TUs=35 failed=0 functions=435  scope=100.0%
+        maxCC=23 maxLines=196 maxNesting=7 maxParams=9 offenders=36 warnings=2
+  ✗ crates/tui/src/ui.rs:599 node_panel  圈复杂度 23 > 10; 长度 170 行 > 60
+  ✗ crates/server/src/main.rs:544 run_background_tasks  圈复杂度 19 > 10; 长度 154 行 > 60; 嵌套 5 层 > 4
+  ✗ crates/tui/src/ui.rs:1024 draw_process  圈复杂度 18 > 10; 长度 196 行 > 60
+  ✗ crates/server/src/handlers.rs:1124 create_alert_rule  圈复杂度 17 > 10; 长度 138 行 > 60
+  ✗ crates/server/src/grpc.rs:252 submit_job  圈复杂度 16 > 10; 长度 88 行 > 60
+  ✗ crates/server/src/main.rs:701 run_scheduler_cycle  圈复杂度 13 > 10; 长度 142 行 > 60
+  ✗ crates/server/src/main.rs:241 load_config  圈复杂度 13 > 10; 长度 68 行 > 60
+  ✗ crates/common/src/alert.rs:156 evaluate  圈复杂度 12 > 10; 长度 146 行 > 60; 嵌套 5 层 > 4
+  ✗ crates/agent/src/job_executor.rs:56 request_cancel  圈复杂度 12 > 10; 长度 70 行 > 60
+  ✗ crates/server/src/handlers.rs:240 login  长度 183 行 > 60
+  ✗ crates/tui/src/ui.rs:1223 draw_cpu_processes  长度 109 行 > 60
+  ✗ crates/server/src/handlers.rs:1382 create_user  长度 74 行 > 60
+  ✗ crates/server/src/grpc.rs:697 evaluate_alerts  长度 66 行 > 60; 嵌套 7 层 > 4
+  ✗ crates/tui/src/ui.rs:781 draw_trend_full  长度 114 行 > 60
+  ✗ crates/server/src/grpc.rs:141 report_metrics  长度 110 行 > 60
+  ⚠ crates/common/src/auth.rs:143:1 warning: items after a test module [clippy]
+  ⚠ crates/agent/src/job_executor.rs:1012:9 warning: field assignment outside of initializer for an instance created with Default::default() [clippy]
+SCOPE gate: PASS
+COMPLEXITY gate: FAIL
+WARNINGS gate: FAIL
+
+TIDY  findings=0 accepted=0
+TIDY gate: PASS
+
+DUPLICATION  0.4% of 9204 code lines in 1 clone(s) (0 across top-level directories), min 100 tokens
+    28 lines  crates/storage/src/user_queries.rs:117-144  ==  crates/storage/src/user_queries.rs:185-212
+DUPLICATION gate: PASS
+
+CRAP  functions=435  maxCRAP=552  maxCC=23  lineCoverage=31.2%  offenders=57
+      552  cc=23  cov=  0%  crates/tui/src/ui.rs:599  node_panel  <-- CRAP 552.0 > 8; complexity 23 > 10
+      380  cc=19  cov=  0%  crates/server/src/main.rs:544  run_background_tasks  <-- CRAP 380.0 > 8; complexity 19 > 10
+      342  cc=18  cov=  0%  crates/tui/src/ui.rs:1024  draw_process  <-- CRAP 342.0 > 8; complexity 18 > 10
+      306  cc=17  cov=  0%  crates/server/src/handlers.rs:1124  create_alert_rule  <-- CRAP 306.0 > 8; complexity 17 > 10
+      272  cc=16  cov=  0%  crates/server/src/grpc.rs:252  submit_job  <-- CRAP 272.0 > 8; complexity 16 > 10
+      182  cc=13  cov=  0%  crates/server/src/main.rs:701  run_scheduler_cycle  <-- CRAP 182.0 > 8; complexity 13 > 10
+      182  cc=13  cov=  0%  crates/server/src/main.rs:241  load_config  <-- CRAP 182.0 > 8; complexity 13 > 10
+      110  cc=10  cov=  0%  crates/server/src/handlers.rs:240  login  <-- CRAP 110.0 > 8
+       90  cc= 9  cov=  0%  crates/tui/src/ui.rs:1223  draw_cpu_processes  <-- CRAP 90.0 > 8
+       90  cc= 9  cov=  0%  crates/server/src/handlers.rs:1382  create_user  <-- CRAP 90.0 > 8
+       90  cc= 9  cov=  0%  crates/server/src/grpc.rs:697  evaluate_alerts  <-- CRAP 90.0 > 8
+       72  cc= 8  cov=  0%  crates/server/src/auth_middleware.rs:43  readonly_middleware  <-- CRAP 72.0 > 8
+       56  cc= 7  cov=  0%  crates/tui/src/ui.rs:781  draw_trend_full  <-- CRAP 56.0 > 8
+       56  cc= 7  cov=  0%  crates/server/src/grpc.rs:141  report_metrics  <-- CRAP 56.0 > 8
+       56  cc= 7  cov=  0%  crates/server/src/handlers.rs:424  refresh_token  <-- CRAP 56.0 > 8
+CRAP gate: FAIL
+ARCH: skipped (没有配置 commands.arch（架构依赖检查）)
+
+══ GATE (quality) ══
+  ✅ build        {}
+  ✅ tests        {"total":98,"failed":0}
+  ✅ scope        {"scope":1,"failedUnits":0,"files":35}
+  ❌ complexity   {"functions":435,"offenders":36,"maxComplexity":23}
+  ❌ warnings     {"warnings":2}
+  ✅ tidy         {"ran":true,"findings":0}
+  ✅ duplication  {"ratio":0.004,"clones":1}
+  ❌ crap         {"maxCrap":552,"offenders":57,"instrumentedFunctions":435}
+  ✅ arch         {"violations":0,"edges":0,"skipped":"没有配置 commands.arch（架构依赖检查）"}
+  ❌ coverage     {"lineCoverage":0.312}
+
+GATE quality: FAIL
+
+# gauntlet next — quality — 第 1 轮
+
+结论：**CONTINUE**　剩余 123 项，离阈值的距离 603.873　失败的闸门：warnings, complexity, crap, coverage
+
+下一步：修第 1 项（同一闸门的同类问题可以一起修），然后重新运行本命令。没有轮数上限：只要指标还在向阈值靠近就继续。
+
+## warnings（2 项）— 修掉告警本身，不要用 pragma 或删 -W 选项压掉
+1. `crates/common/src/auth.rs:143` warning: items after a test module [clippy]
+2. `crates/agent/src/job_executor.rs:1012` warning: field assignment outside of initializer for an instance created with Default::default() [clippy]
+
+## complexity（36 项）— 提取函数 / 卫语句 / 表驱动 / 参数对象，把指标降到阈值内
+3. `crates/tui/src/ui.rs:599` node_panel：圈复杂度 23 > 10；长度 170 行 > 60
+4. `crates/server/src/main.rs:544` run_background_tasks：圈复杂度 19 > 10；长度 154 行 > 60；嵌套 5 层 > 4
+5. `crates/tui/src/ui.rs:1024` draw_process：圈复杂度 18 > 10；长度 196 行 > 60
+6. `crates/server/src/handlers.rs:1124` create_alert_rule：圈复杂度 17 > 10；长度 138 行 > 60
+7. `crates/server/src/grpc.rs:252` submit_job：圈复杂度 16 > 10；长度 88 行 > 60
+8. `crates/server/src/main.rs:701` run_scheduler_cycle：圈复杂度 13 > 10；长度 142 行 > 60
+9. `crates/server/src/main.rs:241` load_config：圈复杂度 13 > 10；长度 68 行 > 60
+10. `crates/common/src/alert.rs:156` evaluate：圈复杂度 12 > 10；长度 146 行 > 60；嵌套 5 层 > 4
+11. `crates/agent/src/job_executor.rs:56` request_cancel：圈复杂度 12 > 10；长度 70 行 > 60
+12. `crates/server/src/handlers.rs:240` login：长度 183 行 > 60
+13. `crates/tui/src/ui.rs:1223` draw_cpu_processes：长度 109 行 > 60
+14. `crates/server/src/handlers.rs:1382` create_user：长度 74 行 > 60
+15. `crates/server/src/grpc.rs:697` evaluate_alerts：长度 66 行 > 60；嵌套 7 层 > 4
+16. `crates/tui/src/ui.rs:781` draw_trend_full：长度 114 行 > 60
+17. `crates/server/src/grpc.rs:141` report_metrics：长度 110 行 > 60
+18. `crates/server/src/handlers.rs:424` refresh_token：长度 87 行 > 60
+19. `crates/server/src/handlers.rs:1612` change_my_password：长度 79 行 > 60
+20. `crates/server/src/handlers.rs:575` get_metrics_history：长度 75 行 > 60
+21. `crates/server/src/ws_handler.rs:164` ws_upgrade：长度 67 行 > 60
+22. `crates/tui/src/ui.rs:463` draw_topbar：长度 62 行 > 60
+23. `crates/agent/src/job_executor.rs:533` read_line_capped：长度 61 行 > 60
+24. `crates/server/src/handlers.rs:859` create_job：长度 93 行 > 60
+25. `crates/server/src/handlers.rs:1493` update_user：长度 76 行 > 60
+26. `crates/server/src/handlers.rs:1694` get_cluster_info：长度 72 行 > 60
+27. `crates/storage/src/user_queries.rs:111` update_user_guarded：长度 68 行 > 60
+… 还有 11 项（完整数据见输出目录的 *.json）
+
+## crap（57 项）— 降低复杂度，或为该函数补测试
+28. `crates/tui/src/ui.rs:599` node_panel：CRAP 552.0 > 8；complexity 23 > 10（覆盖率 0%）
+29. `crates/server/src/main.rs:544` run_background_tasks：CRAP 380.0 > 8；complexity 19 > 10（覆盖率 0%）
+30. `crates/tui/src/ui.rs:1024` draw_process：CRAP 342.0 > 8；complexity 18 > 10（覆盖率 0%）
+31. `crates/server/src/handlers.rs:1124` create_alert_rule：CRAP 306.0 > 8；complexity 17 > 10（覆盖率 0%）
+32. `crates/server/src/grpc.rs:252` submit_job：CRAP 272.0 > 8；complexity 16 > 10（覆盖率 0%）
+33. `crates/server/src/main.rs:701` run_scheduler_cycle：CRAP 182.0 > 8；complexity 13 > 10（覆盖率 0%）
+34. `crates/server/src/main.rs:241` load_config：CRAP 182.0 > 8；complexity 13 > 10（覆盖率 0%）
+35. `crates/server/src/handlers.rs:240` login：CRAP 110.0 > 8（覆盖率 0%）
+36. `crates/tui/src/ui.rs:1223` draw_cpu_processes：CRAP 90.0 > 8（覆盖率 0%）
+37. `crates/server/src/handlers.rs:1382` create_user：CRAP 90.0 > 8（覆盖率 0%）
+38. `crates/server/src/grpc.rs:697` evaluate_alerts：CRAP 90.0 > 8（覆盖率 0%）
+39. `crates/server/src/auth_middleware.rs:43` readonly_middleware：CRAP 72.0 > 8（覆盖率 0%）
+40. `crates/tui/src/ui.rs:781` draw_trend_full：CRAP 56.0 > 8（覆盖率 0%）
+41. `crates/server/src/grpc.rs:141` report_metrics：CRAP 56.0 > 8（覆盖率 0%）
+42. `crates/server/src/handlers.rs:424` refresh_token：CRAP 56.0 > 8（覆盖率 0%）
+43. `crates/server/src/handlers.rs:1612` change_my_password：CRAP 56.0 > 8（覆盖率 0%）
+44. `crates/server/src/handlers.rs:575` get_metrics_history：CRAP 56.0 > 8（覆盖率 0%）
+45. `crates/server/src/ws_handler.rs:164` ws_upgrade：CRAP 56.0 > 8（覆盖率 0%）
+46. `crates/tui/src/ui.rs:463` draw_topbar：CRAP 56.0 > 8（覆盖率 0%）
+47. `crates/server/src/handlers.rs:859` create_job：CRAP 42.0 > 8（覆盖率 0%）
+48. `crates/server/src/handlers.rs:1493` update_user：CRAP 42.0 > 8（覆盖率 0%）
+49. `crates/server/src/handlers.rs:1694` get_cluster_info：CRAP 42.0 > 8（覆盖率 0%）
+50. `crates/server/src/grpc.rs:389` report_job_logs：CRAP 42.0 > 8（覆盖率 0%）
+51. `crates/server/src/ws_handler.rs:113` broadcast：CRAP 42.0 > 8（覆盖率 0%）
+52. `crates/tui/src/ui.rs:73` push：CRAP 42.0 > 8（覆盖率 0%）
+… 还有 32 项（完整数据见输出目录的 *.json）
+
+## coverage（28 项）— 为未执行的代码补测试；确属死代码就删除
+53. `crates/common/src/lib.rs` 行覆盖率 0.0%（0/7）
+54. `crates/protocol/build.rs` 行覆盖率 0.0%（0/14）
+55. `crates/protocol/src/lib.rs` 行覆盖率 0.0%（0/10）
+56. `crates/server/src/auth_middleware.rs` 行覆盖率 0.0%（0/95）
+57. `crates/server/src/ws_handler.rs` 行覆盖率 0.0%（0/193）
+58. `crates/storage/src/aggregation.rs` 行覆盖率 0.0%（0/97）
+59. `crates/storage/src/alert_queries.rs` 行覆盖率 0.0%（0/241）
+60. `crates/storage/src/job_queries.rs` 行覆盖率 0.0%（0/379）
+61. `crates/storage/src/lib.rs` 行覆盖率 0.0%（0/248）
+62. `crates/storage/src/models.rs` 行覆盖率 0.0%（0/122）
+63. `crates/storage/src/queries.rs` 行覆盖率 0.0%（0/286）
+64. `crates/tui/src/api.rs` 行覆盖率 0.0%（0/104）
+65. `crates/tui/src/main.rs` 行覆盖率 0.0%（0/86）
+66. `crates/agent/src/grpc_client.rs` 行覆盖率 2.2%（4/185）
+67. `crates/tui/src/ui.rs` 行覆盖率 4.7%（51/1079）
+68. `crates/agent/src/main.rs` 行覆盖率 8.7%（9/104）
+69. `crates/server/src/grpc.rs` 行覆盖率 14.7%（79/539）
+70. `crates/server/src/handlers.rs` 行覆盖率 15.6%（218/1399）
+71. `crates/server/src/main.rs` 行覆盖率 26.8%（172/641）
+72. `crates/storage/src/user_queries.rs` 行覆盖率 51.7%（153/296）
+73. `crates/agent/src/metrics.rs` 行覆盖率 54.2%（275/507）
+74. `crates/common/src/error.rs` 行覆盖率 60.0%（9/15）
+75. `crates/agent/src/job_executor.rs` 行覆盖率 64.7%（458/708）
+76. `crates/common/src/job.rs` 行覆盖率 67.2%（131/195）
+77. `crates/common/src/auth.rs` 行覆盖率 77.0%（94/122）
+… 还有 3 项（完整数据见输出目录的 *.json）
+
+NEXT quality: CONTINUE

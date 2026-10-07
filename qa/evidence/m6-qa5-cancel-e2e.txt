@@ -1,0 +1,37 @@
+server+agent 已起（PIDs: 3604599 / 3604748），admin token len=268
+
+===== H1 普通取消：SIGTERM 被忽略 → 期望 ~5s 后 SIGKILL 升级 =====
+H1 job_id=6e5014c8-2427-48f1-b72b-2cbe0d1a6e47
+H1 进程组 leader pid=3605166（cmdline: /bin/sh -c trap '' TERM; sleep 180 ）
+H1 取消前状态=running  pid 存活=yes
+H1 DELETE /api/jobs/6e5014c8-2427-48f1-b72b-2cbe0d1a6e47 -> 200
+H1 SIGTERM 后 1s：pid 存活=yes（忽略 SIGTERM 的任务应仍存活）  状态=stopping
+H1 pid 消失耗时（自 DELETE 起）= 8900ms   最终状态=stopping
+H1 agent 日志（本条路径）: [2m2026-10-07T15:23:18.074732Z[0m [32m INFO[0m Process spawned [3mjob_id[0m[2m=[0m6e5014c8-2427-48f1-b72b-2cbe0d1a6e47 [3mpid[0m[2m=[0m3605166 [2m2026-10-07T15:23:28.063614Z[0m [33m WARN[0m SIGTERM ignored, escalating to SIGKILL [3mjob_id[0m[2m=[0m6e5014c8-2427-48f1-b72b-2cbe0d1a6e47 [3mpid[0m[2m=[0m3605166 
+
+===== H2 强制取消 ?force=true：期望立即 SIGKILL（远小于 5s） =====
+H2 job_id=5870983b-2e99-410e-a5ce-1734e2a55a13
+H2 进程组 leader pid=3605650  pid 存活=yes  状态=running
+H2 DELETE /api/jobs/5870983b-2e99-410e-a5ce-1734e2a55a13?force=true -> 200
+H2 pid 消失耗时（自 DELETE 起）= 4658ms   最终状态=stopping
+H2 agent 日志（本条路径）: [2m2026-10-07T15:23:38.074649Z[0m [32m INFO[0m Process spawned [3mjob_id[0m[2m=[0m5870983b-2e99-410e-a5ce-1734e2a55a13 [3mpid[0m[2m=[0m3605650 [2m2026-10-07T15:23:43.061123Z[0m [33m WARN[0m Forced cancellation — sending SIGKILL [3mjob_id[0m[2m=[0m5870983b-2e99-410e-a5ce-1734e2a55a13 [3mpid[0m[2m=[0m3605650 
+
+===== H3 终端任务再取消：期望 409（文档契约） =====
+H3 DELETE /api/jobs/5870983b-2e99-410e-a5ce-1734e2a55a13（已完成/已取消）-> 200
+H3 DELETE /api/jobs/qa5-no-such-job -> 404   [期望 404]
+
+===== I B 的 process_starttime 下标错误：独立数值证明（index 19 = starttime，index 20 = vsize） =====
+I  样本 pid=3605823  CLK_TCK=100  uptime=3754469s  ps etimes=0s
+I  tail 字段下标 19 -> 值 375446910（/100 = 3754469 s 前的启动时刻 ⇒ 存活约 0s）
+I  tail 字段下标 20 -> 值 226271232（= vsize，字节；/1024 = 220968 kB）
+I  /proc/3605823/status VmSize = 220968 kB
+I  2 秒后再读：下标 19 = 375446910（应不变）；下标 20 = 226271232（进程分配/释放内存时会变）
+
+===== J 对照：下标 20（vsize）会随分配变化，下标 19（starttime）不变 =====
+J  第 1 次采样: index19(starttime)=375447116  index20(vsize)=233541632  vsize/1024=228068 kB  /proc/self/status VmSize=228068 kB
+J  第 2 次采样: index19(starttime)=375447116  index20(vsize)=300654592  vsize/1024=293608 kB  /proc/self/status VmSize=293608 kB
+J  第 3 次采样: index19(starttime)=375447116  index20(vsize)=367767552  vsize/1024=359148 kB  /proc/self/status VmSize=359148 kB
+J  第 4 次采样: index19(starttime)=375447116  index20(vsize)=434880512  vsize/1024=424688 kB  /proc/self/status VmSize=424688 kB
+J  结论：只要作业进程在 spawn 与取消之间分配过内存，B 的「expected_start vs actual」比较就必然不等 -> 走 pid-recycled 分支 -> 不发信号；而 starttime 全程不变。
+
+qa5-cancel-e2e: 完成（evidence /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence/phase5/qa5-cancel-e2e.txt）；server/agent 已按 PID 文件停掉

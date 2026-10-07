@@ -1,0 +1,119 @@
+### host=lyy-node03 commit=e8fd233 at 2026-10-07T15:30:02Z
+NOTE S12 status histogram:      10 401      10 429 
+CHECK SEC-13-NO-IP-RATE-LIMIT: FAIL expected=0 actual=1
+CHECK SEC-13-ALL-ATTEMPTS-401: FAIL expected=20 actual=10
+NOTE S15 GET /api/users first row: {"username":"admin","password_hash":""}
+CHECK SEC-16-PASSWORD-HASH-EMPTY: PASS expected=1 actual=1
+NOTE S16 GET /api/jobs shape: {"type":"object","keys":["jobs","total"],"total":66}
+NOTE S16 probe job_id=adec0cb5-0366-47db-bff7-a90e86d83d65
+NOTE S16 logs limit=0 -> 0 row(s); limit=99999 -> 0 row(s) (clamped to 1..10000)
+CHECK SEC-17-LOGS-LIMIT-CLAMPED: FAIL expected=1 actual=0
+CHECK SEC-17-LOGS-LIMIT-UPPER: PASS expected=1 actual=1
+NOTE S16 list page_size=0 -> HTTP 200
+CHECK SEC-17-PAGE-SIZE-0-ACCEPTED: PASS expected=200 actual=200
+NOTE S16 list page_size=99999 -> HTTP 200
+CHECK SEC-17-PAGE-SIZE-99999-ACCEPTED: PASS expected=200 actual=200
+NOTE C15 stream error lines with agent up: 0
+NOTE C15 stream error lines 20s after agent-down: 0 — no growth means no orphaned polling task spamming the log
+CHECK CON-15-STREAM-NO-ERROR-GROWTH: PASS expected=1 actual=1
+NOTE C15 residual gap: the send-failure branch itself was verified by static reading only (not constructed at runtime).
+--- grpc.rs loop-exit guard ---
+371:                            if tx.send(Ok(job_to_proto(&job))).await.is_err() {
+372-                                return;
+373-                            }
+### C8 retry_count / max_retries usage outside the two literal zeros
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/server/src/main.rs:862:        retry_count: row.retry_count as u32,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/server/src/main.rs:863:        max_retries: row.max_retries as u32,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/server/src/handlers.rs:898:    let max_retries = req.max_retries.min(10) as i32;
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/server/src/handlers.rs:923:        max_retries,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/server/src/handlers.rs:967:    pub max_retries: u32,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/server/src/grpc.rs:913:        retry_count: job.retry_count as u32,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/server/src/grpc.rs:914:        max_retries: job.max_retries as u32,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent/src/job_executor.rs:270:    // retry_count, so a legitimate server-side retry (counter bumped)
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent/src/job_executor.rs:272:    match read_completed_marker(&log_dir, job.retry_count).await {
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent/src/job_executor.rs:335:                job.retry_count,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent/src/job_executor.rs:484:            write_completed_marker(&log_dir, job.retry_count, final_status, exit_code, &message)
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent/src/job_executor.rs:501:                job.retry_count,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent/src/job_executor.rs:605:/// retry_count / status int / exit_code / message). Read back by
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent/src/job_executor.rs:612:    retry_count: u32,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent/src/job_executor.rs:624:        retry_count, status as i32, exit_code, message
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent/src/job_executor.rs:633:    /// different retry_count) — execute normally.
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent/src/job_executor.rs:643:async fn read_completed_marker(job_dir: &Path, retry_count: u32) -> MarkerRead {
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent/src/job_executor.rs:657:    if stored_retry != retry_count {
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent/src/job_executor.rs:949:            // A marker for a different run (retry_count bumped) is not ours.
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage/src/job_queries.rs:18:            resource_quota, retry_count, max_retries
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage/src/job_queries.rs:42:    .bind(job.retry_count)
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage/src/job_queries.rs:43:    .bind(job.max_retries)
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage/src/job_queries.rs:56:       retry_count, max_retries FROM jobs WHERE job_id = $1",
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage/src/job_queries.rs:104:       retry_count, max_retries FROM jobs {} ORDER BY created_at DESC LIMIT ${} OFFSET ${}",
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage/src/job_queries.rs:156:       retry_count, max_retries FROM jobs
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage/src/job_queries.rs:174:       retry_count, max_retries FROM jobs
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage/src/job_queries.rs:280:       retry_count, max_retries FROM jobs
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage/src/job_queries.rs:300:       retry_count, max_retries FROM jobs
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage/src/job_queries.rs:352:       retry_count, max_retries FROM jobs
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage/src/models.rs:76:    pub retry_count: i32,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage/src/models.rs:77:    pub max_retries: i32,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/common/src/job.rs:137:    pub max_retries: u32,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/common/src/job.rs:151:        max_retries: u32,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/common/src/job.rs:165:            max_retries,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/common/src/job.rs:188:    pub retry_count: u32,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/common/src/job.rs:189:    pub max_retries: u32,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/common/src/job.rs:212:            max_retries: def.max_retries,
+/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/common/src/job.rs:310:            max_retries: 3,
+### O15 container tooling
+no-docker
+podman version: podman version 5.6.0
+podman local image count: 0
+  => the compose path of deploy/docker-compose.yml cannot be exercised here (OPS-05 = N/A, static checks only)
+### O19 GPU inventory
+NOTE O19 nvidia-smi GPU count: 6
+NOTE O19 'NVML init failed' lines in last agent log: 0
+0
+  => README:323 pure-CPU fallback stays unverified: this host always has 6 L20s (OPS-09 = N/A)
+### O20 listeners / firewall
+no 8080/50051/9090 listener right now (server stopped)
+firewall-cmd present: /usr/bin/firewall-cmd
+firewall-cmd --state: not running
+  => no root on this host; firewall policy itself stays unverified (OPS-10 = N/A)
+### FE-01 frontend inventory
+NOTE FE-01 gh-line web/ -> ls: cannot access '/public/tianyuyang/code/ClusterScope-review/merge-m6/web': No such file or directory
+NOTE FE-01 gh-line package.json count: 0
+NOTE FE-01 gh-line html/ts/js count: 3
+NOTE FE-01 tree A local-wip/web files: 27
+### MRG-01 material pointers
+-rw-r--r-- 1 tianyuyang tianyuyang 8929224 Oct  7 02:49 /public/tianyuyang/code/ClusterScope-review/node-line.bundle
+
+/public/tianyuyang/code/ClusterScope-review/local-wip/:
+total 197
+drwxr-xr-x  9 tianyuyang tianyuyang   1024 Sep 13 18:35 .
+drwxr-xr-x 11 tianyuyang tianyuyang   1024 Oct  7 18:52 ..
+drwxr-xr-x  2 tianyuyang tianyuyang   1024 Oct  7 02:52 assets
+-rw-r--r--  1 tianyuyang tianyuyang 121593 Sep 13 12:15 Cargo.lock
+-rw-r--r--  1 tianyuyang tianyuyang   1944 Sep 13 12:19 Cargo.toml
+drwxr-xr-x  9 tianyuyang tianyuyang   1024 Oct  7 02:52 crates
+drwxr-xr-x  2 tianyuyang tianyuyang   1024 Oct  7 02:52 deploy
+drwxr-xr-x  2 tianyuyang tianyuyang   1024 Oct  7 02:52 docs
+-rw-r--r--  1 tianyuyang tianyuyang     79 Sep 13 12:22 .gitignore
+drwxr-xr-x  2 tianyuyang tianyuyang   1024 Oct  7 02:52 proto
+-rw-r--r--  1 tianyuyang tianyuyang  14664 Sep 13 12:15 README.md
+drwxr-xr-x  2 tianyuyang tianyuyang   1024 Oct  7 02:52 tests
+drwxr-xr-x  4 tianyuyang tianyuyang   1024 Sep 13 18:42 web
+## master...origin/master [ahead 12]
+ M Cargo.lock
+ M Cargo.toml
+ M crates/agent/src/job_executor.rs
+ M crates/agent/src/metrics.rs
+ M crates/common/src/alert.rs
+ M crates/server/Cargo.toml
+ M crates/server/src/auth_middleware.rs
+ M crates/server/src/grpc.rs
+ M crates/server/src/handlers.rs
+ M crates/server/src/main.rs
+ M crates/server/src/ws_handler.rs
+ M crates/storage/src/user_queries.rs
+19d8fbc fix: web — refresh-token rotation on 401, read-only-mode probe, job args quoting
+eac070e fix: unbreak audit-log listing, unblock scheduler head-of-line, guard duration narrowing
+0c26dcd fix: replay completed-run markers in proto numbering, refuse corrupt markers, reap orphan process groups
+22
+----
+EXTRA-CHECKS: FAILURES PRESENT

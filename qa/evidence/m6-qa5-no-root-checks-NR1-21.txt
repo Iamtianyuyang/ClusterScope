@@ -1,0 +1,27 @@
+== ClusterScope no-root checks on lyy-node03 as tianyuyang (uid 3000)
+== evidence: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence
+NR4 PASS - not writable as uid 3000: /etc/clusterscope /var/lib/clusterscope /var/log/clusterscope-server /usr/local/bin
+NR7 PASS - bare start refused: Error: refusing to start: jwt_secret is missing/too weak with auth_required: true. Set a strong jwt_secret in server.yaml (or JWT_SECRET env), or set auth_required: false for trusted LANs.
+NR2 PASS - server up as uid 3000: listeners=2 health=200
+NR21 PASS - running server opens 0 files under /etc|/var for clusterscope (lsof)
+NR1 PASS - unprivileged bind succeeded as uid 3000 on: 8080 50051 (busy, not probed:)
+NR6 FAIL - agent did not start with the default config path: Error: config file not found: /etc/clusterscope/agent.yaml does not exist. It was requested explicitly with -c/--config, so the agent stops here instead of quietly using built-in defaults. User-level installs keep this file at $HOME/.config/clusterscope/agent.yaml; system-wide installs use /etc/clusterscope/agent.yaml.
+NR6b FAIL - agent did not create a HOME-local log dir
+NR5 PASS - user unit installed/enabled without sudo (FragmentPath=/public/tianyuyang/.config/systemd/user/nr-probe-unit.service)
+NR14 PASS - install-agent.sh: 9 user-path refs, 0 non-comment system-path refs, nohup fallback present
+NR15 FAIL - system-unit count=4 (expected 2); clusterscope user present=no
+NR16 PASS - live user unit active (FragmentPath=/public/tianyuyang/.config/systemd/user/clusterscope-agent.service); running agent processes=2
+NR13 FAIL - readme_user_lines=8 shipped_server_units=1 handwritten_user_unit=no
+NR3 PASS - agent created log dir under the -c/--config-dir home: /tmp/nr-home/.config/clusterscope/logs
+NR20 PASS - unprivileged reads: nvidia-smi -L, /sys/class/drm/card0 power state, /sys/block/nvme0n1 model
+NR18 PASS - TUI rendered /tmp/nr-checks/tui.pty (1185 bytes), no panic
+NR8 FAIL - env keys=6
+NR9 PASS - self-compiled PG 16.4 runs as uid 3000 and answers; README offers only 'docker compose up' while docker is absent (psql nopath)
+NR10 PASS - README has 18 no-root/systemctl--user mentions; classifications in /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence/no-root-readme-claims.txt
+NOTE - skipped (--no-slow): run without --no-slow to test linger survival
+NOTE - skipped (--no-slow): run without --no-slow to exercise the nohup fallback
+NR19 PASS - read-only HOME -> agent exits 1 at 'Failed to create log directory' (hard requirement, no rootless bypass)
+NR17 PASS - gh-line has no web/ and no package.json -> frontend no-root re-check is N/A here (see FE-01)
+MRG-02 PASS - merge-plan carries 8 no-root invariants; NR constraints and qa/no-root.qa.md present
+== no-root checks: PASS=16 FAIL=5
+== evidence dir: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence

@@ -1,0 +1,89 @@
+
+===== NRM4：12 个 graft 文件逐个 diff 里不许出现 root 路径/特权原语 =====
+NRM4 crates/storage/src/user_queries.rs -> 命中 0 处
+NRM4 crates/server/src/auth_middleware.rs -> 命中 0 处
+NRM4 crates/common/src/alert.rs -> 命中 0 处
+NRM4 crates/agent/src/metrics.rs -> 命中 0 处
+NRM4 crates/agent/src/job_executor.rs -> 命中 0 处
+NRM4 crates/server/src/ws_handler.rs -> 命中 0 处
+NRM4 crates/server/src/grpc.rs -> 命中 0 处
+NRM4 crates/server/src/handlers.rs -> 命中 0 处
+NRM4 crates/server/src/main.rs -> 命中 0 处
+NRM4 Cargo.toml -> 命中 0 处
+NRM4 Cargo.lock -> 命中 0 处
+NRM4 crates/server/Cargo.toml -> 命中 0 处
+
+===== NRM5：新增依赖清单（Cargo.toml / Cargo.lock 的改动面） =====
+   Cargo.lock                | 336 ++++++++++++++++++++++++++++++++++++----------
+   Cargo.toml                |  12 ++
+   crates/server/Cargo.toml  |  13 +-
+   crates/storage/Cargo.toml |   5 +
+   4 files changed, 297 insertions(+), 69 deletions(-)
+  --- workspace Cargo.toml 的依赖行改动 ---
+  +sha2 = "0.10"
+  +hyper = { version = "1", features = ["full"] }
+  +hyper-util = { version = "0.1", features = ["http1", "server", "service", "tokio"] }
+  +http-body-util = "0.1"
+  +tower = "0.5"
+  +tower-limit = "0.3"
+  +subtle = "2"
+  +rcgen = "0.13"
+  +rustls = "0.23"
+  +rustls-pemfile = "2"
+  +tokio-rustls = "0.26"
+  +rustls-pki-types = "1"
+  --- crates/*/Cargo.toml 的依赖行改动 ---
+  [crates/server/Cargo.toml]
+    -tonic.workspace = true
+    +tonic = { workspace = true, features = ["tls"] }
+    +hyper.workspace = true
+    +hyper-util.workspace = true
+    +http-body-util.workspace = true
+    +tower.workspace = true
+    +tower-limit.workspace = true
+    +subtle.workspace = true
+    +rcgen.workspace = true
+    +rustls.workspace = true
+    +rustls-pemfile.workspace = true
+    +tokio-rustls.workspace = true
+    +rustls-pki-types.workspace = true
+  [crates/storage/Cargo.toml]
+    +sha2.workspace = true
+    +protocol.workspace = true
+    +tokio.workspace = true
+  [crates/common/Cargo.toml]
+    +serde_yaml.workspace = true
+  --- Cargo.lock 里新增/删除的包（name 行） ---
+        1 +name = "aws-lc-rs"
+        1 +name = "aws-lc-sys"
+        1 +name = "bytes"
+        1 +name = "cmake"
+        1 +name = "dunce"
+        1 +name = "fs_extra"
+        1 +name = "jobserver"
+        1 +name = "pin-project"
+        1 +name = "pin-project-internal"
+        1 +name = "pin-project-lite"
+        1 +name = "rcgen"
+        1 +name = "rustls-pemfile"
+        1 +name = "syn"
+        1 +name = "tokio"
+        1 +name = "tower-discover"
+        1 +name = "tower-limit"
+        1 +name = "tower-load"
+        1 +name = "yasna"
+
+===== NRM6/NRM7 不回归：用户级 unit 与无 root DB 路径的文档（上一轮产物仍在） =====
+  deploy/ 下的 unit 文件: agent.service clusterscope-agent.service clusterscope-server.service server.service 
+  install-agent.sh 里的 systemd 目标: 12:# remote host and started via systemd --user (or nohup as a fallback). 106:if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then 123:    systemctl --user daemon-reload 
+
+===== NRM1/NRM2 回归：no-root-checks.sh --no-slow（作者口径 NR1–NR21） =====
+  rc=5  PASS=1  FAIL=0
+  NR6 FAIL - agent did not start with the default config path: Error: config file not found: /etc/clusterscope/agent.yaml does not exist. It was requested explicitly with -c/--config, so the agent stops here instead of quietly using built-in defaults. User-level installs keep this file at $HOME/.config/clusterscope/agent.yaml; system-wide installs use /etc/clusterscope/agent.yaml.
+  NR15 FAIL - system-unit count=4 (expected 2); clusterscope user present=no
+  NR13 FAIL - readme_user_lines=8 shipped_server_units=1 handwritten_user_unit=no
+  NR8 FAIL - env keys=6
+  == no-root checks: PASS=16 FAIL=5
+  == evidence dir: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence
+
+qa5-nrm44: 完成（/public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence/phase5/qa5-nrm44.txt）
