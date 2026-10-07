@@ -91,7 +91,12 @@ impl MetricsCollector {
             warn!(error = %e, "Failed to collect GPU processes");
         }
 
-        self.collect_system_processes(&mut report);
+        // F-06: `collect_process_details` used to be a dead config key.
+        // Honour it for the host-process scan as well as the GPU-process
+        // scan (defaults to true, so nothing changes out of the box).
+        if config.collect_process_details {
+            self.collect_system_processes(&mut report);
+        }
 
         Ok(report)
     }
@@ -351,9 +356,15 @@ impl MetricsCollector {
 
     fn collect_gpu_processes(
         &self,
-        _config: &AgentConfig,
+        config: &AgentConfig,
         report: &mut NodeMetricsReport,
     ) -> Result<()> {
+        // F-06: honour the (previously dead) `collect_process_details`
+        // knob -- skipping the per-process calls saves one NVML/nvidia-smi
+        // round trip per cycle on clusters that do not need the detail.
+        if !config.collect_process_details {
+            return Ok(());
+        }
         // Primary path: NVML (no root, no nvidia-smi text parsing).
         if let Some(nvml) = nvml() {
             if self.collect_gpu_processes_nvml(nvml, report).is_ok() {
