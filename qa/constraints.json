@@ -1391,4 +1391,15 @@
     "qa": "merge-m6.qa.md#M6-02",
     "severity": "minor"
   }
+,
+  {
+    "id": "MRG6-22",
+    "text": "**勘误（追加，不改写 MRG6-10）**：MRG6-10 末句把旧口径（`NR_FIX_BASE=7ca587a`）下 F12 的失败写成「两条范围断言」，**实测只有一条**：`改动文件全部落在 nr-fixes 轮允许集内`（失败项是 `report/*` 与合流新增的 `crates/**`）；同一轮里 `crates/storage 与 crates/server 零改动` **仍然成立**（合流起点 HEAD 相对 `7ca587a` 本来就是零改动）。两轮的断言集合各自都不小于原始集合：M6 轮 5 条（范围 / 冻结面 / 负例 5-5 / 正例 `crates/server/src/handlers.rs` / 正例 `demo/*`），no-root 轮恢复为它原来的 4 条（范围 / storage-server 零改动 / 负例 5-5 / 正例 `demo/*`）——上一版改动曾把 M6 的正例探测带进 no-root 轮，造成一条假失败，已在本条落账的同一批改动里去掉。",
+    "basis": "第 1 阶段实跑：`sh qa/harness/no-root-fixes-checks.sh --no-slow` → PASS=12 FAIL=0（M6 轮）；`NR_FIX_BASE=7ca587a sh qa/harness/no-root-fixes-checks.sh --no-slow` → PASS=11 FAIL=1，F12 的失败项集合见 gauntlet-out/m6/final2-no-root-oldround.log 与 gauntlet-out/m6/f12-evidence-oldround.txt",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/merge-m6 && sh qa/harness/no-root-fixes-checks.sh --no-slow（F12 的 SCOPE_ROUND=m6）；NR_FIX_BASE=7ca587a sh qa/harness/no-root-fixes-checks.sh --no-slow（F12 的 SCOPE_ROUND=nr-fixes，失败项应与本条逐字一致）",
+    "expect": "M6 轮 12/12；旧口径 11/12 且 F12 的失败项只有「改动文件全部落在 nr-fixes 轮允许集内」一条",
+    "verdict": "must-hold",
+    "qa": "merge-m6.qa.md#8",
+    "severity": "minor"
+  }
 ]

@@ -226,6 +226,24 @@ sh qa/harness/merge-m6-checks.sh --static   # 只跑不需要 server/agent 的�
 
 > `M6-12` 的判据里**不要**用 `ops-checks.sh` 那样清空整表（该脚本 `:112` 的 `delete from node_metrics` 是已知夹具卫生问题 N9，跑之前要先备份或改脚本 —— 改脚本需人确认）。`M6-15` 是自写的只读判据。
 
+### 6.1 这组检查「咬得住」的反向证据（合流**前**实跑，2026-10-07）
+
+```text
+$ sh qa/harness/merge-m6-checks.sh              # 全量，合流前
+M6-01 PASS … M6-07 PASS
+M6-08 FAIL - doc-claims：FAIL=9 ≤ 基线 9；SIGKILL 断言 PASS=0、force 断言 PASS=0
+M6-09 PASS / M6-10 PASS
+M6-11 FAIL - api-checks：PASS=18（要求 ≥ 基线 18）；DOC-GET-AUDIT-LOGS 已 PASS=0
+M6-12 FAIL - 审计覆盖：新动作种类 2（要求 ≥3，合流前是 2）
+M6-13 FAIL - 登录限速：12 次同源失败登录里出现 0 次 429（F-08 的正判据）
+M6-14 PASS - job-e2e：PASS=15 FAIL=0
+M6-15 PASS - 重启后 /api/health=200、public 表 11 张、admin 行 1
+M6-CHECKS: PASS=11 FAIL=4
+```
+
+四条 FAIL **逐条对应合流要做的事**（F-05/SIGKILL、F-01、F-10、F-08）——这就是「检查会咬」的证明；
+合流完成后这 4 条必须转 PASS（原始输出 `gauntlet-out/m6/final2-full-m6-checks.log`）。
+
 ---
 
 ## 7 harness 的树定位修正（为什么必须改，怎么证明没改判定）
@@ -274,7 +292,8 @@ R="${R:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 ```sh
 sh qa/harness/no-root-fixes-checks.sh                        # 本树 = M6 轮口径（默认，取本树能解析到的最新一轮基线）
-NR_FIX_BASE=7ca587a sh qa/harness/no-root-fixes-checks.sh    # 旧口径；在本树上 F12 的两条范围断言**预期 FAIL**
+NR_FIX_BASE=7ca587a sh qa/harness/no-root-fixes-checks.sh    # 旧口径；在本树上 F12 的「改动文件全部落在允许集内」**预期 FAIL**
+                                                             # （失败项是 report/* 与合流新增的 crates/**；这是范围口径，不是修复回归）
                                                              # （原因就是合流本身改了 server/storage，不是修复回归）
 ```
 

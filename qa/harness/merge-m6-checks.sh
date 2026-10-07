@@ -169,7 +169,7 @@ else
   api_pass=$(grep -c ': PASS' "$api_log")
   audit_flip=$(grep -c '^CHECK DOC-GET-AUDIT-LOGS: PASS' "$api_log")
   verdict M6-11 "$([ "$api_pass" -ge "$BASE_API_PASS" ] && [ "$audit_flip" = 1 ] && echo 0 || echo 1)" \
-    "api-checks：PASS=$api_pass ≥ 基线 $BASE_API_PASS，且 DOC-GET-AUDIT-LOGS 已 PASS（F-01 修复的判据）"
+    "api-checks：PASS=$api_pass（要求 ≥ 基线 $BASE_API_PASS）；DOC-GET-AUDIT-LOGS 已 PASS=$audit_flip（要求 1 = F-01 修好了）"
 
   # ---------------------------------------------------------------- M6-12 审计覆盖（F-10）
   TOKEN=$(login "$ADMIN_USER" "$ADMIN_PASS")
@@ -191,7 +191,7 @@ else
     echo "action histogram:"; psql_q "select action, count(*) from audit_logs where timestamp > '$T0' group by action order by 2 desc;"
   } >> "$LOG"
   verdict M6-12 "$([ "${actions:-0}" -ge 3 ] && [ -n "${list_total:-}" ] && echo 0 || echo 1)" \
-    "审计覆盖：新动作种类 $actions ≥ 3（F-10 的写入点从 2 个扩到 13 个），且审计端点可见这些行"
+    "审计覆盖：新动作种类 ${actions:-0}（要求 ≥3，合流前是 2）；GET /api/audit-logs 的 total=${list_total:-<读不到>}（要求非空 = 端点可用）"
 
   # ---------------------------------------------------------------- M6-13 登录限速的正判据（F-08）
   codes="$QA_DIR/merge-m6-login-codes.txt"; : > "$codes"

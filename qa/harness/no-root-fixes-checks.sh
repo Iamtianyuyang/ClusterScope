@@ -664,7 +664,9 @@ f12() {
     done
     # 正例自检（2026-10-07 修订新增）：demo/* 是本次加入的允许项，必须判**允许** —— 守住这条裁决，
     # 防止允许集被下一次改动悄悄改回去（那会让 QA 阶段的法定产物再次被判越界）。负例 5 条与 5/5 计数不变。
-    in_scope crates/server/src/handlers.rs && probe_ok=允许 || probe_ok=越界
+    # （no-root 轮不引入 M6 的正例探测：`crates/server/src/handlers.rs` 在这一轮**本来就该判越界**，
+    #   把它塞进正例自检会让旧口径的 F12 多出一条假失败 —— 这一轮的断言集合与原版逐条一致。）
+    probe_ok="不适用"
     in_scope demo/01-build-and-test-gates.json && demo_ok=允许 || demo_ok=越界
   fi
   {
@@ -695,8 +697,10 @@ f12() {
   fi
   A "负例自检：$(printf '%s' "$probe_bad" | wc -w)/5 条探测路径仍被判越界" \
     "$([ "$(printf '%s' "$probe_bad" | wc -w)" = 5 ] && echo 0 || echo 1)"
-  A "正例自检：crates/server/src/handlers.rs 判允许（实际 $probe_ok）" \
-    "$([ "$probe_ok" = 允许 ] && echo 0 || echo 1)"
+  if [ "$SCOPE_ROUND" = m6 ]; then
+    A "正例自检：crates/server/src/handlers.rs 判允许（实际 $probe_ok）" \
+      "$([ "$probe_ok" = 允许 ] && echo 0 || echo 1)"
+  fi
   A "正例自检：demo/*（QA 阶段法定产物）判允许（实际 $demo_ok）" \
     "$([ "$demo_ok" = 允许 ] && echo 0 || echo 1)"
   end_check F12 "改动范围（${SCOPE_ROUND} 轮口径）落在允许集内、冻结面零改动、负例 5/5"
