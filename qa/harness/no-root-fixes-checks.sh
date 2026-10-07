@@ -369,18 +369,17 @@ f5() {
   systemctl --user show clusterscope-agent.service -p FragmentPath -p ExecStart --value >> "$CUR_LOG" 2>&1
   systemctl --user status clusterscope-agent.service --no-pager >> "$CUR_LOG" 2>&1 || true
   # server unit：真起一次（需要一份能连上本机 PG 的配置）
-  if [ "$server_cfg_existed" = 0 ]; then
-    sed -e 's#postgresql://clusterscope:clusterscope@localhost:5432/clusterscope#postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope#' \
-      deploy/server.yaml.example > "$CFGD/server.yaml"
-  fi
+  # 本检查**自带**配置，不复用机器上已有的 ~/.config/clusterscope/server.yaml：
+  # 那份文件可能指向别的 PG 端口（本机实测指向 5433，那里没有实例在听），server 会卡在
+  # 连库超时里、unit 本身反而没被测到。备份/还原逻辑照旧（安装前那份文件最后原样还原）。
+  selfcfg=1
+  sed -e 's#postgresql://clusterscope:clusterscope@localhost:5432/clusterscope#postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope#' \
+    -e 's#change-me-to-a-long-random-string#nr-fixes-checks-secret-0123456789#' deploy/server.yaml.example > "$CFGD/server.yaml"
   systemctl --user enable --now clusterscope-server.service > /dev/null 2>&1
   rc=$?
   A "enable --now clusterscope-server.service rc=0（实际 $rc）" "$rc"
   sleep 3
   if [ "$(systemctl --user is-active clusterscope-server.service 2>/dev/null)" != active ] && [ "$ports_busy" = 0 ]; then
-    selfcfg=1
-    sed -e 's#postgresql://clusterscope:clusterscope@localhost:5432/clusterscope#postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope#' \
-      -e 's#change-me-to-a-long-random-string#nr-fixes-checks-secret-0123456789#' deploy/server.yaml.example > "$CFGD/server.yaml"
     systemctl --user restart clusterscope-server.service > /dev/null 2>&1
     sleep 4
   fi
