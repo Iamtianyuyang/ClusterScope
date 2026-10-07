@@ -1,10 +1,14 @@
-# 三棵树合流方案（第 6 阶段交付 · M1–M9 逐题）
+# 三棵树合流方案（第 6 阶段交付 · M1–M10 逐题）
 
 > 审查对象：**C = GitHub 已发布线** `f9c080b`（TUI-only，40 个提交，`version 0.1.1`）。
-> 本文件回答 `qa/merge-plan-requirements.md` 的 M1–M9，每题给**事实**（带命令与证据）与**建议**（可执行、代价可估）。
+> 本文件回答 `qa/merge-plan-requirements.md` 的 M1–M10，每题给**事实**（带命令与证据）与**建议**（可执行、代价可估）。
 > 事实来自第 5 阶段已核验的 `qa/evidence/merge-plan-facts.txt`，以及本阶段在父目录 `ClusterScope-review/` 的
 > `node-line.bundle` / `gh-line.bundle` / `local-wip/` 上重新跑的探测（`gauntlet-out/merge/*.txt`）。
 > **`M5` 是产品决策，本文件只给选项与代价，不替人拍板。**
+>
+> **2026-10-07 增补（本文件第 2 版）**：并入 **no-root 维度的合流不变量 `M10`（`NRM1`–`NRM8`）**，
+> 把第 5 阶段增补发现的 **NF-01 / NF-02 升级为「合流前必修」**，并在 M6 的路线里加入两项合流后待办
+> （补用户级 unit、文档化无 root 的数据库路径）。**上一轮的勘误记录 E-1/E-2 原样保留**，M1–M9 的实测数字一个未改。
 
 三棵树的代号沿用 `qa/merge-plan-requirements.md`：
 
@@ -45,6 +49,29 @@ git rev-list --count b/master..c/master                            # → 33（C 
 > 空输出被误读成了 YES。附录与 `qa/evidence/line-fork-verify.txt` 已改成显式 `echo $?` 的写法。
 > **环境**：测试机 `git 2.47.3`；该版本下 `git rev-parse --short b/master c/master`（两个 rev + `--short`）会报 `fatal: Needed a single revision`，
 > 所以上面拆成两条写（哈希与结论不受影响）。
+
+---
+
+## 增补记录（2026-10-07，no-root 维度并入）
+
+> 增补原因：用户需求原文是「**这个项目是要做一个不用 root 的程序**」。上一轮的审查只把「无 root」当成一条文档不符
+> （`DOC-21`）记录。第 1 阶段增补把它拆成 **23 条可判定约束**（`NR-01`…`NR-21`、`NR-06b`、`MRG-02`）并在
+> `qa/merge-plan-requirements.md` 里加了 **M10 + 不变量 `NRM1`–`NRM8`**；第 5 阶段增补在真实 release 二进制上逐条复跑、
+> 独立复推，并把 **2 条新 finding（NF-01 / NF-02）** 写进 `qa/qa-report.json`。本节只记录**这些新事实对合流方案的影响**。
+
+| # | 增补事实 | 对合流方案的影响 |
+|---|---|---|
+| **A-1** | **运行时确实不需要 root**：uid 3000、`CapEff=0000000000000000`、零 HOME 外写入，server（8080/50051 监听、`/api/health`=200）、agent、TUI（pty 正常渲染）全功能可用；端口都 >1024 不需要 `CAP_NET_BIND_SERVICE`；`/proc` 权限不足时按 README 承诺降级 | `NRM1` **成立** → 合流**不得引入**任何特权原语（`NRM4`/`NRM5` 就是这条的判据） |
+| **A-2** | **NF-01（major）**：agent 在「干净 HOME + `-c` 指向缺失文件」下 **exit 1**，报错只说 `Failed to write node identity`、**从不提配置文件缺失**；配置缺失时还会**静默回退**（config 写 59999、实际拨 `http://localhost:50051`） | **合流前必修**（Leader 裁决 1）：至少做到「缺配置时明确报错 + 创建父目录」。它直接打在 `NRM2` 上 |
+| **A-3** | **NF-02（major）**：`deploy/install-agent.sh:80` 的 nohup 分支先跑 `pkill -f clusterscope-agent`，**会杀掉同用户所有 agent**（含它没启动的；本机常驻 agent PID 266643 即活体受害者）。第 5 阶段未执行它（取证来自源码 + 实时进程表） | **合流前必修**（Leader 裁决 1）：1 行改动——不要 `pkill -f`，改成按 PID / 精确匹配 |
+| **A-4** | **仓库 0 个用户级 server unit**：README:288-289 的 `systemctl --user restart clusterscope-server` 在**干净机器**上必然失败（本机那份 `~/.config/systemd/user/clusterscope-server.service` 是手写私货，2026-08-10，不属于仓库）；随仓库发的是系统级 `deploy/*.service`，非 root 实测装不上（`systemctl link` → `Interactive authentication required`；`cp` → `Permission denied`） | `NRM6` **不成立** → 写进 M6 的**合流后待办**（Leader 裁决 2：本次审查不改产品代码） |
+| **A-5** | **无 root 的数据库路径未文档化**：README:57/87 承诺「无 root 时可用 `docker compose up`」，但本机无 docker、podman 零镜像且无外网 → 该承诺在本环境不可执行；真正可行的路径（源码编译 PG 到 HOME）README **0 处**记载 | `NRM7` **不成立** → 写进 M6 的**合流后待办** |
+| **A-6** | **linger 是每机配置**：本机 `Linger=yes`（`loginctl show-user tianyuyang` → `Linger=yes`、`State=active`），用户级服务活过登出**本机实测 ✅**；但 `linger=no` 的节点上用户级 agent 会**随登出而死**，而 `loginctl enable-linger` 通常需要管理员/root | 写成**部署前提**（见 M10「部署前提」），不替集群做假设；`linger=no` 分支本机**无法复现** |
+| **A-7** | **诚实项（清单自身的不精确，作为 discovery D-N14 并入）**：`qa/merge-plan-requirements.md` 里 `NRM5` 的 `grep -E "setuid\|setgid\|pre_exec\|pkexec\|sudo \|chown"` 在 GNU grep 下**匹配空集**（ERE 里 `\|` 是字面竖线），它的「0 命中」是**模式假象**；用正确的 ERE 复跑命中 2 行（见 M10 的 NRM5） | 结论不变（仍无特权原语），但**不能**再拿那条命令当证据；M10 里已换成正确模式 |
+| **A-8** | **作者 harness 的 NR6 PASS 是假阳性**：`qa/harness/no-root-checks.sh:171-177` 用 `grep -q 'ClusterScope Agent starting'` 判 NR6、**从不读退出码**，而问候行在崩溃前就打印了 | `NR-06` 的最终判定**以第 5 阶段为准**（`Q305`：`violated`，见 `qa/qa-report.json`）；`NRM2` 的「不崩」前半句**不成立** |
+
+> 增补**没有**改动任何产品代码 / 测试 / `deploy/` / `README.md` / `docs/`；也没有改动既有 81 条约束与第 5 阶段写入
+> `qa/qa-report.json` 的任何 verdict。M6/M8 的推荐路线与定级判据仍是上一轮那套，这里是**追加**。
 
 ---
 
@@ -183,7 +210,7 @@ crates/storage/src/models.rs          0 个冲突块（自动合并成功）
 
 ## M6 推荐路线（可执行序列）
 
-**基线取 C**（已发布、可构建、44 测试通过），分 6 步，每步都有验证命令：
+**基线取 C**（已发布、可构建、44 测试通过），分 7 步（0–6，含 no-root 的合流前必修与合流后待办），每步都有验证命令：
 
 ### 步骤 0 — 冻结 B 的 12 个未提交文件（**已执行，产物已留档**）
 
@@ -263,6 +290,28 @@ cd web && npm ci && npm run build          # 需要外网/内网 npm 镜像
 
 见 M9。
 
+### 步骤 6 — no-root 合流前必修（NF-01 / NF-02，两处都很小；Leader 裁决 1）
+
+它们**不来自任何一棵树的现有提交**——C 上没有修法，B 的 12 个未提交文件里也没有——所以必须**新写**，改动量都很小：
+
+| 项 | 改哪 | 判据 / 验证命令 |
+|---|---|---|
+| **NF-02**（1 行） | `deploy/install-agent.sh:80` 的 `pkill -f clusterscope-agent 2>/dev/null \|\| true`（nohup 分支）→ **不要 `pkill -f`**，改成按 PID / 精确匹配（脚本自己写下的 pidfile，或锚定到 `$HOME/.local/bin/clusterscope-agent` 的完整路径） | `grep -n pkill deploy/install-agent.sh`；`bash -n deploy/install-agent.sh`。**验证时不要在一台有常驻 agent 的机器上实跑整条 nohup 分支**（会误杀，见 NF-02）；用 `sh -x` / 只读回显确认匹配范围 |
+| **NF-01**（两条小改动） | ① `crates/agent/src/config_loader.rs:9-11`：`-c` 路径不存在时**明确报错**（对齐 server 的 `Config file not found: <path>`，`crates/server/src/main.rs:193`），不再静默回退默认值；② `crates/agent/src/config_loader.rs:40` 附近：创建 `node_id_file` 的**父目录**（现在只建了 log dir） | `env HOME=/tmp/nf01-verify ./target/release/clusterscope-agent -c /tmp/definitely-absent.yaml` → 错误信息里必须出现**缺失的配置路径**；`mkdir -p $HOME/.config` 与否都不再影响退出码（现在是 1 / 124 的差别） |
+
+两条的原始复现命令都在 `qa/qa-report.json` 的 `NF-01`/`NF-02` 条目 `repro` 字段里，修完照抄即可复验。
+**注意口径**：`NF-01` 的判定以第 5 阶段为准——作者 harness 的 `NR6 PASS` 是假阳性（判据取了 `grep` 的退出码，
+而问候行在崩溃前就打印了），修完 harness 也要一起改成断言进程退出码。
+
+### 步骤 7 — 合流后待办（no-root 维度，Leader 裁决 2：本次审查不改产品代码）
+
+| 待办 | 为什么必须做 | 判据（合流后照抄即可） |
+|---|---|---|
+| **补用户级 unit / 明确区分两套部署件** | `NRM6`：README:288-289 的 `systemctl --user … clusterscope-server` 在**干净机器**上没有可解析的 unit（仓库 0 个用户级 server unit）；而随仓库发的 `deploy/*.service` 是系统级，非 root 实测装不上 | 选 (a)：`grep -n 'systemctl --user' README.md` 与 `find . -name 'clusterscope-server.service' -not -path './target/*'` **必须同时非空**；选 (b)：README 里每处 `systemctl --user … clusterscope-server` 都改写/删除并注明系统级前提。两种情况都要在 PR 描述里写明选哪条 |
+| **文档化「无 root 的数据库路径」** | `NRM7`：README:57/87（`:337` 的 deploy 清单同源）承诺 `docker compose up`，本集群无 docker/docker-compose、无外网 → 不可执行；真正可行的「源码编译 PG 16.4 到 HOME」在 README 里 **0 处**记载 | `grep -n 'docker compose up' README.md` 的每处要么标注「只在有 docker 的节点成立」，要么换成源码编译步骤；重跑 `sh qa/harness/doc-claims-checks.sh`，`NR-09`/`NR-10` 只允许变好 |
+
+这两项都是**文档/部署件**改动（不是产品逻辑），但都属于「无 root 可部署」这条需求的一部分，不能记成「后续再说」。
+
 ---
 
 ## M7 合流后的质量口径
@@ -296,6 +345,8 @@ cd web && npm ci && npm run build          # 需要外网/内网 npm 镜像
 |---|---|---|---|---|
 | **F-01** `GET /api/audit-logs` 恒 500 | major | 数据正确性（端点完全不可用） | **合流前必修** | ✅ `eac070e`（实测 cherry-pick 冲突仅 6 块） |
 | **F-16** 审计 COUNT 语句零绑定（被 500 掩盖的第二个缺陷） | major | 数据正确性 | **合流前必修** | ✅ 同一个 `eac070e` |
+| **NF-01** agent 在「干净 HOME + 缺失 `-c` 文件」下 exit 1，且报错不提配置文件；配置缺失时还会静默回退 | major | **可部署性（无 root 需求）**；错误信息误导运维 | **合流前必修**（Leader 裁决 1，M6 步骤 6） | ❌ 三棵树都没有修法（需新写：明确报错 + 建父目录） |
+| **NF-02** `deploy/install-agent.sh:80` 的 `pkill -f clusterscope-agent` 会杀掉同用户**所有** agent（含它没启动的） | major | **共享机器上的破坏性副作用**（本机常驻 agent PID 266643 即活体受害者） | **合流前必修**（Leader 裁决 1，1 行改动，M6 步骤 6） | ❌ 三棵树都没有修法 |
 | **F-02** 天级（90 天）历史永不返回、错误被静默吞 | major | 数据正确性 | **合流前必修** | ⚠️ B 的 `f4a8a31 feat: history endpoint serves hourly/daily aggregates beyond 24h` 是**同一问题的另一条修法**，需人比对取舍 |
 | **F-07** read-only 鉴权边界与两份文档都不一致 | major | 安全边界 | **合流前必修（至少改文档）** | ⚠️ B 的 `19d8fbc` 提到 "read-only-mode probe" |
 | **F-08** 登录无 IP/全局限速 | major | 安全边界 | **合流前必修** | ✅ B-wip `handlers.rs:65,95,200` 有按 IP 的滑动窗口限速器（C 侧 0 命中） |
@@ -311,7 +362,12 @@ cd web && npm ci && npm run build          # 需要外网/内网 npm 镜像
 | **F-15** `retry_count`/`max_retries` 是死列 | minor | 可运维性 | **只记录** | ✅ B 的 `0e79e5a perf: job retries` |
 | **F-04** 三个质量闸门 FAIL | major | 质量口径（M7） | **只记录**（本审查不修） | — |
 
-**合流前必修判据总结**：`F-01` + `F-16`（同一提交）+ `F-02` + `F-07`~`F-11` + `F-12` 里的默认口令。
+**合流前必修判据总结（第 2 版，2026-10-07 增补）**：`F-01` + `F-16`（同一提交）+ **`NF-01`** + **`NF-02`**
+（no-root 维度，改动极小但直接打在「无 root 可部署」这条需求上，见 M6 步骤 6）+ `F-02` + `F-07`~`F-11` + `F-12` 里的默认口令。
+
+**与 no-root 需求的对应**：`NF-01`（agent 缺配置就死、且报错不提原因）与 `NF-02`（安装脚本误杀同用户 agent）
+之外，M10 的 `NRM6`（缺用户级 unit）与 `NRM7`（无 root 的 DB 路径未文档化）不是 finding 而是**不变量缺口**，
+按 Leader 裁决 2 记入 **M6 步骤 7 的合流后待办**，不在本次审查里改产品代码。
 
 ---
 
@@ -345,6 +401,179 @@ sh qa/harness/extra-checks.sh
 
 ---
 
+## M10 不变量：合流不得引入新的 root 依赖（NRM1–NRM8 逐条回答）
+
+> 需求原文：「**这个项目是要做一个不用 root 的程序**」。M10 把它拆成 8 条**合流后必须仍然成立**的不变量
+> （`qa/merge-plan-requirements.md` 的 M10 展开），本节逐条回答：**判据 → 现在的事实（命令与输出）→ 合流时要做什么**。
+> 命令一律在**合流后的仓库根目录**执行（下文的 `R`）；每条都与第 5 阶段增补落进 `qa/qa-report.json` 的检查同源
+> （`Q300`–`Q322`、`Q330`），原始输出在 `qa/evidence/no-root-verify*.txt`。
+> 本节的**总判定**是：**4 条现在成立（NRM1/NRM3/NRM5 + NRM8 的前置）、1 条部分不成立（NRM2，= NF-01）、
+> 2 条不成立（NRM6/NRM7）、1 条现在无法评估（NRM4，B 的 12 个文件不在本树上）。**
+
+### 一、逐条判定
+
+| # | 不变量（合流后必须成立） | 现在（合流前）的判定 | 合流时要做的动作 |
+|---|---|---|---|
+| **NRM1** | 运行时零特权：普通用户起 server/agent/TUI，8080/50051 监听、`/api/health`=200、TUI 在 pty 渲染 | ✅ **成立**（`Q300`/`Q301`/`Q302`/`Q318`/`Q320`） | 每次 graft 后重跑 `sh qa/harness/no-root-checks.sh`（NR1/NR2/NR3/NR18/NR20 必须仍 PASS） |
+| **NRM2** | 零配置文件也不崩：server 靠 `POSTGRES_URL`/`JWT_SECRET`/`AUTH_REQUIRED` 可起（`NR-21`）；agent 缺 `-c` 文件时不读系统路径、日志落 HOME（`NR-06`/`NR-06b`） | ⚠️ **部分不成立**：`NR-21` ✅（`Q321`）、`NR-06b` ✅（`Q306`），但 `NR-06` ❌ → **NF-01**（`Q305`：干净 HOME + 缺 `-c` 文件 = exit 1） | **合流前必修 NF-01**（M6 步骤 6）；修完复跑 `Q305` 的复现命令 + `lsof -p <pid> \| grep -cE '/etc/clusterscope\|/var/(lib\|log)/clusterscope'` 必须为 0 |
+| **NRM3** | 产品代码与用户级脚本里**0 处硬编码系统路径** | ✅ **成立**：`crates/` 与 `deploy/install-agent.sh`、`deploy/tui.sh` 里共 **3 处**，全部是**可覆盖的默认值**（见下） | 合流后同一条 grep 的命中数**不得增加**；新增的每一处都要有可覆盖的 CLI/env 理由 |
+| **NRM4** | B 的 12 个未提交文件逐一验证不引入 root 依赖 | ⏳ **现在无法评估**：那 12 个文件**不在本树上**（未提交、不在任何 bundle 里，见 M1） | 步骤 2 graft 每个文件**之前/之后**各跑一次见下的循环命令；命中即 FAIL，必须逐条解释或改回 |
+| **NRM5** | 合流不得新增特权原语（`setuid`/`setgid`/`pre_exec` 提权/`chown` 系统路径/`sudo`/`pkexec`；新增依赖不得引入要求系统级权限的路径） | ✅ **成立**：**0 个真特权原语**（正确模式下命中 2 行，见下，是进程组设置不是提权） | 合流后重跑正确模式的 grep；`git diff <base> --stat -- Cargo.toml crates/*/Cargo.toml` 后逐个新依赖查用途 |
+| **NRM6** | 两套部署件的矛盾必须**修掉或明确区分**（不能继续「README 说 user、仓库发 system」） | ❌ **不成立**：`NR-13`（README 5 行 `systemctl --user`、仓库 0 个用户级 server unit）+ `NR-15`（系统级 unit 非 root 装不上：`systemctl link` → `Interactive authentication required`，`cp` → `Permission denied`） | **M6 步骤 7 待办**（Leader 裁决 2）：选 (a) 补一个用户级 unit，或 (b) 把 `deploy/*.service` 改名/注明系统级前提，并改 README |
+| **NRM7** | 文档承诺与实测口径一致：README:87 的 `docker compose up` 要么改成与本集群一致的说明，要么标注「需要 docker 的节点才成立」 | ❌ **不成立**：README **:57 / :87**（`:337` 同源）承诺 compose；本机无 docker/docker-compose、无外网；可行路径「源码编译 PG 到 HOME」**README 0 处**记载 | **M6 步骤 7 待办**；重跑 `sh qa/harness/doc-claims-checks.sh`，`NR-09`/`NR-10` 只允许变好 |
+| **NRM8** | 合流后仍可复现证明：`sh qa/harness/no-root-checks.sh` 全 PASS、`node .gauntlet/gauntlet.mjs test` 的 44/44 不减少、M9 的行为等价清单同时通过 | ⏳ **前置已就绪**：基线 `tests: 44/44`；no-root 脚本作者口径 `PASS=23 FAIL=0`（但其中 NR6 是**假阳性**，见下） | 合流后三条命令的输出**贴在 PR 描述里**；任何新的 FAIL 都要有对应 finding 条目（不得静默） |
+
+### 二、逐条的事实与命令
+
+**NRM1（成立）**——`id -u` = 3000；`/proc/<server-pid>/status` 的 `Uid: 3000 3000 3000 3000`、
+`CapEff: 0000000000000000`（零特权，绑 8080/50051 也不需要 `CAP_NET_BIND_SERVICE`，两个端口都 >1024）：
+
+```sh
+grep -E '^(Uid|Gid):' /proc/<pid>/status            # → 3000 3000 3000 3000
+grep '^CapEff:' /proc/<pid>/status                  # → 0000000000000000
+ss -ltnH | grep -E ':(8080|50051)[[:space:]]'       # → 两个 LISTEN（owner = 该 pid）
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/api/health   # → 200
+```
+
+证据：`qa/evidence/no-root-verify2-e-nr1-socket-ownership.txt`、`no-root-verify-12-nr01-unprivileged-bind.txt`、
+`no-root-verify-13-nr18-tui-pty.txt`、`no-root-verify-14-nr20-nvml-sysfs.txt`。
+
+**NRM2（NF-01 部分不成立）**——`NR-21` 的 env-only server 实测成立（`argv` 里没有配置参数、`health=200`、
+`lsof` 在 `/etc/clusterscope`、`/var/lib`、`/var/log` 下命中 **0**），`NR-06b` 的日志目录也确实建在 HOME。
+但 `NR-06` 在**它自己的判据场景**里不成立：
+
+```sh
+H=/tmp/nf01; rm -rf $H; mkdir -p $H
+env HOME=$H timeout 8 ./target/release/clusterscope-agent -c /etc/clusterscope/agent.yaml; echo exit=$?   # → exit=1
+mkdir -p $H/.config
+env HOME=$H timeout 8 ./target/release/clusterscope-agent -c /etc/clusterscope/agent.yaml; echo exit=$?   # → exit=124（活着）
+env HOME=$H ./target/release/clusterscope-agent -c /tmp/definitely-absent.yaml 2>&1 | tail -3            # 报错只提 node_id
+```
+
+机制：`crates/agent/src/config_loader.rs:9-11` 只看 `exists()` → 静默用 `AgentConfig::default()`；
+`:40` 只建 log dir、**不建** `node_id_file` 的父目录 → `node_identity.rs:27` 写失败 → exit 1；
+报错里"缺失的配置文件"出现次数 = **0**。**另一个二进制不一致**：server 对缺失配置是
+`Error: Config file not found: <path>` 直接退出（`crates/server/src/main.rs:193`），agent 却沉默地换默认值。
+
+**NRM3（成立，3 处可覆盖默认值）**：
+
+```sh
+grep -rn '/etc/clusterscope\|/var/lib/clusterscope\|/var/log/clusterscope\|/usr/local/bin' \
+  crates deploy/install-agent.sh deploy/tui.sh | grep -v '^#'
+crates/server/src/main.rs:186:        .unwrap_or("/etc/clusterscope/server.yaml");      # 可被 argv[1] 覆盖
+crates/agent/src/main.rs:15:    #[arg(short, long, default_value = "/etc/clusterscope/agent.yaml")]  # 可被 -c 覆盖
+crates/common/src/config.rs:38:                .unwrap_or_else(|| PathBuf::from("/etc/clusterscope"))   # 可被配置键覆盖
+```
+
+= **3 处**（与合流前基线同数）；`deploy/install-agent.sh`、`deploy/tui.sh` 的**非注释行里 0 处**。
+合流后的唯一要求是**这个数不增加**。
+
+**NRM4（现在无法评估）**——B 的 12 个文件只存在于 `/public/tianyuyang/code/ClusterScope` 的工作树里
+（M1）；合流 graft 之前先备份（M6 步骤 0 已完成），然后对每个文件跑：
+
+```sh
+for f in Cargo.lock Cargo.toml crates/agent/src/job_executor.rs crates/agent/src/metrics.rs \
+         crates/common/src/alert.rs crates/server/Cargo.toml crates/server/src/auth_middleware.rs \
+         crates/server/src/grpc.rs crates/server/src/handlers.rs crates/server/src/main.rs \
+         crates/server/src/ws_handler.rs crates/storage/src/user_queries.rs; do
+  git diff -- "$f" | grep -nE '/etc/|/var/lib|/var/log|/usr/local|pre_exec|setuid|setgid|chown|CAP_' && echo "HIT $f";
+done
+```
+
+命中即 FAIL。**注意**：这 12 个文件里 `Cargo.lock`/`Cargo.toml` 的变化还要按 NRM5 的后半句
+（新增依赖是否要求系统级权限）逐个人工确认。
+
+**NRM5（成立；并纠正一处模式假象）**——`qa/merge-plan-requirements.md` 里给的那条
+`grep -rnE 'setuid\|setgid\|pre_exec\|pkexec\|sudo \|chown' crates/` 在 GNU grep 下**匹配空集**
+（ERE 里 `\|` 是字面竖线，不是"或"），它的「0 命中」**不是测量结果**（这条已作为 discovery `N14` 原样并入）。
+用正确的 ERE 复跑：
+
+```sh
+grep -rnE 'setuid|setgid|pre_exec|pkexec|sudo |chown|setsid' crates/ | wc -l   # → 2（同一处调用）
+crates/agent/src/job_executor.rs:128:        cmd.pre_exec(|| {
+crates/agent/src/job_executor.rs:129:            libc::setsid();
+```
+
+这是**给子进程建新会话/进程组**（配合取消时按进程组 kill），**不是提权**；`getcap` 显示二进制上没有文件能力。
+所以 NRM5 的结论**成立**，但依据换成上面这条命令。
+
+**NRM6（不成立，合流后待办）**——两套部署件的实测差异：
+
+| 面 | 用户级（`install-agent.sh`） | 系统级（`deploy/server.service`、`deploy/agent.service`） |
+|---|---|---|
+| 路径 | `~/.local/bin`、`~/.config/clusterscope`、`~/.config/systemd/user` | `/usr/local/bin`、`/etc/clusterscope`、`/var/lib/clusterscope`、`/var/log/clusterscope-*` |
+| 归属 | 当前用户 | `User=clusterscope`（**本机不存在该用户**） |
+| 目标 | `systemd --user`（`WantedBy=default.target`）或 `nohup` | `WantedBy=multi-user.target` |
+| 额外依赖 | 无 | `After=network.target postgresql.service redis.service`（`redis` 代码里从未被读；本机 PG 编译在 HOME，`postgresql.service` 不存在 → **N11**） |
+| 非 root 实测 | ✅ 可用（本机 2026-09-02 起 user unit active） | ❌ `systemctl link` → `Failed to link unit: Interactive authentication required.`；`cp` → `Permission denied` |
+
+而 README 有 **5 行** `systemctl --user`（288、289、290、291、321），其中 288/289 管的是 **server**，
+仓库里 **0 个**用户级 server unit（`find . -name 'clusterscope-server.service' -not -path './target/*'` = 0）。
+本机那份 `~/.config/systemd/user/clusterscope-server.service`（`ExecStart=$HOME/.local/bin/clusterscope-server $HOME/.config/clusterscope/server.yaml`、
+`WantedBy=default.target`、2026-08-10 建立、当前 disabled/inactive）是**手写私货**，不属于仓库 →
+「用户级跑 server」这条路**可行但没被交付**。
+
+**NRM7（不成立，合流后待办）**——README 的 compose 承诺有两处（不止一处）：
+
+```sh
+grep -n 'docker compose up\|docker-compose' README.md
+57:| PostgreSQL | v16+(server 必需;可用 `deploy/docker-compose.yml` 一键起) |
+87:无 root 时可用 `docker compose up`(`deploy/docker-compose.yml`,只含 postgres + server)。
+337:deploy/          # systemd、docker-compose、install-agent.sh、tui.sh
+command -v docker || echo docker-absent     # → docker-absent（podman 在，但零镜像、无外网）
+```
+
+可行路径是「源码编译 PostgreSQL 16.4 到 HOME」（本机就是这么跑的：`pg_ctl status` exit 0、
+`select version()` = `PostgreSQL 16.4`），而 README **0 处**提到它。
+
+**NRM8（前置就绪，判据在合流后）**——基线：`tests: 44/44`；`sh qa/harness/no-root-checks.sh` 的作者口径
+`PASS=23 FAIL=0`（`NR-17` 是 `na` 但脚本记 PASS，这是脚本的口径）。**但作者脚本的 `NR6` 那一行是假阳性**：
+`qa/harness/no-root-checks.sh:171-177` 用 `grep -q 'ClusterScope Agent starting'` 判 NR6、**从不读进程退出码**，
+而问候行在崩溃前就打印了 → 所以合流后**不能**只跑作者脚本就算证明，要同时用第 5 阶段的独立复推
+（`qa/harness/nr-verify*.sh`，证据 `qa/evidence/no-root-verify*.txt`）。
+
+```sh
+sh qa/harness/no-root-checks.sh              # 期望 PASS=23 FAIL=0（NR-13/NR-15 在处置后应变 PASS）
+sh qa/harness/nr-verify.sh                   # 独立复推（判据比作者脚本严：读退出码）
+node .gauntlet/gauntlet.mjs test             # 期望 ≥44 passed / 0 failed
+sh qa/harness/doc-claims-checks.sh           # FAIL 数不增加
+```
+
+### 三、部署前提（合流后必须一起写进 README 的 5 条）
+
+这几条是「无 root 可用」真正成立的前提，现在 README 都没有写全：
+
+| 前提 | 事实 | 合流后怎么处理 |
+|---|---|---|
+| **HOME 可写** | `NR-19`：`HOME` 只读时 agent `Error: Failed to create log directory` 直接 exit 1（硬失败）；server 不受影响（只写 stderr） | 写进 README 的部署前提 |
+| **端口都 >1024** | 8080/50051 不需要 `CAP_NET_BIND_SERVICE`；但默认配置的 `prometheus_addr` 是 0.0.0.0:9090（该键还是死键） | 写清端口表 |
+| **`jwt_secret` 守卫** | `NR-07`：不给配置也不用环境变量时 server **拒绝启动**（`refusing to start: jwt_secret is missing/too weak`），README 没写 | 写进 README 的「最小启动」 |
+| **linger（每机配置）** | 见下（双向记录） | 写成部署前提，不要替集群假设 |
+| **数据库从哪来** | 见 NRM7 | 见 M6 步骤 7 |
+
+**linger 双向记录（原样写清，不替集群做假设）**：
+
+- **`linger=yes` → 用户级服务活过登出**：本机实测 ✅。`loginctl show-user tianyuyang` → `Linger=yes`、`State=active`；
+  探针 unit 的 `MainPID` 在会话结束后仍存活（`NR-11`/`Q311`）；更强的证据是本机自 **2026-09-02** 起常驻的
+  用户级 agent（PID 266643）跨过了每一次登出。
+- **环境事实（必须原样写明）**：本机当前 `Linger=yes` **很可能是 Leader 前期探测时执行 `loginctl enable-linger` 造成的**，
+  **不是集群默认值**；探测初期读到的是 `no`。`loginctl enable-linger` 需要 root/管理员（本机无 sudo，
+  且本次**不许**改集群配置），所以 `linger=no` 的分支在本机**无法复现**。
+- **`linger=no` → 随登出而死**：语义上，最后一个会话结束时 logind 会停掉该用户的 per-user manager，
+  它的所有 unit（含 `Restart=always`）一起被杀 → **干净节点上用户级 agent 会随登出而死**；
+  而开启 linger 通常需要管理员/root。这是「无 root 承诺」的一条**边界**，必须写清。
+- **`install-agent.sh` 只探测 `systemctl --user show-environment`、从不检查 `Linger`**（`deploy/install-agent.sh:60`）
+  → 在没有 linger 的节点上会**静默**装出一个登出即死的服务。合流时应把这条写进安装脚本的提示或 README。
+
+### 四、M10 的验收口径（一句话）
+
+在一台**没有 root、没有 docker、没有外网**的节点上，用合流后的代码把 server + agent + TUI 跑起来
+（`sh qa/harness/no-root-checks.sh` 全 PASS，只允许已在 PR 里写明处置的 `NR-13`/`NR-15` 两条），
+并且 `crates/**` 里没有任何代码路径要求写 `/etc`、`/var/lib`、`/var/log`、`/usr/local/bin`；
+`NRM1`–`NRM8` 的逐条命令与输出**贴在合流 PR 描述里**。
+
+---
+
 ## 风险与回滚
 
 | 风险 | 触发条件 | 缓解 | 回滚 |
@@ -353,7 +582,9 @@ sh qa/harness/extra-checks.sh
 | cherry-pick `eac070e` 时把 B 的其他改动带进来 | 误用 `git merge 19d8fbc`（实测 35 个冲突文件） | 只用 `cherry-pick -n` + 按文件 `git add` | `git cherry-pick --abort` |
 | 合流后 REST 契约漂移（web 依赖的 10 个端点） | 接回 web 但 server 路由改了 | 合流后先跑 `api-checks.sh` 再开浏览器 | 分支回退 |
 | 质量指标继续变差掩盖新缺陷 | 合流引入新代码 | 每次 graft 后单独提交，`git bisect` 可用 | 单提交 revert |
-| 共享机器上误杀别人的进程 | 用 `pkill`/`killall` | **只按 PID 文件停**（`qa/harness/*-down.sh`）；本机有一个不属于本次审查的常驻 agent（PID 266643），本阶段未做任何干预 | — |
+| 共享机器上误杀别人的进程 | 用 `pkill`/`killall` | **只按 PID 文件停**（`qa/harness/*-down.sh`）；本机有一个不属于本次审查的常驻 agent（PID 266643），本阶段未做任何干预。**注意：仓库自带的 `deploy/install-agent.sh:80` 恰好违反这条**（`pkill -f clusterscope-agent` 会杀掉同用户所有 agent，见 **NF-02**）→ 合流前必修（M6 步骤 6） | — |
+| 合流把「不用 root」这条需求做没了 | 新代码/新依赖要求系统路径或特权 | **M10 的 `NRM1`–`NRM8`**：每次 graft 后跑 `sh qa/harness/no-root-checks.sh` + `crates/` 的系统路径 grep（命中数不得增加） | 单提交 revert；`NRM4` 的循环命令逐文件定位 |
+
 | `qa/harness/ops-checks.sh:112` 全表清空 `node_metrics` | 在共享 PG 上跑 ops-checks | 已知夹具卫生问题（N9）；跑之前先备份或改脚本只删自己的 node_id（**改脚本需人确认**） | 从备份恢复 |
 
 ---

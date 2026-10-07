@@ -1,29 +1,35 @@
-# ClusterScope 审查 · 证据包小结（第 6 阶段）
+# ClusterScope 审查 · 证据包小结（第 6 阶段 · 含 no-root 增补）
 
 > **单文件证据包（先看这个）**：`report/review.html`
-> **合流方案**：`report/merge-plan.md` · **使用教程**：`docs/review-howto.md`
-> **审查对象**：GitHub 已发布线 `f9c080b`（TUI-only，40 个提交）· **报告提交**：`gauntlet/audit-gh-line` 的 `[report]` 提交
+> **合流方案**：`report/merge-plan.md`（M1–M10） · **使用教程**：`docs/review-howto.md`
+> **审查对象**：GitHub 已发布线 `f9c080b`（TUI-only，40 个提交） · **报告提交**：`gauntlet/audit-gh-line` 的 `[report]` 提交（`8fb31d1` = 上一版 + no-root 两个增补）
 
 ## 5 分钟审阅路线（入口）
 
-1. **先看 3 处**（`report/review.html` 内）：① 第 1 节前 3 条 findings（F-01 / F-16 / F-02，都是"功能实际不可用"级别）；
-   ② 第 2 节闸门面板（✅ 与 ❌ 分开呈现 + `verdict: pass` 的语义）；③ 第 5 节 N1–N9（审查自身的 9 处不精确）。
-2. **再点 3 个演示**（`gauntlet-out/evidence/demos/`）：`04-rest-security-audit-logs.html`、`07-history-daily-tier-missing.html`、`02-quality-gates-fail.html`。
-3. **最后看两处结构证据**：架构图 `gauntlet-out/evidence/diagrams/clusterscope-runtime.html`、合流方案 `report/merge-plan.md`（**M5 需产品决策**）。
+1. **先看 4 处**（`report/review.html` 内）：① 第 1 节前 3 条 findings（F-01 / F-16 / F-02，都是"功能实际不可用"级别）；
+   ② **第 2 节「无 root 合规」**（一句话结论 + 4 条核心结论 + NF-01/NF-02 两条 major + `NRM1`–`NRM8` 现状表）；
+   ③ 第 3 节闸门面板（✅ 与 ❌ 分开呈现 + `verdict: pass` 的语义）；④ 第 6 节 N1–N14（审查自身的 14 处不精确）。
+2. **再点 4 个演示**（`gauntlet-out/evidence/demos/`）：`04-rest-security-audit-logs.html`、`07-history-daily-tier-missing.html`、`02-quality-gates-fail.html`、**`09-no-root-system-vs-user-units.html`**（同批还有 `10-no-root-linger-and-config-fallback.html`）。
+3. **最后看两处结构证据**：架构图 `gauntlet-out/evidence/diagrams/clusterscope-runtime.html`、合流方案 `report/merge-plan.md`（**M5 需产品决策**、**M10 = no-root 不变量 `NRM1`–`NRM8`**）。
 
-## 结论（两句话）
+## 结论（三句话）
 
-- **证据包本身合格**：81 条约束逐条真跑、16 条 finding 有原始证据、8 个演示可回放、架构图通过 Archify 校验。
+- **证据包本身合格**：**104 条约束**（81 条原样 + 23 条 no-root 增补）逐条真跑、**18 条 finding** 有原始证据、**10 个演示**可回放、架构图通过 Archify 校验。
 - **产品不健康**：硬阈值下 complexity 21/316（maxCC 23）、CRAP 45/316（maxCRAP 552）、覆盖率 20.7% 三闸门 ❌；
   外加两个"功能不可用"缺陷（审计端点恒 500、90 天天级历史永不返回）与四个安全边界缺口（无登录限速、token 不可吊销、审计只覆盖 2 个动作、任务参数无上限）。
+- **"不用 root"这条需求：运行时成立，交付面不成立**——uid 3000 / `CapEff=0` 下 server + agent + TUI 全功能可用（实测），
+  但随仓库发的是**系统级** unit（非 root 装不上）、仓库里 **0 个**用户级 server unit、无 root 的数据库路径 README **一处未写**；
+  另加两条 major：**NF-01**（干净 HOME + 缺 `-c` 文件 → exit 1，报错从不提配置文件）与 **NF-02**（`deploy/install-agent.sh:80` 的 `pkill -f clusterscope-agent` 会杀掉同用户所有 agent）。
 
-## 16 条 findings 速览
+## 18 条 findings 速览
 
 | id | severity | 一句话 | B 线是否已修 |
 |---|---|---|---|
 | F-01 | major | `GET /api/audit-logs` 恒 500（`SELECT *` 与 `username` 列不匹配） | ✅ `eac070e` |
 | F-16 | major | 审计 COUNT 语句零绑定（被 500 掩盖的第二个缺陷） | ✅ 同一个 `eac070e` |
 | F-02 | major | 天级（90 天）历史永不返回、错误被静默吞 | ⚠️ 另一条修法，需比对 |
+| **NF-01** | **major** | **agent 在「干净 HOME + `-c` 缺失文件」下 exit 1，报错不提配置文件；配置缺失时静默回退** | ❌ 三棵树都没有修法（需新写） |
+| **NF-02** | **major** | **`deploy/install-agent.sh:80` 的 `pkill -f clusterscope-agent` 会杀掉同用户所有 agent** | ❌ 三棵树都没有修法（1 行改动） |
 | F-04 | major | 硬阈值下三个质量闸门 FAIL（审查结论，不修） | — |
 | F-06 | major | 15 个配置键写了不生效（清单只记 11 个） | ✅ 大部分 |
 | F-07 | major | read-only 鉴权边界与两份文档都不一致 | ⚠️ 部分 |
@@ -38,35 +44,60 @@
 | F-14 | minor | 没有自动架构检查（arch 跳过） | ❌ |
 | F-15 | minor | `retry_count`/`max_retries` 是死列 | ✅ B 提交 |
 
-**合流前必修**：F-01 + F-16 + F-02 + F-07 ~ F-11 + F-12 里的默认口令。
+**合流前必修**：F-01 + F-16 + F-02 + F-07 ~ F-11 + F-12 里的默认口令 + **NF-01 + NF-02**（no-root，Leader 已裁决，改动都很小）。
+
+## no-root 一节摘要（2026-10-07 增补：23 条 `NR-*` + M10 不变量）
+
+- **成立（实测）**：运行时零特权——uid **3000**、**`CapEff=0000000000000000`**、零 HOME 外写入；
+  server（8080/50051 监听、`/api/health`=200）、agent、TUI（pty 正常渲染）全功能可用；`/proc` 权限不足时按 README 承诺降级；
+  端口都 >1024，不需要 `CAP_NET_BIND_SERVICE`；零配置文件也能起 server（env-only 路径 `lsof` 命中 0 处系统路径）。
+- **不成立**：① 部署件与承诺自相矛盾——随仓库发的 `deploy/{server,agent}.service` 是**系统级** unit
+  （`User=clusterscope`、`/usr/local/bin`、`/etc/clusterscope`、`/var/lib/clusterscope`、`/var/log/…`、`WantedBy=multi-user.target`），
+  非 root 实测装不上（`systemctl link` → `Interactive authentication required`；`cp` → `Permission denied`），而 README 通篇写 `systemctl --user`；
+  ② 仓库 **0 个**用户级 server unit——README:288-289 的 `systemctl --user restart clusterscope-server` 在**干净机器**上必然失败
+  （本机那份 `~/.config/systemd/user/clusterscope-server.service` 是 2026-08-10 的**手写私货**，不属于仓库）；
+  ③ 无 root 的数据库路径未文档化——README:57/87 承诺「无 root 时可用 `docker compose up`」，本机无 docker、podman 零镜像且无外网，
+  而真正可行的路径（源码编译 PG 16.4 到 HOME）README **0 处**记载。
+- **两条新 finding（都升级为合流前必修）**：**NF-01**、**NF-02**（见上表；NF-02 第 5 阶段**未执行**——跑一下就会误杀常驻 agent，取证来自源码 + 实时进程表）。
+- **linger 双向记录（原样写明）**：本机当前 `Linger=yes`（`loginctl show-user tianyuyang`），用户级服务**活过登出（本机实测 ✅）**；
+  但本机这个 `yes` **很可能是 Leader 前期探测时执行 `loginctl enable-linger` 造成的，不是集群默认值**（探测初期读到 `no`）。
+  反向：`linger=no` 的节点上，最后一个会话结束时 logind 会停掉该用户的 per-user manager → **用户级 agent 会随登出而死**，
+  而开启 linger 通常需要管理员/root → 该分支在本机**无法复现**（无 root、不许改集群配置），只作语义记录，**不替集群做假设**。
+- **诚实项**：`qa/merge-plan-requirements.md` 里 `NRM5` 的 `grep -E "…\|…"` 在 GNU grep 下**匹配空集**（ERE 里 `\|` 是字面竖线），
+  它的「0 命中」是**模式假象**；正确模式命中 1 处无害的 `libc::setsid()`（`job_executor.rs:128-129`，进程组设置，非提权）→ 作为 discovery `N14` 原样并入。
+  另：作者 harness 的 `NR6 PASS` 是**假阳性**（判据取了 `grep` 的退出码，问候行在崩溃前就打印了），`NR-06` 的最终判定以第 5 阶段为准。
+- **合流必须回答**：**M10 的 `NRM1`–`NRM8`**（逐条命令与输出见 `report/merge-plan.md` 的 M10）。
+  现状：`NRM1`/`NRM3`/`NRM5` 成立、`NRM2` 部分不成立（= NF-01）、`NRM4` 待合流时逐文件验、`NRM6`/`NRM7` 不成立、`NRM8` 前置就绪。
+  **合流后待办**：补用户级 unit（`NRM6`）、文档化无 root 的数据库路径（`NRM7`）。
 
 ## 合流一句话
 
 以 **C（GitHub `f9c080b`）为基线**：先把 B 的 `eac070e` cherry-pick 进来（实测只有 4 个文件 / 6 个冲突块 / 约 140 行），
 再按文件 graft B 的 12 个未提交改动（1784+/740−，不在任何提交或 bundle 里，**先打包校验**），
+再做 no-root 的两处必修（`NF-01`：缺配置明确报错 + 建父目录；`NF-02`：去掉 `pkill -f`，改按 PID/精确匹配），
 A 的独有资产（web 27 文件、`common/{dedup,metrics,sequence}.rs`、`tests/integration_test.rs`、`deploy/nginx.conf`）按 M5 的产品决策处理。
 **不要整体 `git merge 19d8fbc`**（实测 35 个文件冲突，含 `modify/delete`）。
+合流后还要把 **M6 步骤 7 的两个待办**（补用户级 unit、文档化无 root 的 DB 路径）做掉，并按 **M10** 的三条命令复验。
 
 ---
 
 # 以下是 kit 自动生成的仪表盘与逐条明细（原始记录，未经修饰）
-
 ## ❌ Gauntlet 证据包：ClusterScope GitHub 已发布线（f9c080b）全维度审查
 
-> ❌ **未通过：** 验收测试（0/0 通过）；函数质量（316 个函数，超标 21 个）；CRAP（最大 CRAP 552）；行覆盖率（20.7%）；QA 端到端（77/82 通过）；需求约束（76/81 条已证实）
+> ❌ **未通过：** 验收规格（0 个场景，未定义步骤 0）；验收测试（0/0 通过）；函数质量（316 个函数，超标 21 个）；CRAP（最大 CRAP 552）；行覆盖率（20.7%）；QA 端到端（101/106 通过）；需求约束（99/104 条已证实）
 
 > ⚠️ **需要你确认：** 改动了规则文件 gauntlet.config.json、qa/constraints.json；没有配置架构依赖检查（commands.arch）
 
 ```html title="闸门仪表盘"
-<style>body{background:var(--background);color:var(--foreground);font-family:var(--font-sans);margin:0}</style><div style="padding:6px 4px"><div style="display:flex;gap:4px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--border)"><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid var(--chart-2);background:var(--chart-2);color:var(--background)">✓</div><div style="font-size:12px;font-weight:600">摸底</div><div style="font-size:11px;color:var(--muted-foreground)">commands 适配器</div></div><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid var(--border);background:transparent;color:var(--background)"></div><div style="font-size:12px;font-weight:600">规格</div><div style="font-size:11px;color:var(--muted-foreground)">0 个 Gherkin 场景</div></div><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid color-mix(in srgb, #dc2626 85%, var(--foreground));background:color-mix(in srgb, #dc2626 85%, var(--foreground));color:var(--background)">✗</div><div style="font-size:12px;font-weight:600">编码</div><div style="font-size:11px;color:var(--muted-foreground)">44/44 个测试通过</div></div><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid color-mix(in srgb, #dc2626 85%, var(--foreground));background:color-mix(in srgb, #dc2626 85%, var(--foreground));color:var(--background)">✗</div><div style="font-size:12px;font-weight:600">清理</div><div style="font-size:11px;color:var(--muted-foreground)">最大圈复杂度 23，重复 0%</div></div><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid color-mix(in srgb, #dc2626 85%, var(--foreground));background:color-mix(in srgb, #dc2626 85%, var(--foreground));color:var(--background)">✗</div><div style="font-size:12px;font-weight:600">加固</div><div style="font-size:11px;color:var(--muted-foreground)">未运行</div></div><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid color-mix(in srgb, #dc2626 85%, var(--foreground));background:color-mix(in srgb, #dc2626 85%, var(--foreground));color:var(--background)">✗</div><div style="font-size:12px;font-weight:600">QA</div><div style="font-size:11px;color:var(--muted-foreground)">77/82 项检查通过</div></div><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid color-mix(in srgb, #dc2626 85%, var(--foreground));background:color-mix(in srgb, #dc2626 85%, var(--foreground));color:var(--background)">✗</div><div style="font-size:12px;font-weight:600">证据包</div><div style="font-size:11px;color:var(--muted-foreground)">本页 + 架构图</div></div></div><div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12px"><span>✓ 测量范围（静态分析）</span><span style="font-family:ui-monospace,monospace;color:var(--chart-2)">100% · 下限 100%</span></div><div style="position:relative;height:10px;border:1px solid var(--border);border-radius:3px;background:var(--muted);margin-top:3px"><div style="position:absolute;left:0;top:0;bottom:0;width:100.0%;background:var(--chart-2);opacity:.35;border-right:2px solid var(--chart-2)"></div><div style="position:absolute;top:-4px;bottom:-4px;left:100.0%;border-left:2px dashed var(--muted-foreground)"></div></div></div><div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12px"><span>✗ 最大圈复杂度（全部函数）</span><span style="font-family:ui-monospace,monospace;color:color-mix(in srgb, #dc2626 85%, var(--foreground))">23 · 上限 10</span></div><div style="position:relative;height:10px;border:1px solid var(--border);border-radius:3px;background:var(--muted);margin-top:3px"><div style="position:absolute;left:0;top:0;bottom:0;width:80.0%;background:color-mix(in srgb, #dc2626 85%, var(--foreground));opacity:.35;border-right:2px solid color-mix(in srgb, #dc2626 85%, var(--foreground))"></div><div style="position:absolute;top:-4px;bottom:-4px;left:34.8%;border-left:2px dashed var(--muted-foreground)"></div></div></div><div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12px"><span>✓ 编译告警</span><span style="font-family:ui-monospace,monospace;color:var(--chart-2)">0 · 上限 0</span></div><div style="position:relative;height:10px;border:1px solid var(--border);border-radius:3px;background:var(--muted);margin-top:3px"><div style="position:absolute;left:0;top:0;bottom:0;width:0.0%;background:var(--chart-2);opacity:.35;border-right:2px solid var(--chart-2)"></div><div style="position:absolute;top:-4px;bottom:-4px;left:0.0%;border-left:2px dashed var(--muted-foreground)"></div></div></div><div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12px"><span>✓ 重复代码</span><span style="font-family:ui-monospace,monospace;color:var(--chart-2)">0% · 上限 3%</span></div><div style="position:relative;height:10px;border:1px solid var(--border);border-radius:3px;background:var(--muted);margin-top:3px"><div style="position:absolute;left:0;top:0;bottom:0;width:0.0%;background:var(--chart-2);opacity:.35;border-right:2px solid var(--chart-2)"></div><div style="position:absolute;top:-4px;bottom:-4px;left:30.0%;border-left:2px dashed var(--muted-foreground)"></div></div></div><div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12px"><span>✗ 需求约束</span><span style="font-family:ui-monospace,monospace;color:color-mix(in srgb, #dc2626 85%, var(--foreground))">76/81 · 下限 81/81</span></div><div style="position:relative;height:10px;border:1px solid var(--border);border-radius:3px;background:var(--muted);margin-top:3px"><div style="position:absolute;left:0;top:0;bottom:0;width:93.8%;background:color-mix(in srgb, #dc2626 85%, var(--foreground));opacity:.35;border-right:2px solid color-mix(in srgb, #dc2626 85%, var(--foreground))"></div><div style="position:absolute;top:-4px;bottom:-4px;left:100.0%;border-left:2px dashed var(--muted-foreground)"></div></div></div></div>
+<style>body{background:var(--background);color:var(--foreground);font-family:var(--font-sans);margin:0}</style><div style="padding:6px 4px"><div style="display:flex;gap:4px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--border)"><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid var(--chart-2);background:var(--chart-2);color:var(--background)">✓</div><div style="font-size:12px;font-weight:600">摸底</div><div style="font-size:11px;color:var(--muted-foreground)">commands 适配器</div></div><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid color-mix(in srgb, #dc2626 85%, var(--foreground));background:color-mix(in srgb, #dc2626 85%, var(--foreground));color:var(--background)">✗</div><div style="font-size:12px;font-weight:600">规格</div><div style="font-size:11px;color:var(--muted-foreground)">0 个 Gherkin 场景</div></div><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid color-mix(in srgb, #dc2626 85%, var(--foreground));background:color-mix(in srgb, #dc2626 85%, var(--foreground));color:var(--background)">✗</div><div style="font-size:12px;font-weight:600">编码</div><div style="font-size:11px;color:var(--muted-foreground)">44/44 个测试通过</div></div><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid color-mix(in srgb, #dc2626 85%, var(--foreground));background:color-mix(in srgb, #dc2626 85%, var(--foreground));color:var(--background)">✗</div><div style="font-size:12px;font-weight:600">清理</div><div style="font-size:11px;color:var(--muted-foreground)">最大圈复杂度 23，重复 0%</div></div><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid color-mix(in srgb, #dc2626 85%, var(--foreground));background:color-mix(in srgb, #dc2626 85%, var(--foreground));color:var(--background)">✗</div><div style="font-size:12px;font-weight:600">加固</div><div style="font-size:11px;color:var(--muted-foreground)">未运行</div></div><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid color-mix(in srgb, #dc2626 85%, var(--foreground));background:color-mix(in srgb, #dc2626 85%, var(--foreground));color:var(--background)">✗</div><div style="font-size:12px;font-weight:600">QA</div><div style="font-size:11px;color:var(--muted-foreground)">101/106 项检查通过</div></div><div style="flex:1;min-width:70px;text-align:center"><div style="width:22px;height:22px;margin:0 auto 4px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid color-mix(in srgb, #dc2626 85%, var(--foreground));background:color-mix(in srgb, #dc2626 85%, var(--foreground));color:var(--background)">✗</div><div style="font-size:12px;font-weight:600">证据包</div><div style="font-size:11px;color:var(--muted-foreground)">本页 + 架构图</div></div></div><div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12px"><span>✓ 测量范围（静态分析）</span><span style="font-family:ui-monospace,monospace;color:var(--chart-2)">100% · 下限 100%</span></div><div style="position:relative;height:10px;border:1px solid var(--border);border-radius:3px;background:var(--muted);margin-top:3px"><div style="position:absolute;left:0;top:0;bottom:0;width:100.0%;background:var(--chart-2);opacity:.35;border-right:2px solid var(--chart-2)"></div><div style="position:absolute;top:-4px;bottom:-4px;left:100.0%;border-left:2px dashed var(--muted-foreground)"></div></div></div><div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12px"><span>✗ 最大圈复杂度（全部函数）</span><span style="font-family:ui-monospace,monospace;color:color-mix(in srgb, #dc2626 85%, var(--foreground))">23 · 上限 10</span></div><div style="position:relative;height:10px;border:1px solid var(--border);border-radius:3px;background:var(--muted);margin-top:3px"><div style="position:absolute;left:0;top:0;bottom:0;width:80.0%;background:color-mix(in srgb, #dc2626 85%, var(--foreground));opacity:.35;border-right:2px solid color-mix(in srgb, #dc2626 85%, var(--foreground))"></div><div style="position:absolute;top:-4px;bottom:-4px;left:34.8%;border-left:2px dashed var(--muted-foreground)"></div></div></div><div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12px"><span>✓ 编译告警</span><span style="font-family:ui-monospace,monospace;color:var(--chart-2)">0 · 上限 0</span></div><div style="position:relative;height:10px;border:1px solid var(--border);border-radius:3px;background:var(--muted);margin-top:3px"><div style="position:absolute;left:0;top:0;bottom:0;width:0.0%;background:var(--chart-2);opacity:.35;border-right:2px solid var(--chart-2)"></div><div style="position:absolute;top:-4px;bottom:-4px;left:0.0%;border-left:2px dashed var(--muted-foreground)"></div></div></div><div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12px"><span>✓ 重复代码</span><span style="font-family:ui-monospace,monospace;color:var(--chart-2)">0% · 上限 3%</span></div><div style="position:relative;height:10px;border:1px solid var(--border);border-radius:3px;background:var(--muted);margin-top:3px"><div style="position:absolute;left:0;top:0;bottom:0;width:0.0%;background:var(--chart-2);opacity:.35;border-right:2px solid var(--chart-2)"></div><div style="position:absolute;top:-4px;bottom:-4px;left:30.0%;border-left:2px dashed var(--muted-foreground)"></div></div></div><div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:12px"><span>✗ 需求约束</span><span style="font-family:ui-monospace,monospace;color:color-mix(in srgb, #dc2626 85%, var(--foreground))">99/104 · 下限 104/104</span></div><div style="position:relative;height:10px;border:1px solid var(--border);border-radius:3px;background:var(--muted);margin-top:3px"><div style="position:absolute;left:0;top:0;bottom:0;width:95.2%;background:color-mix(in srgb, #dc2626 85%, var(--foreground));opacity:.35;border-right:2px solid color-mix(in srgb, #dc2626 85%, var(--foreground))"></div><div style="position:absolute;top:-4px;bottom:-4px;left:100.0%;border-left:2px dashed var(--muted-foreground)"></div></div></div></div>
 ```
 
 - 📏 产品代码 33 个文件、7030 行：静态分析 100%，有覆盖率数据 100%，被变异测试触及 0%。
 - 🔬 316 个函数：最大圈复杂度 23，最长 196 行，最深嵌套 7 层；编译告警 0 条。
 - 📋 重复代码占 0%（0 处，其中跨目录 0 处）。
-- 📦 本分支改动 87 个文件，+19525 / −0 行，其中 2 个是规则文件。
+- 📦 本分支改动 135 个文件，+43217 / −0 行，其中 2 个是规则文件。
 
-### 📌 需求约束 76/81
+### 📌 需求约束 99/104
 - ✅ **GATE-01** 真实构建闸门成立：`cargo build --workspace --all-targets --offline` 退出码 0（三棵树里本线是可构建的）。
 - ✅ **GATE-02** 真实测试闸门成立：44 个测试全部通过、0 失败、0 忽略。
 - ✅ **GATE-03** clippy 与 rustfmt 闸门成立：`cargo clippy --workspace --all-targets --offline` 与 `cargo fmt --all --check` 都是 0 发现。
@@ -148,6 +179,29 @@ A 的独有资产（web 27 文件、`common/{dedup,metrics,sequence}.rs`、`test
 - ✅ **OPS-11** TUI 依赖 REST 且不链接内部 crate（README:15、架构图 TUI→REST）：`cargo tree -p tui` 只应出现 common/protocol 之外的外部依赖。
 - ❌ **FE-01** 前端维度在本线不适用（N/A）：审查对象 f9c080b 已删除 `web/`，仓库里没有任何前端代码（无 `web/`、无 `package.json`、无 html/ts/js）；前端只存在于另两棵树（A 的 `local-wip/web/` 有 27 个文件：App.tsx / auth.ts / i18n.tsx / pages / services）。
 - ❌ **MRG-01** 合流方案必须逐条回答 qa/merge-plan-requirements.md 里的必答问题（三棵树的差异、重复实现、被丢弃的工作、冲突点、推荐路线、风险）。
+- ✅ **NR-01** 本程序（server / agent / TUI）必须能在**无 root** 的普通用户下运行：需求原文「这个项目是要做一个不用 root 的程序」。端口 8080（REST）与 50051（gRPC）均 >1024，绑定不需要 CAP_NET_BIND_SERVICE。
+- ✅ **NR-02** README:84-86 文档化的 server 启动路径必须对普通用户成立：`cp deploy/server.yaml.example server.yaml` → 改 postgres_url 指向本机 → `clusterscope-server server.yaml`，监听 8080/50051 且 /api/health 返回 200；配置放在用户目录（如 ~/.config/clusterscope）即可，不需要 /etc/clusterscope。
+- ✅ **NR-03** agent 的默认路径必须全部落在用户 HOME 内，不得依赖 /etc：`-c` 默认值虽是 /etc/clusterscope/agent.yaml（crates/agent/src/main.rs:15），但 `--config-dir` / `--server-addr` / `--node-id` / `--agent-token` 四个覆盖参数存在（main.rs:13-27），且 dirs 6.0.0 + XDG 解析出 ~/.config/node_id 与 ~/.local/state/clusterscope-agent（crates/common/src/config.rs:37-46）。
+- ✅ **NR-04** 所有系统级路径对普通用户不可写：/etc/clusterscope、/var/lib/clusterscope、/var/log/clusterscope-{server,agent} 都不存在且父目录 root:root 755，/usr/local/bin 是 root:root 755。
+- ✅ **NR-05** `systemctl --user` 在本集群可用：普通用户能在 ~/.config/systemd/user/ 下安装、启用、启动、查询、停用并删除一个 unit，全程不需要 sudo；`systemctl --user show-environment` exit 0，user manager 状态 running。
+- ✅ **NR-06** `-c` 指向的配置文件**不存在**时 agent 不得崩溃：config_loader.rs:9-11 只做 `config_path.exists()` 判断，缺失即静默用默认值继续启动（这是隐患而非崩溃：系统级 unit 照抄时会在不知情的情况下跑默认配置）。
+- ✅ **NR-06b** agent 的日志目录默认值必须落在 HOME 内且可创建：`dirs::state_dir()` → ~/.local/state/clusterscope-agent（crates/common/src/config.rs:44-46；dirs 6.0.0 + dirs-sys 0.5.0 走 XDG，不存在 /var/log 兜底的实际触发路径）。
+- ✅ **NR-07** server **裸启动**（不给配置、不给环境变量）必须拒绝而不是带着弱密钥起来：`jwt_secret` 为默认值时入口守卫直接 bail。README 没有写这条前置条件，属隐性要求（只能靠 config 模板里的 jwt_secret 或 JWT_SECRET 环境变量满足）。
+- ✅ **NR-08** 显式传参/环境变量必须能完全绕开所有 root 路径：server 认 6 个环境键（POSTGRES_URL / JWT_SECRET / HTTP_ADDR / GRPC_ADDR / AUTH_REQUIRED / AGENT_TOKEN，且都支持 CLUSTERSCOPE_ 前缀），agent 有 `--config` / `--config-dir` / `--server-addr` / `--node-id` / `--agent-token`。
+- ✅ **NR-09** server 需要的 PostgreSQL 必须有一条**无 root、无 docker、无外网**也能落地的路径：本机可行路径是「源码编译到 HOME」（/public/tianyuyang/code/ClusterScope-review/pg16 + pgdata，uid 3000 自己跑），但 **README:87 只给了 `docker compose up`**，而本机无 docker/docker-compose、无外网——这条承诺在本环境不成立，可行的替代路径未文档化。
+- ✅ **NR-10** README 里每一处「无需 root / no root / root-not required / systemctl --user」都要逐条与实物对账，判「成立 / 不成立 / 无法验证」：共 11 处 —— :15(平台承诺)、:21(徽章)、:56(权限表)、:89(agent 免密 ssh)、:211(数据采集)、:290/:291(agent 管理)、:293(journalctl)、:321(排障) **成立**；:87（`docker compose up`）与 :288/:289（`systemctl --user … clusterscope-server`）**不成立**。
+- ✅ **NR-11** 用户级服务能否活过登录会话结束，取决于 logind 的 linger：本机 `Linger=yes`（user manager State=active），因此 `systemd --user` 起的 agent 在断开 SSH 后仍在（本机自 2026-09-02 的运行实例即证据）。但 linger 是**每机**配置（`loginctl enable-linger` 需要 root），别处可能为 no → 必须逐机复跑。
+- ✅ **NR-12** `nohup` 回退只能「把 agent 跑起来」，**不能**满足「agent 常驻」：install-agent.sh 只在 systemd --user 分支写 `Restart=always`（:70），nohup 分支（:81-83）没有守护，进程被杀后不会重启，而 linger=no 的机器上它还会随会话结束而死。README 承诺的「Server 重启后 Agent 每 60s 自动重新注册 / 节点状态自动切换」因此只在 systemd --user（+linger）路径下成立。
+- ✅ **NR-13** README:288-289 的 `systemctl --user status/restart clusterscope-server` 只写了命令、没写怎么产生这个 unit，而仓库里 0 个用户级 server unit（三棵树发的都是系统级 `deploy/server.service`）——用户级启动 server 的可复制步骤（写 server.yaml + 建 unit/nohup）在 README 与 docs/ 里都不存在。本机确实有一个**手写的** `~/.config/systemd/user/clusterscope-server.service`（`ExecStart=$HOME/.local/bin/clusterscope-server $HOME/.config/clusterscope/server.yaml`、`WantedBy=default.target`，2026-08-10 建立、当前 disabled/inactive），正说明这条路可行但**不是文档/仓库给出的**；install-agent.sh 也只覆盖 agent。
+- ✅ **NR-14** `deploy/install-agent.sh` 是**用户级**安装器：路径全部是 ~/.local/bin、~/.config/clusterscope、~/.config/systemd/user（注释以外的行不出现 /usr/local/bin、/etc、/var）；先探测 `systemctl --user show-environment`，不可用则回退 `nohup`；语法检查通过。
+- ✅ **NR-15** 随仓库发的两个 unit 是**系统级**，普通用户装不上：`User=clusterscope`/`Group=clusterscope`（本机无此用户）、`ExecStart=/usr/local/bin/…`、`WorkingDirectory=/var/lib/clusterscope`、`LogsDirectory=/var/log/clusterscope-*`、`WantedBy=multi-user.target`；server.service 还 `After=postgresql.service redis.service`（redis 在代码里未被使用）。这些路径全部不可写 → 非 root 下不可安装。
+- ✅ **NR-16** 用户级路径已经在生产运行（本机最强证据）：~/.config/systemd/user/clusterscope-agent.service 存在且 active (running)，可执行文件在 ~/.local/bin/clusterscope-agent，配置在 ~/.config/clusterscope/agent.yaml（与 install-agent.sh 写出的路径一致）。
+- ✅ **NR-17** 前端维度的 no-root 复检在本线不适用（N/A）：gh-line 无 web/、0 个 package.json（前端只在 A/B 两棵树）；合流后若接入 web，必须在 M10 的判据里复跑。
+- ✅ **NR-18** TUI 在无 root 的普通用户下、在 pty 中能正常渲染（不是只支持 stdout 重定向）：`-s http://127.0.0.1:8080` 连接本机 server，pty 输出非空且无 panic。
+- ✅ **NR-19** 「无 root」的实际前提是 **HOME 可写**：HOME 不可写时 agent 在启动阶段硬失败（`Failed to create log directory: … Permission denied`，exit 1），没有降级路径，也没有可绕开的环境变量（config_loader.rs:39-42 是必需步骤）。不写 HOME 的 server 不受影响（日志走 stderr，无 LogsDirectory）。
+- ✅ **NR-20** GPU/磁盘指标采集不需要 root：`nvidia-smi -L` 可用、`/sys/class/drm/card0/device/power/runtime_status` 与 `/sys/block/nvme0n1/device/model` 普通用户可读；（`/proc/<pid>` 的降级路径已由 DOC-20 覆盖，此处不重复）。
+- ✅ **NR-21** 同一个二进制在「零配置文件」下也能起来：server 可以只靠环境变量启动（POSTGRES_URL + JWT_SECRET + AUTH_REQUIRED=false，无 argv[1]），且启动后不打开 /etc/clusterscope、/var/lib/clusterscope、/var/log/clusterscope 下的任何文件。
+- ✅ **MRG-02** 合流必须满足 M10 不变量：B 的 12 个未提交改动 + B 的 12 个独有提交 + A 的独有资产合流后**不得引入新的 root 依赖**，且系统级 unit 必须修掉或明确区分；判据 NRM1–NRM6 与「合流后证明仍然无 root 可用」的可复跑清单见 qa/merge-plan-requirements.md 的 M10。
 
 ### 📘 验收场景 0/0
 

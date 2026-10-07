@@ -36,18 +36,34 @@
 
 <div class="g-note">
 <b>先读这一页再读下面的机器面板。</b>
-本页是第 6 阶段（Reporter）写给人类审阅者的简报，**审查对象 = GitHub 已发布线 `f9c080b`（TUI-only，40 个提交）**，
-工作树提交 `2f4da96`（= `f9c080b` + 审查自身的 6 个提交：档案/清单/QA/报告）。
-本审查**只跑了 0 → 1 → 5 → 6 四个阶段**，没有编码/清理/加固阶段，**未修改任何产品代码、测试、文档或部署配置**。
+本页是第 6 阶段（Reporter）写给人类审阅者的简报，<b>审查对象 = GitHub 已发布线 <code>f9c080b</code>（TUI-only，40 个提交）</b>，
+工作树提交 <code>8fb31d1</code>（= <code>f9c080b</code> + 审查自身的 8 个提交：档案/清单/QA/报告 + 本次两个增补）。
+本审查<b>只跑了 0 → 1 → 5 → 6 四个阶段</b>，没有编码/清理/加固阶段，<b>未修改任何产品代码、测试、文档或部署配置</b>。
 下面的机器面板（A–O）由 Gauntlet kit 自动生成，是原始记录；本页是它的中文导读与结论。
+</div>
+
+<div class="g-warnbox">
+<b>本版是增量版（2026-10-07 增补），并入「无 root 合规」维度。</b>
+起因是需求原文「<b>这个项目是要做一个不用 root 的程序</b>」。第 1 阶段增补追加了
+<b>23 条 <code>NR-*</code> 约束</b>（<code>NR-01</code>…<code>NR-21</code>、<code>NR-06b</code>、<code>MRG-02</code>，合计 <b>104 条</b>）
+与合流不变量 <b>M10 / <code>NRM1</code>–<code>NRM8</code></b>；第 5 阶段增补把这 23 条在真实构建产物上逐条复跑并
+独立复推，新增 <b>2 条 finding（<code>NF-01</code> / <code>NF-02</code>）</b>与 5 条 discovery（<code>N10</code>–<code>N14</code>）。
+本轮（第 6 阶段增补）只做<b>并入</b>：新增 <b>第 2 节「无 root 合规」</b>、更新计数、把 <code>demo/09</code>、<code>demo/10</code>
+加进演示清单、把 <code>NF-01</code>/<code>NF-02</code> 写进合流前必修。<b>上一版的 16 条 findings、闸门数字、
+无法验证项与 N1–N9 一个未改。</b>
 </div>
 
 <h2>0. 这一版到底能不能合并？——两句话</h2>
 <ol class="g-steps">
-<li><b>这份证据包本身是合格的：</b>81 条约束逐条真跑、16 条 finding 都有原始证据、8 个演示可一键回放、
+<li><b>这份证据包本身是合格的：</b><b>104 条约束</b>（81 条原样 + 23 条 no-root 增补）逐条真跑、
+<b>18 条 finding</b>（16 + <code>NF-01</code>/<code>NF-02</code>）都有原始证据、<b>10 个演示</b>可一键回放、
 架构图通过 Archify 校验、复现命令全在。审计结论可信。</li>
 <li><b>产品本身不健康，不建议在修完必修项前发布：</b>硬阈值下 3 个质量闸门 FAIL（complexity 21/316、CRAP 45/316、覆盖率 20.7%），
-外加 2 个"功能实际不可用"的缺陷（审计日志端点恒 500、90 天天级历史永不返回）与 4 个安全边界缺口。</li>
+外加 2 个"功能实际不可用"的缺陷（审计日志端点恒 500、90 天天级历史永不返回）、4 个安全边界缺口，
+以及 <b>no-root 维度的 2 条 major（<code>NF-01</code> 缺配置即死且不报原因、<code>NF-02</code> 安装脚本误杀同用户 agent）</b>。</li>
+<li><b>"不用 root"这条需求：运行时成立，交付面不成立。</b>uid 3000 / <code>CapEff=0</code> 下 server + agent + TUI 全功能可用（实测），
+但随仓库发的部署件是<b>系统级</b> unit（非 root 装不上）、仓库里 <b>0 个</b>用户级 server unit，
+而无 root 的数据库路径在 README 里<b>一处未写</b>。详见下面第 2 节。</li>
 </ol>
 
 <div class="g-errbox">
@@ -61,9 +77,10 @@
 </ul>
 </div>
 
-<h2>1. 16 条 findings（按 severity 排序）</h2>
+<h2>1. 18 条 findings（16 条原样 + no-root 增补的 NF-01 / NF-02）</h2>
 <p>每条给：一句话结论、影响面、<b>一条可复制的最小复现命令</b>、原始证据文件、以及「B 线（未推送的 `19d8fbc` 工作树）是否已有修法」。</p>
-<p class="g-muted">证据文件全部在 <code>qa/evidence/</code>；演示录像在 <code>gauntlet-out/evidence/demos/</code>（<code>node .gauntlet/gauntlet.mjs demo demo/&lt;file&gt;.json</code> 可重放）。</p>
+<p class="g-muted">证据文件全部在 <code>qa/evidence/</code>；演示录像在 <code>gauntlet-out/evidence/demos/</code>（<code>node .gauntlet/gauntlet.mjs demo demo/&lt;file&gt;.json</code> 可重放）。
+<b>本节的 16 条与上一版逐字一致</b>；<code>NF-01</code>/<code>NF-02</code> 两条完整卡片在下面<b>第 2 节</b>（no-root 合规）。</p>
 
 <div class="g-find sev-major">
 <div class="g-find-h"><span class="g-sev major">major</span>F-01 · GET /api/audit-logs 恒 500，审计日志端点完全不可用</div>
@@ -240,7 +257,111 @@ grep -n default_admin_password crates/common/src/config.rs README.md deploy/serv
 <dt>B 线修法</dt><dd><span class="g-fix yes">已有</span>B 的 <code>0e79e5a perf: job retries …</code>。</dd>
 </dl></div></div>
 
-<h2>2. 闸门面板（✅ / ❌ 分开看）</h2>
+<h2>2. 无 root 合规（2026-10-07 增补：23 条 NR-* + M10 不变量）</h2>
+<p>需求原文：<b>「这个项目是要做一个不用 root 的程序」</b>。上一版只把「无 root」当成一条文档不符（<code>DOC-21</code>）记录。
+这次增补把它变成 <b>23 条可判定约束</b>（<code>NR-01</code>…<code>NR-21</code>、<code>NR-06b</code>、<code>MRG-02</code>；合计 <b>104 条</b>），
+在真实 release 二进制上逐条复跑（uid 3000、无 sudo），并在合流方案里加了 <b>M10 不变量 <code>NRM1</code>–<code>NRM8</code></b>。
+逐条判定与命令见 <code>report/merge-plan.md</code> 的 <b>M10</b>；原始证据在 <code>qa/evidence/no-root-verify*.txt</code>
+与 <code>qa/qa-report.json</code> 的 <code>Q300</code>–<code>Q330</code>。</p>
+
+<div class="g-note">
+<b>一句话结论：运行时确实不需要 root（实测），但交付面自相矛盾——仓库发的部署件要 root、README 写的管理命令在干净机器上没有对应的 unit、无 root 的数据库路径一处未写。</b>
+</div>
+
+<h3>核心结论（原样传达，不软化）</h3>
+<ol class="g-steps">
+<li>✅ <b>运行时确实不需要 root</b>：uid <b>3000</b>、<b><code>CapEff=0000000000000000</code></b>、零 HOME 外写入；
+server（8080/50051 监听、<code>/api/health</code>=200）、agent（起得来并上报）、TUI（pty 正常渲染）全功能可用；
+<code>/proc</code> 权限不足时按 README 承诺降级；两个端口都 &gt;1024，不需要 <code>CAP_NET_BIND_SERVICE</code>。</li>
+<li>❌ <b>部署件与承诺自相矛盾</b>：随仓库发的 <code>deploy/server.service</code>、<code>deploy/agent.service</code> 是
+<b>系统级 unit</b>（<code>User=clusterscope</code>、<code>/usr/local/bin</code>、<code>/etc/clusterscope</code>、
+<code>/var/lib/clusterscope</code>、<code>/var/log/…</code>、<code>WantedBy=multi-user.target</code>），非 root 实测装不上
+（<code>systemctl link</code> → <code>Interactive authentication required</code>；<code>cp</code> → <code>Permission denied</code>）；
+而 README 通篇写 <code>systemctl --user</code>。</li>
+<li>❌ <b>仓库里 0 个用户级 server unit</b>：README:288-289 的 <code>systemctl --user restart clusterscope-server</code>
+在<b>干净机器</b>上必然失败（本机那份 <code>~/.config/systemd/user/clusterscope-server.service</code> 是<b>手写私货</b>，
+2026-08-10 建立、当前 disabled/inactive，不属于仓库）。</li>
+<li>❌ <b>无 root 的数据库路径未文档化</b>：README:57/87 承诺「无 root 时可用 <code>docker compose up</code>」，
+但本机无 docker、podman 零镜像且无外网 → 该承诺在本环境不可执行；真正可行的路径（源码编译 PostgreSQL 16.4 到 HOME）
+README <b>0 处</b>记载。</li>
+</ol>
+
+<h3>两条 no-root finding（都是 major，Leader 已裁决为「合流前必修」）</h3>
+
+<div class="g-find sev-major">
+<div class="g-find-h"><span class="g-sev major">major</span>NF-01 · agent 在「干净 HOME + <code>-c</code> 指向缺失文件」下 exit 1，报错从不提配置文件</div>
+<div class="g-find-b"><dl>
+<dt>结论</dt><dd>新用户（<code>$HOME/.config</code> 还不存在）照抄系统级 unit 的 <code>ExecStart -c …</code>，拿到的是一个打印一行 INFO 后
+<b>退出 1</b> 的进程——没有 dashboard 节点、没有指标、没有重试循环；而错误信息只说 <code>Failed to write node identity</code>，
+<b>从不提配置文件缺失</b>。同时配置缺失时确实会<b>静默回退</b>（默认值里 <code>server_addr=http://localhost:50051</code>、<code>node_id=None</code>）。</dd>
+<dt>影响面</dt><dd>「干净用户 / 干净 HOME」正是 no-root 部署的第一天；也说明本审查上一版「agent 缺配置不崩」的结论在这条路径上不成立。</dd>
+<dt>根因</dt><dd><code>crates/agent/src/config_loader.rs:9-11</code> 只看 <code>exists()</code> → 静默换 <code>AgentConfig::default()</code>；
+<code>:40</code> 只创建 log dir（<code>$HOME/.local/state/clusterscope-agent</code>），<b>不建</b> <code>node_id_file</code> 的父目录 →
+<code>node_identity.rs:27</code> 写失败 → exit 1。对照：<code>crates/server/src/main.rs:193</code> 对缺失配置是
+<code>Error: Config file not found: &lt;path&gt;</code> 直接退出——<b>两个二进制对同一件事的行为相反</b>。</dd>
+<dt>最小复现</dt><dd><pre><code>H=/tmp/nf01; rm -rf $H; mkdir -p $H
+env HOME=$H timeout 8 ./target/release/clusterscope-agent -c /etc/clusterscope/agent.yaml; echo exit=$?   # → exit=1
+mkdir -p $H/.config
+env HOME=$H timeout 8 ./target/release/clusterscope-agent -c /etc/clusterscope/agent.yaml; echo exit=$?   # → exit=124（活着）
+env HOME=$H ./target/release/clusterscope-agent -c /tmp/definitely-absent.yaml 2>&1 | tail -3            # 报错只提 node_id</code></pre></dd>
+<dt>证据</dt><dd><code>qa/evidence/no-root-verify-05-nr06-silent-fallback.txt</code>、<code>no-root-verify2-a-agent-missing-config.txt</code>、<code>no-root-verify3-q1-missing-config-lifetime.txt</code>（<code>qa/qa-report.json</code> 的 <code>Q305</code>，判定 <code>violated</code>）</dd>
+<dt>裁决</dt><dd><span class="g-fix part">合流前必修</span>至少做到「<b>缺配置时明确报错 + 创建父目录</b>」；并顺手把作者 harness 的 NR6 判据改成断言进程退出码。<b>注意</b>：作者脚本的 <code>NR6 PASS</code> 是假阳性（见下面「边界与诚实项」），<code>NR-06</code> 的最终判定以第 5 阶段为准。</dd>
+</dl></div></div>
+
+<div class="g-find sev-major">
+<div class="g-find-h"><span class="g-sev major">major</span>NF-02 · <code>install-agent.sh</code> 的 nohup 分支先 <code>pkill -f clusterscope-agent</code>，会杀掉同用户<b>所有</b> agent</div>
+<div class="g-find-b"><dl>
+<dt>结论</dt><dd><code>deploy/install-agent.sh:80</code>（nohup 回退分支）第一件事是 <code>pkill -f clusterscope-agent</code>：
+它会终止<b>它没有启动的</b> agent——共享集群上就是你邻居/集群常驻的那一个。本机就有一个活体受害者（PID 266643，2026-09-02 起）。</dd>
+<dt>影响面</dt><dd>① 破坏性副作用：安装 agent 会打死同一台机器上同 uid 的其它 agent；② 第二个实例还会与第一个争同一个 <code>node_id</code>（README:298 明确警告「一机一个 agent」）；③ 本审查自己的硬规矩是「禁止 <code>pkill -f clusterscope</code>」（<code>qa/README.md</code> 规矩 1），仓库自带的安装脚本恰好违反它。</dd>
+<dt>根因</dt><dd>模式匹配的是<b>任意路径</b>下的 <code>clusterscope-agent</code> 进程（同 uid 全部命中），而不是「本脚本即将写到 <code>~/.local/bin</code> 的那个」。</dd>
+<dt>最小复现</dt><dd><pre><code>grep -n 'pkill' deploy/install-agent.sh                        # → 80: pkill -f clusterscope-agent 2&gt;/dev/null || true
+ps -u "$(id -un)" -o pid,lstart,cmd | grep clusterscope-agent | grep -v grep   # → PID 266643（2026-09-02 起，会被杀掉）
+sed -n '79,84p' deploy/install-agent.sh                        # 那个分支</code></pre></dd>
+<dt>证据</dt><dd><code>qa/evidence/no-root-verify-16-nr12-nohup-fallback.txt</code>（<code>Q312</code> / <code>NR-12</code>）；<b>第 5 阶段未执行它</b>——跑一下就会误杀常驻 agent，取证来自源码 + 实时进程表</dd>
+<dt>裁决</dt><dd><span class="g-fix yes">合流前必修（1 行改动）</span>不要 <code>pkill -f</code>，改成按 PID / 精确匹配（脚本自己记下的 pidfile，或锚定到 <code>$HOME/.local/bin</code> 的完整路径）。</dd>
+</dl></div></div>
+
+<h3>边界与诚实项（都要写进部署前提）</h3>
+<ul>
+<li>⚠️ <b>linger 是每机配置（双向记录）</b>：本机当前 <code>Linger=yes</code>（<code>loginctl show-user tianyuyang</code> → <code>Linger=yes</code>、<code>State=active</code>），
+<b>用户级服务活过登出——本机实测 ✅</b>（探针 unit 的 <code>MainPID</code> 在会话结束后仍存活；更强的证据是自 2026-09-02 起常驻的用户级 agent，PID 266643，跨过了每一次登出）。
+<b>但本机这个 <code>yes</code> 很可能是 Leader 前期探测时执行 <code>loginctl enable-linger</code> 造成的，不是集群默认值</b>（探测初期读到的是 <code>no</code>）。
+反向语义：<code>linger=no</code> 的节点上，最后一个会话结束时 logind 会停掉该用户的 per-user manager，所有 unit 一起死 →
+<b>干净节点上用户级 agent 会随登出而死</b>，而开启 linger 通常需要管理员/root → 这是「无 root 承诺」的一条<b>边界</b>。
+该分支在本机<b>无法复现</b>（无 root、不许改集群配置），只作语义记录，<b>不替集群做假设</b>。</li>
+<li>⚠️ <b>作者 harness 的 <code>NR6 PASS</code> 是假阳性</b>：<code>qa/harness/no-root-checks.sh:171-177</code> 用 <code>grep -q 'ClusterScope Agent starting'</code> 判 NR6、<b>从不读进程退出码</b>，而问候行在崩溃之前就打印了 → 进程其实已经死了，检查却 PASS。<b><code>NR-06</code> 的最终判定以第 5 阶段为准</b>（<code>Q305</code>：<code>violated</code>，复现出 <code>exit=1</code>）。</li>
+<li>⚠️ <b>诚实项：<code>NRM5</code> 的 grep 模式在 GNU grep 下匹配空集</b>（<code>qa/merge-plan-requirements.md</code> 里写成 <code>grep -E "setuid\|setgid\|…"</code>，ERE 里 <code>\|</code> 是<b>字面竖线</b>不是「或」）——它的「0 命中」是<b>模式假象</b>。
+用正确的模式复跑命中 2 行：<code>crates/agent/src/job_executor.rs:128-129</code> 的 <code>cmd.pre_exec(|| libc::setsid())</code>，用途是<b>给子进程建新会话/进程组</b>（配合取消时按进程组 kill），<b>不是提权</b>。
+结论（无特权原语）不变，已作为 discovery <code>N14</code> 原样并入。</li>
+</ul>
+
+<h3>合流不变量 <code>NRM1</code>–<code>NRM8</code>（逐条命令与输出见 <code>report/merge-plan.md</code> 的 M10）</h3>
+<table>
+<thead><tr><th>#</th><th>不变量（合流后必须成立）</th><th>现状（合流前）</th></tr></thead>
+<tbody>
+<tr><td><code>NRM1</code></td><td>运行时零特权（server/agent/TUI 用普通用户起得来）</td><td>✅ <b>成立</b>：<code>Q300</code>/<code>Q301</code>/<code>Q302</code>/<code>Q318</code>/<code>Q320</code></td></tr>
+<tr><td><code>NRM2</code></td><td>零配置文件也不崩（env-only server；agent 缺 <code>-c</code> 不读系统路径）</td><td>⚠️ <b>部分不成立</b>：<code>NR-21</code>/<code>NR-06b</code> ✅，<code>NR-06</code> ❌ → <b>NF-01</b></td></tr>
+<tr><td><code>NRM3</code></td><td><code>crates/</code> 与用户级脚本里 0 处硬编码系统路径</td><td>✅ <b>成立</b>：3 处，全是可覆盖的默认值（数量不得增加）</td></tr>
+<tr><td><code>NRM4</code></td><td>B 的 12 个未提交文件逐一验证不引入 root 依赖</td><td>⏳ <b>现在无法评估</b>（那 12 个文件不在本树上）→ 合流时逐文件跑</td></tr>
+<tr><td><code>NRM5</code></td><td>合流不新增特权原语（<code>setuid</code>/<code>setgid</code>/提权 <code>pre_exec</code>/<code>chown</code>/<code>sudo</code>/<code>pkexec</code>）</td><td>✅ <b>成立</b>：0 个真特权原语（模式假象见上）</td></tr>
+<tr><td><code>NRM6</code></td><td>两套部署件的矛盾必须修掉或明确区分</td><td>❌ <b>不成立</b>（<code>NR-13</code> + <code>NR-15</code>）→ 合流后待办</td></tr>
+<tr><td><code>NRM7</code></td><td>文档承诺与实测口径一致（<code>docker compose up</code>）</td><td>❌ <b>不成立</b>（<code>NR-09</code>/<code>NR-10</code>）→ 合流后待办</td></tr>
+<tr><td><code>NRM8</code></td><td>合流后仍可复现证明（no-root 脚本 + 44/44 + M9 清单）</td><td>⏳ <b>前置就绪</b>（44/44；脚本作者口径 23 PASS，但 NR6 那行是假阳性）</td></tr>
+</tbody>
+</table>
+<p><b>合流前必修</b>：<code>NF-01</code> + <code>NF-02</code>。<b>合流后待办</b>：<code>NRM6</code>（补用户级 unit / 明确区分两套部署件）+ <code>NRM7</code>（文档化无 root 的数据库路径）。
+<b>部署前提</b>（README 现在都没写全）：HOME 可写、端口 &gt;1024、<code>jwt_secret</code> 守卫、linger（每机事实）、数据库从哪来。</p>
+
+<h3>本节的两个演示（可一键重放）</h3>
+<ul>
+<li><code>demo/09-no-root-system-vs-user-units.json</code> → <code>gauntlet-out/evidence/demos/09-no-root-system-vs-user-units.html</code>：
+系统级 unit 的三次真实失败（<code>systemctl link</code> / <code>cp</code> / <code>systemd-analyze verify</code>）+ 用户级安装器的路径核对 + 「仓库 0 个用户级 server unit」。</li>
+<li><code>demo/10-no-root-linger-and-config-fallback.json</code> → <code>gauntlet-out/evidence/demos/10-no-root-linger-and-config-fallback.html</code>：
+<code>linger=yes</code> 下用户服务活过登出（含「这个 yes 很可能是探测造成的」原样记录、并清理自己的探针 unit）+ agent 缺配置静默回退后 <code>exit 1</code>。</li>
+</ul>
+
+<h2>3. 闸门面板（✅ / ❌ 分开看）</h2>
 <table>
 <thead><tr><th>闸门</th><th>结论</th><th>数字 / 说明</th></tr></thead>
 <tbody>
@@ -257,30 +378,31 @@ grep -n default_admin_password crates/common/src/config.rs README.md deploy/serv
 <tr><td>spec</td><td>N/A</td><td>用户裁决不写 <code>features/*.feature</code>（审查模式不改产品代码 ⇒ 无法落地 Rust 验收测试）。<code>gate --profile full</code> 因此<b>停在 spec 并立即结束</b>：<code>❌ spec {"scenarios":0}</code> → <code>GATE full: FAIL</code></td></tr>
 <tr><td>acceptance</td><td>N/A</td><td>同上；<code>kit test</code> 的 exit 1 只来自 <code>ACCEPTANCE scenarios=0</code></td></tr>
 <tr><td>equivalence（与原程序等价）</td><td>不适用</td><td><code>requireEquivalence: false</code>：本次是审查现有程序，没有"原程序"可对比</td></tr>
-<tr><td>qa / constraints</td><td>✅ PASS</td><td>81/81 条约束逐条执行，<b>76 条与清单预期一致 + 4 条 na + 1 条 unverifiable</b>；16 条 finding 全部被独立复现</td></tr>
+<tr><td>qa / constraints</td><td>✅ PASS</td><td><b>104/104 条约束逐条执行</b>，<b>99 条与清单预期一致 + 4 条 na + 1 条 unverifiable</b>；106 条检查里 101 pass；<b>18 条 finding</b> 全部被独立复现</td></tr>
 </tbody>
 </table>
 
 <div class="g-warnbox">
-<b>下面面板 I「需求约束」显示 <code>76/81</code> 也是同一个口径</b>：81 条约束里 76 条被证实，
+<b>下面面板 I「需求约束」显示 <code>99/104</code> 也是同一个口径</b>：<b>104</b> 条约束里 99 条被证实，
 剩下 5 条 = 4 条 <code>na</code>（前端 / 容器部署 / 纯 CPU 降级 / 防火墙，本环境不适用）+ 1 条 <code>unverifiable</code>
-（合流方案 M1–M9 的答案，本阶段已交付，见第 7 节）。<b>不是"5 条失败"。</b>
+（合流方案 M1–M10 的答案，本阶段已交付，见第 8 节）。<b>不是"5 条失败"。</b><br>
+（上一版是 <code>76/81</code>；本版 81 → 104 = 新增的 23 条 <code>NR-*</code>，其中 22 条直接证实、<code>NR-17</code> 是 <code>na</code>。）
 </div>
 
 <div class="g-warnbox">
 <b>「<code>qa/qa-report.json</code> 的 <code>verdict: pass</code>」到底什么意思？</b><br>
-它的语义是：<b>81 条约束都被真实执行过，并且每一条的实际结果都与清单的预期一致</b>。<br>
-清单里有 29 条是 <code>finding</code> 类——<b>审计预期它不成立</b>（例如"登录没有 IP 限速"），
+它的语义是：<b>104 条约束都被真实执行过，并且每一条的实际结果都与清单的预期一致</b>（106 条检查：101 pass / 4 na / 1 unverifiable）。<br>
+清单里有 <b>38 条是 <code>finding</code> 类</b>——<b>审计预期它不成立</b>（例如"登录没有 IP 限速"、本版新增的"agent 缺配置就死"），
 所以这些约束 <code>FAIL</code> 才是 <code>pass</code>。<br>
-<b>它不等于「产品健康」。</b>产品健康的读数是上面那三个 ❌（complexity / crap / coverage）
-和 16 条 findings。<code>qa/qa-report.json</code> 的 <code>verdictRule</code> 字段里逐字写着这句话。
+<b>它不等于「产品健康」。</b>产品健康的读数是上面那三个 ❌（complexity / crap / coverage）、<b>18 条 findings</b>，
+以及 no-root 维度的 <code>NF-01</code>/<code>NF-02</code>。<code>qa/qa-report.json</code> 的 <code>verdictRule</code> 字段里逐字写着这句话。
 </div>
 
-<h2>3. 无法验证项（1 + 6 条）</h2>
+<h2>4. 无法验证项（1 + 6 条，另有 no-root 维度的 1 条 <code>na</code>）</h2>
 <table>
 <thead><tr><th>#</th><th>项</th><th>卡在哪</th><th>需要什么条件才能验</th></tr></thead>
 <tbody>
-<tr><td>1</td><td><b>合流方案对 M1–M9 的逐题答案</b>（<code>MRG-01</code>，第 5 阶段记 <code>unverifiable</code>）</td><td>它是第 6 阶段的交付物，第 5 阶段不能代答、也未被授权决定 M5 的产品形态</td><td><b>已由本阶段交付</b>：见 <code>report/merge-plan.md</code>（M1–M9 逐题 + 文件级冲突 + 风险回滚 + 合流后验证命令）；M5 仍是产品决策</td></tr>
+<tr><td>1</td><td><b>合流方案对 M1–M10 的逐题答案</b>（<code>MRG-01</code>，第 5 阶段记 <code>unverifiable</code>；<code>MRG-02</code> = M10 的夹具）</td><td>它是第 6 阶段的交付物，第 5 阶段不能代答、也未被授权决定 M5 的产品形态</td><td><b>已由本阶段交付</b>：见 <code>report/merge-plan.md</code>（M1–M10 逐题 + 文件级冲突 + 风险回滚 + 合流后验证命令 + no-root 不变量 <code>NRM1</code>–<code>NRM8</code>）；M5 仍是产品决策</td></tr>
 <tr><td>2</td><td>docker-compose 实际能否起服务（<code>OPS-05</code>）</td><td>本机<b>没有 docker</b>；podman 5.6.0 但本地镜像 0 个、无外网拉镜像</td><td>一台有 docker + 外网的机器；或预先导入 <code>postgres:16-alpine</code> 镜像。当前只做了静态一致性检查（<code>DOC-COMPOSE-PG16</code> PASS）</td></tr>
 <tr><td>3</td><td>无 GPU 节点的降级上报（<code>OPS-09</code>）</td><td>本机固定 <b>6 张 NVIDIA L20</b>，构造不出纯 CPU 节点（agent 日志 <code>NVML init failed</code> 0 条）</td><td>一台没有 GPU 的机器，复测 <code>README:323</code> 的降级路径</td></tr>
 <tr><td>4</td><td>50051/8080 的防火墙放行策略（<code>OPS-10</code>）</td><td><code>firewall-cmd</code> 存在但服务未运行，且本机<b>无 root</b></td><td>有 root 的机器；或由运维给出防火墙策略证据</td></tr>
@@ -290,20 +412,22 @@ grep -n default_admin_password crates/common/src/config.rs README.md deploy/serv
 </tbody>
 </table>
 
-<h2>4. 环境与可复现性</h2>
+<h2>5. 环境与可复现性</h2>
 <table>
 <tbody>
 <tr><th>主机</th><td><code>lyy-node03</code> / <code>tianyuyang@172.19.133.164</code>（Linux x86_64，128 核，6× NVIDIA L20）</td></tr>
 <tr><th>审查对象</th><td>GitHub <code>master</code> = <code>f9c080b</code>（40 个提交，TUI-only，<code>version 0.1.1</code>）</td></tr>
-<tr><th>工作树</th><td><code>/public/tianyuyang/code/ClusterScope-review/gh-line</code>，分支 <code>gauntlet/audit-gh-line</code>，报告提交 <code>2f4da96</code></td></tr>
+<tr><th>工作树</th><td><code>/public/tianyuyang/code/ClusterScope-review/gh-line</code>，分支 <code>gauntlet/audit-gh-line</code>，报告提交 <code>8fb31d1</code>（本版 = 上一版 + 两个增补提交）</td></tr>
+<tr><th>权限面（no-root 维度）</th><td><b>uid 3000</b>、无 sudo（<code>groups</code> 只有 <code>3000</code>）；进程 <code>CapEff=0000000000000000</code>（零特权）；<code>/etc</code>、<code>/var/lib</code>、<code>/var/log</code>、<code>/usr/local/bin</code> 对本用户一律不可写</td></tr>
+<tr><th>linger（每机事实）</th><td>本机 <code>Linger=yes</code>（<code>loginctl show-user tianyuyang</code>）——<b>很可能是 Leader 前期探测时执行 <code>loginctl enable-linger</code> 造成的，不是集群默认值</b>；<code>enable-linger</code> 需要 root，本机无 sudo 且不许改集群配置 → <code>linger=no</code> 的分支<b>无法复现</b>，只作语义记录（见第 2 节）</td></tr>
 <tr><th>二进制构建</th><td><code>cargo build --release --offline</code> → <code>target/release/clusterscope-{agent,server,tui}</code> = 5.9M / 12.4M / 8.1M（2026-10-07 03:09）</td></tr>
 <tr><th>测试二进制</th><td><code>gauntlet-out/cov-target/debug/deps/*</code>（插桩构建，独立 <code>CARGO_TARGET_DIR</code>，与 <code>target/</code> 互不污染）</td></tr>
 <tr><th>Rust</th><td>1.97.1（离线；<code>$HOME/.cargo/bin</code> 不在默认 PATH）</td></tr>
 <tr><th>覆盖率机制</th><td><code>gauntlet-tools/rust-gate.mjs</code>：<code>RUSTFLAGS=-Cinstrument-coverage</code> + <code>LLVM_PROFILE_FILE</code> → <code>llvm-profdata merge</code> → <code>llvm-cov export --format=lcov</code>；JUnit 由 libtest 文本转换（没有 cargo-llvm-cov / cargo-nextest）</td></tr>
 <tr><th>PostgreSQL</th><td><b>16.4</b>（源码编译、无 root、自包含）<br><code>postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope</code><br>二进制在 <code>/public/tianyuyang/code/ClusterScope-review/pg16/bin/</code>（<code>psql</code>/<code>pg_ctl</code> 不在 PATH）</td></tr>
 <tr><th>工具链</th><td>gauntlet kit 0.3.0（<code>.gauntlet/</code>），<code>adapter=commands</code>，<b><code>ratchet=disabled</code></b>（用户裁决：硬阈值判定）</td></tr>
-<tr><th>观察窗口</th><td>2026-10-06T20:35Z ~ 2026-10-06T21:5xZ（本地 2026-10-07 04:35 ~ 05:5x +08:00）</td></tr>
-<tr><th>共享主机策略</th><td>只按 PID 文件停自己起的 server/agent；全程未使用 <code>pkill</code>/<code>killall</code>。同机另有一个与本审查无关的常驻 agent（PID 266643，node_id=lyy-node03），未做任何干预</td></tr>
+<tr><th>观察窗口</th><td>2026-10-06T20:35Z ~ 2026-10-06T21:5xZ（本地 2026-10-07 04:35 ~ 05:5x +08:00）；<b>no-root 增补</b>：2026-10-07 05:3xZ ~ 06:2xZ（本地 13:3x ~ 14:2x +08:00，23 条 <code>NR-*</code> 复跑 + 独立复推）</td></tr>
+<tr><th>共享主机策略</th><td>只按 PID 文件停自己起的 server/agent；全程未使用 <code>pkill</code>/<code>killall</code>。同机另有一个与本审查无关的常驻 agent（PID 266643，node_id=lyy-node03），未做任何干预。<b>注意：仓库自带的 <code>deploy/install-agent.sh:80</code> 会 <code>pkill -f clusterscope-agent</code>（= <code>NF-02</code>），本审查因此<b>没有执行</b>它的 nohup 分支</b></td></tr>
 </tbody>
 </table>
 
@@ -321,11 +445,15 @@ sh qa/harness/extra-checks.sh
 sh qa/harness/auth-tui-checks.sh                           # 14 条全 PASS
 setsid nohup sh qa/harness/long-checks.sh &gt; qa/evidence/long-checks.txt 2&gt;&amp;1 &amp;   # 约 63 分钟
 
-# 8 个演示（各自起停 server/agent，录像落在 gauntlet-out/evidence/demos/）
-for f in demo/0*.json; do node .gauntlet/gauntlet.mjs demo "$f"; done</code></pre>
+# no-root 维度（第 1 / 第 5 阶段增补）
+sh qa/harness/no-root-checks.sh                            # 作者脚本：期望 PASS=23 FAIL=0（NR6 那行是假阳性，见第 2 节）
+sh qa/harness/nr-verify.sh                                 # 独立复推：判据更严（断言进程退出码），原始输出落 qa/evidence/
 
-<h2>5. 清单自我纠错 N1–N9（审查自身的局限）</h2>
-<p>可信度来自诚实，不是完美。第 1 阶段写的审查清单本身有 9 处不精确，第 5 阶段逐条纠正、原样保留：</p>
+# 10 个演示（各自起停 server/agent，录像落在 gauntlet-out/evidence/demos/）
+for f in demo/*.json; do node .gauntlet/gauntlet.mjs demo "$f"; done</code></pre>
+
+<h2>6. 清单自我纠错 N1–N14（审查自身的局限）</h2>
+<p>可信度来自诚实，不是完美。第 1 阶段写的审查清单本身有 <b>14 处</b>不精确（前 9 处来自上一版，后 5 处是本次 no-root 增补新查出来的），第 5 阶段逐条纠正、原样保留：</p>
 <table>
 <thead><tr><th>#</th><th>清单原文</th><th>实测</th></tr></thead>
 <tbody>
@@ -338,25 +466,35 @@ for f in demo/0*.json; do node .gauntlet/gauntlet.mjs demo "$f"; done</code></pr
 <tr><td>N7</td><td><code>auth-tui-checks.sh</code> 的 <code>TUI-SHOWS-NODE</code></td><td>脚本第 58 行写死 <code>grep 'lyy-node03'</code>，该节点来自<b>本机另一个与本审查无关的常驻 agent</b>（PID 266643）——换机器或那个 agent 停了这条会<b>假 FAIL</b>，它是环境依赖而不是被测系统的性质</td></tr>
 <tr><td>N8</td><td>—</td><td><code>crates/agent/src/metrics.rs:18</code> 把"NVML 初始化成功"记成 <code>warn!</code>，正常启动看起来像警告（本次 agent.log 里 4 条 WARN 有 1 条是成功信息）</td></tr>
 <tr><td>N9</td><td>—</td><td><code>qa/harness/ops-checks.sh:112</code> 执行无 <code>WHERE</code> 的 <code>delete from node_metrics;</code>，在共享 PostgreSQL 上会删掉<b>所有节点</b>的原始指标（含同机常驻 agent 的 24 小时数据）。夹具卫生问题，应只删自己的 <code>node_id</code></td></tr>
+<tr><td>N10</td><td>—</td><td><b>（本次增补）</b><code>constraints.json#NR-10</code> 写「README 有 11 处提及」，实际 grep 到 13 个不同行（15、21、56、57、87、89、211、288、289、290、291、293、321）；<code>#NR-13</code> 写「命中 4 行」实际 5 行（288、289、290、291、321）。<b>结论（哪些行成立）不受影响</b>，只有计数口径要改</td></tr>
+<tr><td>N11</td><td>—</td><td><b>（本次增补）</b>系统级 unit 还依赖 <code>postgresql.service</code>（本机 PG 是编译到 HOME 的，<code>/lib/systemd/system/postgresql.service</code> <b>不存在</b>）与 <code>redis.service</code>（<code>redis_url</code> 在代码里从未被读）→ 系统级这条路在本集群<b>双重不可行</b>：非 root 装不上 + 依赖的服务不存在</td></tr>
+<tr><td>N12</td><td>—</td><td><b>（本次增补）</b>README 有<b>第二处</b> compose 承诺（<code>:57</code>，第 1 阶段的 NR-10 分类表只列了 <code>:87</code>）——<code>:57</code>、<code>:87</code>、<code>:337</code> 是同一条承诺，失败模式相同，只是逐行对账漏了两处</td></tr>
+<tr><td>N13</td><td>—</td><td><b>（本次增补）</b>no-root 作者脚本把证据写在 <code>gauntlet-out/</code>（gitignored）并删掉每条检查的原始日志 → 每条 NR 只有一行 PASS/FAIL 结论，复现只能靠重跑脚本；本次增补的 harness（<code>qa/harness/nr-verify*.sh</code>）改成把原始输出写进 <code>qa/evidence/</code> 并提交</td></tr>
+<tr><td>N14</td><td>—</td><td><b>（本次增补，诚实项）</b><code>qa/merge-plan-requirements.md</code> 里 <code>NRM5</code> 的 <code>grep -E "setuid\|setgid\|pre_exec\|pkexec\|sudo \|chown"</code> 在 GNU grep 下<b>匹配空集</b>（ERE 里 <code>\|</code> 是字面竖线）——那条「0 命中」是<b>模式假象</b>，不是测量结果；正确模式命中 <code>crates/agent/src/job_executor.rs:128-129</code> 的 <code>libc::setsid()</code>（进程组设置，非提权）。<b>结论不变</b>，但证据已换成正确命令</td></tr>
 </tbody>
 </table>
 
-<h2>6. 5 分钟人类审阅路线</h2>
+<h2>7. 5 分钟人类审阅路线</h2>
 <ol class="g-steps">
-<li><b>先看这 3 处（约 2 分钟）</b>
+<li><b>先看这 4 处（约 2 分半）</b>
   <ol>
     <li><b>本页第 1 节的前 3 条 findings</b>（F-01 / F-16 / F-02）——它们是"功能实际不可用"级别的缺陷，
     每条的"最小复现"命令可以直接复制粘贴。</li>
-    <li><b>本页第 2 节的闸门面板</b>——确认 ✅ 与 ❌ 是分开呈现的，并且读懂了 <code>verdict: pass</code> 的语义
+    <li><b>本页第 2 节「无 root 合规」</b>——<b>本次增补的核心</b>：一句话结论 + 4 条核心结论 + 两条 major
+    （<code>NF-01</code> 缺配置即死且不报原因、<code>NF-02</code> 安装脚本误杀同用户 agent）+ <code>NRM1</code>–<code>NRM8</code> 现状表。
+    先看这一节的开头三段就够。</li>
+    <li><b>本页第 3 节的闸门面板</b>——确认 ✅ 与 ❌ 是分开呈现的，并且读懂了 <code>verdict: pass</code> 的语义
     （约束被真实执行 ≠ 产品健康）。</li>
-    <li><b>本页第 5 节 N1–N9</b>——审查自身的 9 处不精确都摆在这里；如果这 9 条你认可，说明这份审查是可复算的。</li>
+    <li><b>本页第 6 节 N1–N14</b>——审查自身的 14 处不精确都摆在这里；如果这 14 条你认可，说明这份审查是可复算的。</li>
   </ol>
 </li>
-<li><b>再点开这 3 个演示（约 2 分钟）</b>
+<li><b>再点开这 4 个演示（约 2 分钟）</b>
   <ol>
     <li><code>gauntlet-out/evidence/demos/04-rest-security-audit-logs.html</code> —— 审计端点 500 的真实录像（含根因 grep + psql）</li>
     <li><code>gauntlet-out/evidence/demos/07-history-daily-tier-missing.html</code> —— 天级历史"DB 有 4 行、REST 返回 0 行"</li>
     <li><code>gauntlet-out/evidence/demos/02-quality-gates-fail.html</code> —— 三个质量闸门 FAIL 的原始输出与最严重函数</li>
+    <li><code>gauntlet-out/evidence/demos/09-no-root-system-vs-user-units.html</code>（本次新增）—— 系统级 unit 非 root 装不上 vs 用户级安装器，
+    外加「仓库 0 个用户级 server unit」；同批的 <code>10-no-root-linger-and-config-fallback.html</code> 是 linger + 缺配置静默回退</li>
   </ol>
   <p class="g-muted">每个 <code>.html</code> 是自包含的终端录像（可暂停/加速/一键全显）；同目录还有 <code>.cast</code> 与 <code>.txt</code>。</p>
 </li>
@@ -364,12 +502,13 @@ for f in demo/0*.json; do node .gauntlet/gauntlet.mjs demo "$f"; done</code></pr
   <ol>
     <li><b>架构图</b>：<code>gauntlet-out/evidence/diagrams/clusterscope-runtime.html</code>（Archify 校验通过，
     每个方块与箭头都引用真实源码行号；候选文件 <code>docs/architecture/clusterscope-runtime.architecture.json</code>）。</li>
-    <li><b>合流方案</b>：<code>report/merge-plan.md</code>（M1–M9 逐题；第 6 节"M5 需产品决策"是需要你拍板的地方）。</li>
+    <li><b>合流方案</b>：<code>report/merge-plan.md</code>（M1–M10 逐题；<b>M5 需产品决策</b>、M6 步骤 6/7 的 no-root 合流前必修与合流后待办、
+    <b>M10「no-root 不变量 <code>NRM1</code>–<code>NRM8</code>」</b>）。</li>
   </ol>
 </li>
 </ol>
 
-<h2>7. 三线合流：一页速览</h2>
+<h2>8. 三线合流：一页速览</h2>
 <p>完整方案见 <code>report/merge-plan.md</code>。这里只放结论与最重要的两条事实：</p>
 <table>
 <thead><tr><th>树</th><th>位置 / HEAD</th><th>会丢的东西</th></tr></thead>
@@ -393,11 +532,15 @@ B 的前 3 个提交与 C 的前 3 个提交内容相同（同 parent、同 tree
 <b>不要整体 <code>git merge 19d8fbc</code></b>：实测 35 个文件冲突且包含 <code>modify/delete</code>。</li>
 </ol>
 </div>
-<p><b>合流前必修判据</b>：F-01 / F-16（同一提交）+ F-02 + F-07 ~ F-11 + F-12 里的默认口令。<br>
+<p><b>合流前必修判据</b>：F-01 / F-16（同一提交）+ F-02 + F-07 ~ F-11 + F-12 里的默认口令
++ <b><code>NF-01</code> / <code>NF-02</code>（本次增补，no-root 维度）</b>。<br>
 <b>合流后验证</b>：<code>cargo test --workspace --offline</code>（≥44 passed）、<code>sh qa/harness/api-checks.sh</code>（PASS 数不减少）、
-<code>sh qa/harness/doc-claims-checks.sh</code>（FAIL 数不增加）等，逐条见 <code>report/merge-plan.md</code> 的 M9。</p>
+<code>sh qa/harness/doc-claims-checks.sh</code>（FAIL 数不增加）等，逐条见 <code>report/merge-plan.md</code> 的 M9。<br>
+<b>合流不得把「不用 root」这条需求做没了</b>：判据是 <b>M10 的 <code>NRM1</code>–<code>NRM8</code></b>（逐条命令与输出在 M10），
+合流后必须重跑 <code>sh qa/harness/no-root-checks.sh</code> 与 <code>cargo test</code>，并把输出贴进 PR 描述；
+另有两项合流后待办：<b>补用户级 unit</b>（<code>NRM6</code>）与<b>文档化无 root 的数据库路径</b>（<code>NRM7</code>）。</p>
 
-<h2>8. 这一阶段（Reporter）实际做了什么</h2>
+<h2>9. 这一阶段（Reporter）实际做了什么</h2>
 <ul>
 <li><b>全量复验</b>：<code>gate --profile full</code> 停在 <code>spec</code>（<code>❌ spec {"scenarios":0}</code> → <code>GATE full: FAIL</code>，kit 在 spec 失败时立即 <code>break</code>）；
 再跑 <code>gate --profile quality</code> 拿到完整闸门面板，数字与第 5 阶段<b>逐项一致</b>（21/316、45/316 maxCRAP 552、20.7%、44/44）。</li>
@@ -411,9 +554,18 @@ B 的前 3 个提交与 C 的前 3 个提交内容相同（同 parent、同 tree
 同时把 M6 步骤 0（冻结 B 的 12 个未提交文件）改记为"<b>已执行</b>、产物留档 <code>ClusterScope-review/backup-b-wip/</code>（12 个成员，sha256 <code>8ef25e55…</code>，同输入重建一致）"。
 勘误记录与复现命令见 <code>report/merge-plan.md</code> 顶端；原始探测输出 <code>qa/evidence/line-fork-verify.txt</code>。
 <b>本次返工未改动任何闸门数字、16 条 findings、无法验证项与 N1–N9。</b></li>
+<li><b>增补（2026-10-07，no-root 维度并入 —— 本版）</b>：把两个增补提交（第 1 阶段的 23 条 <code>NR-*</code> 约束 +
+第 5 阶段的逐条复跑与 2 条新 finding）并进证据包与合流方案：
+① 本页新增<b>第 2 节「无 root 合规」</b>（4 条核心结论 + <code>NF-01</code>/<code>NF-02</code> 完整卡片 + <code>NRM1</code>–<code>NRM8</code> 现状表 + 部署前提 + 两个新演示）；
+② 计数更新：约束 <b>81 → 104</b>、findings <b>16 → 18</b>、演示 <b>8 → 10</b>、discovery <b>N1–N9 → N1–N14</b>、
+面板 I 的读法 <b>76/81 → 99/104</b>；③ <code>report/merge-plan.md</code> 新增 <b>M10</b> 与「增补记录」，
+M8 加入 <code>NF-01</code>/<code>NF-02</code>（合流前必修），M6 加入步骤 6（no-root 必修）与步骤 7（补用户级 unit、文档化无 root 的 DB 路径两个待办）；
+④ <code>report/comment.md</code>（PR 正文）同步更新。<b>上一轮的勘误记录 E-1/E-2、16 条 findings、闸门数字、无法验证项与 N1–N9 一个未改</b>；
+本次<b>没有</b>改动任何 <code>qa/qa-report.json</code> 里的 verdict。</li>
 </ul>
 <p class="g-muted">本阶段<b>没有</b>修改任何产品代码 / 测试 / README / docs 正文 / deploy；
-只新增 <code>report/</code>、<code>docs/architecture/</code>、<code>docs/review-howto.md</code>、<code>qa/evidence/</code> 与 <code>GAUNTLET.md</code> 的补充章节。
+只新增与更新 <code>report/</code>（本简报、<code>merge-plan.md</code>、<code>comment.md</code>）、<code>docs/architecture/</code>、
+<code>docs/review-howto.md</code>、<code>qa/evidence/</code> 与 <code>GAUNTLET.md</code> 的补充章节。
 <b>未推送、未开 PR</b>——由 Leader 在你审阅通过后处理。</p>
 
 </section>
