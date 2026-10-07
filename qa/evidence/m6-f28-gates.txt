@@ -1,0 +1,202 @@
+== F-28 re-run: the 9 clippy await_holding_lock warnings in crates/storage/tests ==
+recorded : 2026-10-07T17:51:56Z   host=lyy-node03   uid=3000
+HEAD     : aa093d4   branch=gauntlet/merge-m6   base=8601ac9
+toolchain: rustc 1.97.1 (8bab26f4f 2026-07-14) | cargo 1.97.1 (c980f4866 2026-06-30)
+changed vs 8601ac9 (working tree + untracked): Cargo.lock Cargo.toml GAUNTLET.md README.md crates/agent/src/grpc_client.rs crates/agent/src/job_executor.rs crates/agent/src/main.rs crates/agent/src/metrics.rs crates/common/Cargo.toml crates/common/src/alert.rs crates/common/src/auth.rs crates/common/src/config.rs crates/common/src/job.rs crates/common/src/lib.rs crates/common/src/metrics.rs crates/common/tests/config_keys_acceptance.rs crates/common/tests/integration_test.rs crates/common/tests/metrics_acceptance.rs crates/scheduler/src/lib.rs crates/server/Cargo.toml crates/server/src/auth_middleware.rs crates/server/src/grpc.rs crates/server/src/handlers.rs crates/server/src/main.rs crates/server/src/ws_handler.rs crates/storage/Cargo.toml crates/storage/src/alert_queries.rs crates/storage/src/audit_queries.rs crates/storage/src/conversions.rs crates/storage/src/job_queries.rs crates/storage/src/lib.rs crates/storage/src/models.rs crates/storage/src/queries.rs crates/storage/src/user_queries.rs crates/storage/tests/audit_queries_acceptance.rs crates/storage/tests/conversions_acceptance.rs crates/storage/tests/user_queries_acceptance.rs demo/13-m6-audit-endpoint.json demo/14-m6-force-cancel.json demo/15-m6-lockout-and-cluster-info.json features/merge_m6_audit_queries.feature features/merge_m6_auth_hardening.feature features/merge_m6_job_safety.feature features/merge_m6_legacy_assets.feature qa/README.md qa/constraints.json qa/evidence/m6-qa5-adversarial.txt qa/evidence/m6-qa5-api-checks.txt qa/evidence/m6-qa5-assets-and-409.txt qa/evidence/m6-qa5-burst-codes.txt qa/evidence/m6-qa5-cancel-e2e.txt qa/evidence/m6-qa5-demo-13.txt qa/evidence/m6-qa5-demo-14.txt qa/evidence/m6-qa5-doc-claims.txt qa/evidence/m6-qa5-extra-checks.txt qa/evidence/m6-qa5-final-checks.txt qa/evidence/m6-qa5-gate-coder.txt qa/evidence/m6-qa5-gate-quality.txt qa/evidence/m6-qa5-job-e2e.txt qa/evidence/m6-qa5-last-admin-guard.txt qa/evidence/m6-qa5-merge-m6-checks-run.txt qa/evidence/m6-qa5-merge-m6-checks.txt qa/evidence/m6-qa5-next-quality.txt qa/evidence/m6-qa5-no-root-checks-NR1-21.txt qa/evidence/m6-qa5-no-root-fixes-m6round.txt qa/evidence/m6-qa5-no-root-fixes-oldround.txt qa/evidence/m6-qa5-nrm44.txt qa/evidence/m6-qa5-ops-checks.txt qa/evidence/m6-qa5-route-build-provenance.txt qa/evidence/m6-qa5-route-dup.txt qa/evidence/m6-qa5-sec17-logs.txt qa/evidence/m6-qa6-api-checks.txt qa/evidence/m6-qa6-clippy-all-targets.txt qa/evidence/m6-qa6-cluster-info-and-ops.txt qa/evidence/m6-qa6-demo-13-m6-audit-endpoint.txt qa/evidence/m6-qa6-demo-14-m6-force-cancel.txt qa/evidence/m6-qa6-demo-15-m6-lockout-and-cluster-info.txt qa/evidence/m6-qa6-doc-claims.txt qa/evidence/m6-qa6-extra-checks.txt qa/evidence/m6-qa6-gate-coder.txt qa/evidence/m6-qa6-gate-quality.txt qa/evidence/m6-qa6-job-e2e.txt qa/evidence/m6-qa6-merge-m6-checks.txt qa/evidence/m6-qa6-next-quality.txt qa/evidence/m6-qa6-no-root-checks.txt qa/evidence/m6-qa6-no-root-fixes-m6round.txt qa/evidence/m6-qa6-no-root-fixes-oldround.txt qa/evidence/m6-qa6-ops-checks.txt qa/evidence/m6-qa6-rework-commit-audit.txt qa/evidence/m6-qa6-runtime-independent.txt qa/evidence/m6-qa6-static-probes.txt qa/evidence/m6-rework2-gates.txt qa/harness/apply-mrg6-entries.py qa/harness/env.sh qa/harness/m6-demo-audit.sh qa/harness/m6-demo-cancel.sh qa/harness/m6-demo-lockout-cluster.sh qa/harness/m6-demo-terminal-409.sh qa/harness/merge-m6-checks.sh qa/harness/no-root-checks.sh qa/harness/no-root-fixes-checks.sh qa/harness/nr-verify.sh qa/harness/nr-verify2.sh qa/harness/nr-verify3.sh qa/merge-m6.qa.md qa/mrg6-errata.json qa/mrg6-errata2.json qa/mrg6-errata3.json qa/qa-report.json 
+this fix vs HEAD (pre-fix, uncommitted at capture time): crates/storage/tests/audit_queries_acceptance.rs crates/storage/tests/user_queries_acceptance.rs 
+note: crates/storage/tests/{audit_queries,user_queries,conversions}_acceptance.rs do NOT
+      exist at 8601ac9 -- they are new on this branch, which independently confirms F-28's
+      'these are not baseline debt' (the comparison below is therefore pre-fix HEAD -> fix).
+
+## 0. the 9 warnings as captured before the fix (same tree, HEAD=aa093d4, --all-targets)
+   cargo clippy --workspace --all-targets --offline   (tail)
+crates/storage/tests/audit_queries_acceptance.rs:142:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/audit_queries_acceptance.rs:165:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/audit_queries_acceptance.rs:179:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/audit_queries_acceptance.rs:223:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/user_queries_acceptance.rs:99:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/user_queries_acceptance.rs:145:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/user_queries_acceptance.rs:172:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/user_queries_acceptance.rs:215:9: warning: this `MutexGuard` is held across an await point
+crates/storage/tests/user_queries_acceptance.rs:247:9: warning: this `MutexGuard` is held across an await point
+warning: `storage` (test "audit_queries_acceptance") generated 4 warnings
+warning: `storage` (test "user_queries_acceptance") generated 5 warnings   == 4+5 = 9 == F-28
+
+## 1. cargo clippy --workspace --all-targets --offline -- -D warnings   [judge of this round]
+    Checking common v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/common)
+   Compiling protocol v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/protocol)
+    Checking tui v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/tui)
+    Checking scheduler v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/scheduler)
+    Checking storage v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/storage)
+    Checking agent v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/agent)
+    Checking server v0.1.1 (/public/tianyuyang/code/ClusterScope-review/merge-m6/crates/server)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.75s
+CLIPPY rc=0
+
+## 2. cargo fmt --all --check
+FMT rc=0
+
+## 3. node .gauntlet/gauntlet.mjs gate --profile coder
+══ GATE (coder) ══
+  ✅ spec         {"scenarios":29,"undefinedSteps":0,"ambiguous":0}
+  ✅ build        {}
+  ✅ tests        {"total":98,"failed":0}
+  ✅ acceptance   {"scenarios":29,"passed":29,"failed":0,"missing":0,"failedScenarios":[],"missingScenarios":[]}
+
+GATE coder: PASS
+GATE-CODER rc=0
+
+## 4. sh qa/harness/merge-m6-checks.sh
+M6-01 PASS - cargo build --workspace --all-targets --offline 退出码 0（离线，不得引入新依赖）
+M6-02 PASS - cargo test：rc=0、failed=0、passed=98（要求 0 失败）
+M6-03 PASS - 通过数 98 ≥ 基线 59，且没有删除既有 #[test] 行
+M6-04 PASS - 改动全部落在 M6 允许集内、冻结面零改动（越界：无；冻结面：无）
+M6-05 PASS - NRM3：系统路径默认值 3 处 ≤ 基线 3（全部命中 7 ≤ 7）
+M6-06 PASS - NRM5：提权原语 0 处（必须 0）；特权/进程组族命中 2 ≤ 基线 2（其中 pre_exec 旁有 setsid 1 处）
+NOTE M6-07 用 no-root-fixes-checks.sh --no-slow（F1 动态探针与 F5 真装真启默认跳过，理由见脚本注释/qa/merge-m6.qa.md）
+M6-07 PASS - no-root-fixes-checks.sh（--no-slow）：PASS=12 FAIL=0（要求 12/0）
+M6-08 PASS - doc-claims：FAIL=7 ≤ 基线 9；SIGKILL 断言 PASS=1、force 断言 PASS=1（合流后必须由 FAIL 转 PASS）
+M6-09 PASS - TUI 快捷键 13/13 PASS（实际 13）
+M6-10 PASS - 配置键 17/17 PASS（实际 17）
+M6-11 PASS - api-checks：PASS=19（要求 ≥ 基线 18）；DOC-GET-AUDIT-LOGS 已 PASS=1（要求 1 = F-01 修好了）
+M6-12 PASS - 审计覆盖：新动作种类 4（要求 ≥3，合流前是 2）；GET /api/audit-logs 的 total=676（要求非空 = 端点可用）
+M6-13 PASS - 登录限速：12 次同源失败登录里出现 2 次 429（F-08 的正判据）
+M6-14 PASS - job-e2e（任务生命周期 + 告警 + WebSocket 广播）：PASS=15 FAIL=0
+M6-15 PASS - 重启后 /api/health=200、public 表 11 张（基线 11）、admin 行 1（要求 1）
+----
+M6-CHECKS: PASS=15 FAIL=0   证据目录: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence
+M6-CHECKS rc=0
+
+## 5. sh qa/harness/no-root-fixes-checks.sh --no-slow
+   (full mode NOT run: its F5 step copies the repo unit over, then `systemctl --user
+    enable --now clusterscope-agent.service` -- that is the resident unit whose MainPID
+    266643 this task must not touch. --no-slow is the mode merge-m6-checks.sh M6-07 uses.)
+== 环境 ==
+repo=/public/tianyuyang/code/ClusterScope-review/merge-m6  base=8601ac9  uid=3000  host=lyy-node03  no-slow=1
+Linger=yes
+F1 PASS - 静态部分完成；动态探针被 --no-slow 跳过
+F2 PASS - 显式 -c 指向不存在的文件：非 0 退出且点名该文件、不回退默认值
+F3 PASS - 不带 -c 时：点名默认路径后仍按内置默认值启动
+F4 PASS - 干净 HOME（无 ~/.config）下也能建父目录并写下身份文件
+F5 PASS - 静态部分完成；systemd 起停被 --no-slow 跳过
+F6 PASS - 系统级 unit 保留，且角色/前提写清楚
+F7 PASS - README 记录无 root、无 docker 下的两条 PG 路径与实测选择
+F8 PASS - 用户级部署的 linger 前提写进文档
+F9 PASS - 两种安装方式的分工与前提写进 README
+F10 PASS - 既有测试继续全绿，未删未跳
+F11 PASS - 约束只追加、不改既有条目
+F12 PASS - 改动范围（m6 轮口径）落在允许集内、冻结面零改动、负例 5/5
+
+PASS=12 FAIL=0  证据目录: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/evidence
+NO-ROOT-FIXES rc=0
+
+## 6. node .gauntlet/gauntlet.mjs gate --profile quality
+══ GATE (quality) ══
+  ✅ build        {}
+  ✅ tests        {"total":98,"failed":0}
+  ✅ scope        {"scope":1,"failedUnits":0,"files":35}
+  ❌ complexity   {"functions":435,"offenders":34,"maxComplexity":23}
+  ✅ warnings     {"warnings":0}
+  ✅ tidy         {"ran":true,"findings":0}
+  ✅ duplication  {"ratio":0,"clones":0}
+  ❌ crap         {"maxCrap":552,"offenders":56,"instrumentedFunctions":435}
+  ✅ arch         {"violations":0,"edges":0,"skipped":"没有配置 commands.arch（架构依赖检查）"}
+  ❌ coverage     {"lineCoverage":0.312}
+
+GATE quality: FAIL
+GATE-QUALITY rc=1 (the three pre-existing offenders stay pre-existing)
+
+## 7. the fix itself: complete diff (every differing line), plus the assertion-identity proof
+diff --git a/crates/storage/tests/audit_queries_acceptance.rs b/crates/storage/tests/audit_queries_acceptance.rs
+index 0869186..b341cc7 100644
+--- a/crates/storage/tests/audit_queries_acceptance.rs
++++ b/crates/storage/tests/audit_queries_acceptance.rs
+@@ -20 +19,0 @@ use sqlx::postgres::PgPoolOptions;
+-use std::sync::Mutex;
+@@ -21,0 +21 @@ use storage::audit_queries::{insert_audit_log, list_audit_logs};
++use tokio::sync::{Mutex, MutexGuard};
+@@ -37 +37 @@ const ACTION_CREATE: &str = "m6-create";
+-static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
++static FIXTURE_LOCK: Mutex<()> = Mutex::const_new(());
+@@ -39,4 +39,5 @@ static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
+-fn lock_fixture() -> std::sync::MutexGuard<'static, ()> {
+-    FIXTURE_LOCK
+-        .lock()
+-        .unwrap_or_else(|poisoned| poisoned.into_inner())
++/// The guard has to span the whole test body -- the database awaits included --
++/// so the lock is the async-aware one: a `std::sync` guard held across an await
++/// point blocks the runtime thread the test runs on.
++async fn lock_fixture() -> MutexGuard<'static, ()> {
++    FIXTURE_LOCK.lock().await
+@@ -142 +143 @@ async fn audit_listing_filters_rows_and_returns_a_matching_total() {
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -165 +166 @@ async fn audit_listing_returns_zero_total_instead_of_an_error_when_nothing_match
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -179 +180 @@ async fn audit_listing_is_ordered_newest_first_and_pages_by_offset() {
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -223 +224 @@ async fn audit_listing_combines_user_action_and_time_filters() {
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+diff --git a/crates/storage/tests/user_queries_acceptance.rs b/crates/storage/tests/user_queries_acceptance.rs
+index cd73a50..4751e2d 100644
+--- a/crates/storage/tests/user_queries_acceptance.rs
++++ b/crates/storage/tests/user_queries_acceptance.rs
+@@ -17 +16,0 @@ use sqlx::postgres::PgPoolOptions;
+-use std::sync::Mutex;
+@@ -21,0 +21 @@ use storage::user_queries::{
++use tokio::sync::{Mutex, MutexGuard};
+@@ -47 +47 @@ const FIXTURE_USERS: [&str; 5] = [
+-static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
++static FIXTURE_LOCK: Mutex<()> = Mutex::const_new(());
+@@ -49,4 +49,5 @@ static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
+-fn lock_fixture() -> std::sync::MutexGuard<'static, ()> {
+-    FIXTURE_LOCK
+-        .lock()
+-        .unwrap_or_else(|poisoned| poisoned.into_inner())
++/// The guard has to span the whole test body -- the database awaits included --
++/// so the lock is the async-aware one: a `std::sync` guard held across an await
++/// point blocks the runtime thread the test runs on.
++async fn lock_fixture() -> MutexGuard<'static, ()> {
++    FIXTURE_LOCK.lock().await
+@@ -99 +100 @@ async fn revoking_all_sessions_invalidates_every_outstanding_refresh_token_of_th
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -145 +146 @@ async fn a_refresh_token_can_only_be_consumed_once() {
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -172 +173 @@ async fn refresh_tokens_are_stored_as_digests_so_the_raw_value_is_not_in_the_dat
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -215 +216 @@ async fn deleting_a_user_also_deletes_its_refresh_tokens() {
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+@@ -247 +248 @@ async fn demoting_or_deleting_an_administrator_that_is_not_the_last_one_succeeds
+-    let _guard = lock_fixture();
++    let _guard = lock_fixture().await;
+changed lines containing 'assert': 0   (must be 0)
+changed lines outside the lock-plumbing shapes:
+  0   (must be 0)
+audit_queries_acceptance.rs: assert pre-fix 19 -> post-fix 19   fn/test 13 -> 13
+user_queries_acceptance.rs: assert pre-fix 19 -> post-fix 19   fn/test 15 -> 15
+conversions_acceptance.rs: assert pre-fix 26 -> post-fix 26   fn/test 3 -> 3
+test-name set (the #[tokio::test] functions, pre-fix vs post-fix; must be identical):
+  audit_queries_acceptance.rs: identical (4 test functions)
+  user_queries_acceptance.rs: identical (5 test functions)
+
+## 8. the fixture serialization still holds (3x, forced high parallelism)
+run 1 rc=0 : 2 binary/binaries ok, 4 passed 5 passed 
+run 2 rc=0 : 2 binary/binaries ok, 4 passed 5 passed 
+run 3 rc=0 : 2 binary/binaries ok, 4 passed 5 passed 
+
+## 9. no suppression, no config/baseline drift, nothing else touched
+my change vs pre-fix HEAD (tracked): [crates/storage/tests/audit_queries_acceptance.rs crates/storage/tests/user_queries_acceptance.rs ]
+untracked additions: [qa/evidence/m6-f28-gates.txt ]  (= this evidence file itself)
+allow-attributes in the two files : crates/storage/tests/audit_queries_acceptance.rs:0 crates/storage/tests/user_queries_acceptance.rs:0    (must be 0)
+'await_holding_lock' under crates/storage/tests: crates/storage/tests/audit_queries_acceptance.rs:0 crates/storage/tests/conversions_acceptance.rs:0 crates/storage/tests/user_queries_acceptance.rs:0    (must be 0 = nothing suppressed)
+vs 8601ac9, .gauntlet / gauntlet.config.json / gauntlet-baseline.json / web / deploy/nginx.conf touched:
+  []
+vs 8601ac9, qa/constraints.json deleted lines: 0   (append-only; 0 = nothing removed)
+generated with: sh gauntlet-out/f28-evidence.sh   (scratch logs: gauntlet-out/f28/)
