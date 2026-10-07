@@ -1,0 +1,311 @@
+############ STATIC PROBES @ 2026-10-07T17:08:29Z head=5ceee91dbcf51cfabd3a91f26e3cddb1d4d89ce8 ############
+== git log --oneline -8 ==
+5ceee91 [merge] rework-round gate evidence: coder PASS (98/29), M6 harness 15/15, no-root 12/12 (+ old-calibration 11/12 with the two F12 items), api-checks 19 PASS with SEC-LOGIN-LOCKOUT 429, doc-claims 6 FAIL, quality warnings=0 duplication=0
+d26ada0 [merge] constraints append reworked as a pure insertion (F11: no deleted lines) - MRG6-23/24 text unchanged, closing bracket kept on its own line
+3230e8b [merge] rework round: F-23 lockout 429, F-24 cluster/info null, MRG6-17 README admin note, F-25 two warnings + the duplication clone
+25f475a [qa] M6 round: fix stale cross-references in the two new check entries (Q512 ops-checks fixture note, Q518 -> Q528)
+3fc31d5 [qa] M6 round: independent rerun of every gate on the merged tree + adversarial re-derivation (MRG6-01..22 paired, F-23..F-27 recorded; verdict=fail on 3 unmet expectations)
+868175a [qa] M6 round: two replayable demos (audit endpoint filters / force-cancel vs SIGTERM escalation) + their harness helpers
+e8fd233 [merge] runtime fixes found by the full M6 harness (M6-12 / M6-14 now PASS: 15/15)
+3fb511a [merge] harness-compatibility fixes found by qa/harness/merge-m6-checks.sh
+== git status -sb ==
+## gauntlet/merge-m6
+?? qa/evidence/m6-qa6-api-checks.txt
+?? qa/evidence/m6-qa6-clippy-all-targets.txt
+?? qa/evidence/m6-qa6-cluster-info-and-ops.txt
+?? qa/evidence/m6-qa6-doc-claims.txt
+?? qa/evidence/m6-qa6-extra-checks.txt
+?? qa/evidence/m6-qa6-gate-coder.txt
+?? qa/evidence/m6-qa6-gate-quality.txt
+?? qa/evidence/m6-qa6-job-e2e.txt
+?? qa/evidence/m6-qa6-merge-m6-checks.txt
+?? qa/evidence/m6-qa6-ops-checks.txt
+?? qa/evidence/m6-qa6-runtime-independent.txt
+?? qa/evidence/m6-qa6-static-probes.txt
+== remotes (expect no branch of ours pushed) ==
+19d8fbcf5a26b8b8247ccea8b7b3205a58b12c7a commit	refs/remotes/b/master
+== merges since 8601ac9 (expect empty) ==
+== deleted #[test] lines since 8601ac9 (expect empty) ==
+<none>
+== constraints numstat vs 7ca587a (2nd column must be 0) ==
+384	0	qa/constraints.json
+== constraints numstat vs 8601ac9 ==
+244	0	qa/constraints.json
+== constraints numstat vs 25f475a (this rework round) ==
+21	0	qa/constraints.json
+== frozen surface vs 8601ac9 (expect empty) ==
+== frozen surface vs 25f475a (expect empty) ==
+== F-23: the locked-account branch in handlers.rs (with context) ==
+        login_failed(&state, &client_ip, &req.username);
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    // A locked account answers 429 (not 401): the documented contract tells
+    // the client to back off until `locked_until` passes, and 429 is what
+    // master answered before the graft (the QA lockout check drives exactly
+    // this path). A locked account is therefore distinguishable from a wrong
+    // password — acceptable, because the account is already known to the
+    // caller and the lock is what protects it.
+    if let Some(locked_until) = user.locked_until
+        && locked_until > Utc::now()
+    {
+        storage::audit_queries::insert_audit_log(
+            state.database.pool(),
+            &req.username,
+            "login",
+            Some(&user.user_id),
+            Some("user"),
+            Some("locked account"),
+            "failed",
+            Some(&client_ip),
+        )
+        .await
+        .ok();
+        login_failed(&state, &client_ip, &req.username);
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    // Verify password
+    if auth::verify_password(&req.password, &user.password_hash).is_err() {
+== F-23: which commit changed it ==
+3230e8b [merge] rework round: F-23 lockout 429, F-24 cluster/info null, MRG6-17 README admin note, F-25 two warnings + the duplication clone
+180f416 [merge] graft B handlers.rs + main.rs + manifests (F-08 login limits, F-10 audit coverage, F-11 caps, F-06 config keys)
+f46b6a9 ClusterScope: lightweight GPU cluster monitoring (agent + server + TUI)
+== F-23: master 8601ac9 version of the same branch ==
+40-
+41-    if !user.enabled {
+42-        return Err(StatusCode::UNAUTHORIZED);
+43-    }
+44-
+45-    if let Some(locked_until) = user.locked_until
+46:        && locked_until > Utc::now()
+47-    {
+48-        return Err(StatusCode::TOO_MANY_REQUESTS);
+== MRG6-17: README note ==
+271:> **默认管理员口令**:代码默认 `default_admin_password` 是 **`admin`**(上表示例值 `admin123` 只是模板,
+README.md:267:default_admin_password: "admin123"
+README.md:271:> **默认管理员口令**:代码默认 `default_admin_password` 是 **`admin`**(上表示例值 `admin123` 只是模板,
+crates/common/src/config.rs:85:    pub default_admin_password: String,
+crates/common/src/config.rs:147:            default_admin_password: "admin".to_string(),
+deploy/server.yaml.example:13:default_admin_password: "admin123"
+== MRG6-17: README diff since 8601ac9 ==
+ README.md | 4 ++++
+ 1 file changed, 4 insertions(+)
+== MRG6-17: README diff this rework round ==
+diff --git a/README.md b/README.md
+index 339321b..cf10325 100644
+--- a/README.md
++++ b/README.md
+@@ -268,6 +268,10 @@ default_admin_password: "admin123"
+ auth_required: false           # false = 只读 API 免密码(GET 开放,写操作仍需 JWT)
+ ```
+ 
++> **默认管理员口令**:代码默认 `default_admin_password` 是 **`admin`**(上表示例值 `admin123` 只是模板,
++> 改成它才会生效)。**首次启动后必须立刻修改**:用 `admin` + 该默认口令登录,再调
++> `POST /api/users/{id}/password` 换成强口令;对外暴露的实例还要同时设 `auth_required: true`。
++
+ ### agent.yaml(可多机共享)
+ 
+ ```yaml
+== MRG6-17: doc-claims rows that watch these two lines (still PASS?) ==
+CHECK DOC-ADMIN-PASSWORD-DEFAULT: PASS expected=1 actual=1
+CHECK DOC-ADMIN-PASSWORD-CODE-DEFAULT: PASS expected=1 actual=1
+== F-24: handler now uses the metrics summary ==
+1720:    let gpu_summary = storage::queries::get_gpu_utilization_summary(state.database.pool())
+1721-        .await
+1722-        .ok()
+1723-        .flatten();
+1724-    let (avg_gpu_utilization, idle_gpus) = match gpu_summary {
+1725-        Some((avg, busy, total)) => (Some(avg), Some((total - busy).max(0))),
+1726-        None => (None, None),
+1727-    };
+1728-
+1729-    // Count running jobs (the count comes from the query's total — the row
+1730-    // list is fetched with page_size=1, so the rows themselves would cap the
+1731-    // result at 0/1).
+1732-    let running_jobs =
+1733-        storage::job_queries::list_jobs(state.database.pool(), None, Some("running"), None, 0, 1)
+1734-            .await
+== F-24: callers of get_gpu_utilization_summary ==
+crates/server/src/handlers.rs:1720:    let gpu_summary = storage::queries::get_gpu_utilization_summary(state.database.pool())
+crates/storage/src/queries.rs:267:pub async fn get_gpu_utilization_summary(pool: &PgPool) -> Result<Option<(f64, i64, i64)>> {
+== F-24: 25f475a version of the same block (what it replaced) ==
+        .filter(|n| n.status == common::node_registry::NodeStatus::Online)
+        .count();
+    let degraded = nodes
+        .iter()
+        .filter(|n| n.status == common::node_registry::NodeStatus::Degraded)
+        .count();
+    let offline = nodes
+        .iter()
+        .filter(|n| n.status == common::node_registry::NodeStatus::Offline)
+        .count();
+
+    // Aggregate GPU stats from the latest metrics snapshot per node instead
+    // of returning hardcoded placeholders.
+    let latest = storage::queries::get_latest_metrics_all(state.database.pool())
+        .await
+        .unwrap_or_default();
+    let (mut total_gpus, mut busy_gpus, mut util_sum, mut util_count) = (0u32, 0u32, 0.0f64, 0u32);
+    for m in &latest {
+        if let Some(gpus) = m.gpu_metrics.as_ref().and_then(|v| v.as_array()) {
+            for g in gpus {
+                total_gpus += 1;
+                let util = g
+                    .get("utilization_gpu")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                util_sum += util;
+                util_count += 1;
+                if util >= 1.0 {
+                    busy_gpus += 1;
+                }
+            }
+        }
+    }
+    let avg_gpu_utilization = if util_count > 0 {
+        util_sum / util_count as f64
+    } else {
+        0.0
+    };
+
+    // Count running jobs (the count comes from the query's total — the row
+    // list is fetched with page_size=1, so the rows themselves would cap the
+    // result at 0/1).
+    let running_jobs =
+        storage::job_queries::list_jobs(state.database.pool(), None, Some("running"), None, 0, 1)
+            .await
+            .map(|(_, total)| total)
+            .unwrap_or(0);
+
+    // Count currently active alerts (latest event per key is pending/firing).
+    let active_alerts = storage::alert_queries::get_active_alert_events(state.database.pool())
+        .await
+        .map(|events| events.len())
+        .unwrap_or(0);
+
+    Ok(Json(serde_json::json!({
+        "total_nodes": nodes.len(),
+        "online_nodes": online,
+        "degraded_nodes": degraded,
+        "offline_nodes": offline,
+        "total_gpus": total_gpus,
+        "idle_gpus": total_gpus.saturating_sub(busy_gpus),
+== F-27/MRG6-24: consumers ==
+crates/common/tests/integration_test.rs:15:use common::metrics::MetricsAggregation;
+crates/common/tests/integration_test.rs:159:    let agg = MetricsAggregation::new("gpu_util".to_string(), &values, 0, 1000);
+crates/common/tests/metrics_acceptance.rs:2://! `MetricsAggregation`); the scenario names are the test function names
+crates/common/tests/metrics_acceptance.rs:5:use common::metrics::MetricsAggregation;
+crates/common/tests/metrics_acceptance.rs:10:    let agg = MetricsAggregation::new("m6-gpu_util".to_string(), &values, 1_000, 2_000);
+crates/common/tests/metrics_acceptance.rs:28:    let agg = MetricsAggregation::new("m6-empty".to_string(), &[], 1_000, 2_000);
+crates/common/src/metrics.rs:1://! Metric types and `MetricsAggregation` — one of the three unique assets
+crates/common/src/metrics.rs:8://! [`MetricsAggregation`]. Wiring it into a live path would have meant either
+crates/common/src/metrics.rs:15://! Behaviour: `MetricsAggregation::new` computes avg / max / min / p95 / count
+crates/common/src/metrics.rs:134:pub struct MetricsAggregation {
+crates/common/src/metrics.rs:145:impl MetricsAggregation {
+crates/common/src/metrics.rs:194:        let agg = MetricsAggregation::new("gpu_utilization".to_string(), &values, 0, 1000);
+crates/common/src/metrics.rs:204:        let agg = MetricsAggregation::new("test".to_string(), &[], 0, 1000);
+crates/storage/tests/conversions_acceptance.rs:2://! `node_metrics_to_proto`); the scenario names are the test function names
+crates/storage/tests/conversions_acceptance.rs:7:use storage::conversions::node_metrics_to_proto;
+crates/storage/tests/conversions_acceptance.rs:49:    let report: NodeMetricsReport = node_metrics_to_proto(&row);
+crates/storage/tests/conversions_acceptance.rs:72:    let report: NodeMetricsReport = node_metrics_to_proto(&row);
+crates/storage/src/conversions.rs:4://! `node_metrics_to_proto` is the inverse of what `server::grpc` does when it
+crates/storage/src/conversions.rs:14:pub fn node_metrics_to_proto(m: &NodeMetricsRow) -> NodeMetricsReport {
+== F-27/MRG6-24: doc headers ==
+crates/common/src/metrics.rs:4://! **Status: asset in place, no product consumer yet (M6 rework round, F-27).**
+crates/storage/src/conversions.rs:3://! **Status: asset in place, no product consumer yet (M6 rework round, F-27).**
+== F-27/MRG6-24: assets + tests still present ==
+-rw-r--r-- 1 tianyuyang tianyuyang 6106 Oct  8 00:27 crates/common/src/metrics.rs
+-rw-r--r-- 1 tianyuyang tianyuyang 1788 Oct  8 00:27 crates/storage/src/conversions.rs
+crates/common/tests/:
+total 97
+drwxr-xr-x 2 tianyuyang tianyuyang 1024 Oct  7 22:14 .
+drwxr-xr-x 4 tianyuyang tianyuyang 1024 Oct  7 22:07 ..
+-rw-r--r-- 1 tianyuyang tianyuyang 2619 Oct  7 22:09 config_keys_acceptance.rs
+-rw-r--r-- 1 tianyuyang tianyuyang 6572 Oct  7 22:14 integration_test.rs
+-rw-r--r-- 1 tianyuyang tianyuyang 1306 Oct  7 22:11 metrics_acceptance.rs
+
+crates/storage/tests/:
+total 97
+drwxr-xr-x 2 tianyuyang tianyuyang  1024 Oct  7 22:11 .
+drwxr-xr-x 4 tianyuyang tianyuyang  1024 Oct  7 20:00 ..
+-rw-r--r-- 1 tianyuyang tianyuyang  8895 Oct  7 22:37 audit_queries_acceptance.rs
+-rw-r--r-- 1 tianyuyang tianyuyang  3087 Oct  7 22:15 conversions_acceptance.rs
+-rw-r--r-- 1 tianyuyang tianyuyang 10175 Oct  7 21:29 user_queries_acceptance.rs
+== F-27: rework round did not touch the asset tests (expect empty) ==
+== clippy 9 warnings: do the storage test files exist at 8601ac9? (expect: nothing listed) ==
+(end of 8601ac9 listing)
+== which commit introduced them ==
+4eee91e 2026-10-07 22:16:10 +0800 [merge] step3: bring back A unique assets (common::metrics, storage::conversions, ported integration test)
+6b504be 2026-10-07 20:24:10 +0800 [merge] graft B user_queries.rs (F-09 revocation, digest tokens, guarded admin ops)
+8100441 2026-10-07 20:03:48 +0800 [code] M6 step1 acceptance tests: 4 audit-listing scenarios on the real DB (F-01/F-16)
+== rework round did not touch storage tests (expect empty) ==
+== the MutexGuard sites clippy flags (user_queries_acceptance.rs) ==
+
+async fn issue_token(pool: &PgPool, raw: &str, user_id: &str) {
+    add_refresh_token(pool, raw, user_id, Utc::now() + Duration::hours(1))
+        .await
+        .expect("issuing a refresh token must succeed");
+}
+
+#[tokio::test]
+async fn revoking_all_sessions_invalidates_every_outstanding_refresh_token_of_the_user() {
+    let _guard = lock_fixture();
+    let pool = accept_pool().await;
+    cleanup(&pool).await;
+
+    let user_id = new_fixture_user(&pool, USER_REVOKE, "viewer").await;
+    let raw_token = "m6-raw-token-revoke";
+    issue_token(&pool, raw_token, &user_id).await;
+    cleanup(&pool).await;
+}
+
+#[tokio::test]
+async fn a_refresh_token_can_only_be_consumed_once() {
+    let _guard = lock_fixture();
+    let pool = accept_pool().await;
+    cleanup(&pool).await;
+
+    let user_id = new_fixture_user(&pool, USER_ONCE, "viewer").await;
+    let raw_token = "m6-raw-token-once";
+== earlier hunt: were these warnings reported before this branch? (merge-base = 8601ac9) ==
+8601ac9 is an ancestor of HEAD
+== MRG6-19: resident agent PID 266643 ==
+    PID                  STARTED CMD
+ 266643 Wed Sep  2 12:59:26 2026 /public/tianyuyang/.local/bin/clusterscope-agent -c /public/tianyuyang/.config/clusterscope/agent.yaml
+== Linger ==
+Linger=yes
+== NRM3 / NRM5 greps ==
+crates/server/src/main.rs:246:        .unwrap_or("/etc/clusterscope/server.yaml");
+crates/agent/tests/no_root_agent_config.rs:18:const DEFAULT_CONFIG_PATH: &str = "/etc/clusterscope/agent.yaml";
+crates/agent/tests/no_root_agent_config.rs:203:        // 这台机器上有 /etc/clusterscope/agent.yaml,"默认路径缺失"的前提不成立
+crates/agent/src/main.rs:15:    /// Config file. Omitted = `/etc/clusterscope/agent.yaml`, and the agent warns
+crates/agent/src/config_loader.rs:11:pub const DEFAULT_CONFIG_PATH: &str = "/etc/clusterscope/agent.yaml";
+crates/agent/src/config_loader.rs:14:/// (`--config /etc/clusterscope/agent.yaml`)的人一眼看到自己该用的路径(`FIX-02`)。
+crates/common/src/config.rs:38:                .unwrap_or_else(|| PathBuf::from("/etc/clusterscope"))
+-- NRM5 --
+crates/agent/src/job_executor.rs:323:        cmd.pre_exec(|| {
+crates/agent/src/job_executor.rs:324:            libc::setsid();
+== features added (expect only new merge_m6_* files) ==
+A	features/merge_m6_audit_queries.feature
+A	features/merge_m6_auth_hardening.feature
+A	features/merge_m6_job_safety.feature
+A	features/merge_m6_legacy_assets.feature
+== demo/ ==
+01-build-and-test-gates.json
+02-quality-gates-fail.json
+03-doc-claims.json
+04-rest-security-audit-logs.json
+05-job-lifecycle-e2e.json
+06-job-pid-not-persisted.json
+07-history-daily-tier-missing.json
+08-concurrency-and-ops.json
+09-no-root-system-vs-user-units.json
+10-no-root-linger-and-config-fallback.json
+11-no-root-fixes-install-agent-safety.json
+12-no-root-fixes-user-units-and-config-errors.json
+13-m6-audit-endpoint.json
+14-m6-force-cancel.json
+== MBG6-23/24 errata file ==
+3230e8b [merge] rework round: F-23 lockout 429, F-24 cluster/info null, MRG6-17 README admin note, F-25 two warnings + the duplication clone
+############ END STATIC PROBES ############

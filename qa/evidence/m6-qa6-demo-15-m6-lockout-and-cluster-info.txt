@@ -1,0 +1,4 @@
+$ sh qa/harness/server-up.sh false  -> exit 0
+$ sh qa/harness/m6-demo-lockout-cluster.sh  -> exit 0
+$ sh qa/harness/agent-down.sh && sh qa/harness/server-down.sh  -> exit 0
+demo: /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/evidence/demos/15-m6-lockout-and-cluster-info.html

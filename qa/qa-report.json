@@ -1,7 +1,7 @@
 {
- "verdict": "fail",
- "verdictRule": "verdict=pass 的语义是：qa/constraints.json 的全部 81 条约束都被真实执行过，并且每一条的实际结果都与清单的预期一致（finding 类约束的预期就是「审计预期它不成立」，因此它们 FAIL 才是 pass）。quality 三闸门 complexity / crap / coverage 仍然是 FAIL，已原样记录在 gates 与 findings 里，不是本次 QA 的失败项，也没有被修饰成 PASS。；增补（第 5 阶段，no-root 维度）：同一条规则适用于第 1 阶段新增的 23 条 NR-*/MRG-02（NR-01…NR-21、NR-06b、MRG-02），合计 104 条；23 条全部配对（Q300-Q322/Q330）。其中 1 条复现出的实际行为与清单预期不一致（NR-06：agent 在干净 HOME + 缺失 -c 文件时 exit 1，清单写的是静默回退不崩），按本规则记 verdict=violated 并新增 finding NF-01；原有 81 条一个字段都没改。；增补（第 5 阶段，M6 三线合流轮）：同一条规则适用于第 1 阶段新增的 22 条 MRG6-01…MRG6-22，合计 140 条。22 条全部在合流后的真实构建产物上重新执行并配对（Q501–Q522）；其中 **19 条与清单预期一致，3 条不一致** → 按本规则 top-level verdict=fail：① MRG6-02 的 expect 里「api-checks 的 PASS 数从 18 升到 19」不成立（实测 18，因为 DOC-GET-AUDIT-LOGS 翻转的同时 SEC-LOGIN-LOCKOUT 由 PASS 掉成 FAIL，被 M6-11 的 `PASS ≥ 18` 容差盖住）→ 新 finding F-23（1 行修复点）；② MRG6-17 的「README 补强默认口令提示」根本没落地（本分支自 8601ac9 起没有改过 README）；③ MRG6-22 的勘误说旧口径 F12 只失败一条，实测是两条（与 MRG6-10 原文一致）→ F-26。另有两条独立记录：F-25（合流新增质量欠账：warnings 0→2、duplication 0→0.4%、next 距离 409.505→603.873，M7 的「不变差」不成立）与 F-27（A 资产无产品调用点 + MRG6-07 路径写法不精确）。既有 132 条检查与既有 findings 一个字段都没改。",
- "summary": "81/81 条约束全部在真实构建产物上逐条复跑：76 条实测与清单预期一致，4 条 na（前端 / 容器部署 / 纯 CPU 降级 / 防火墙），1 条 unverifiable（合流方案 M1–M9 的答案属于第 6 阶段产出）。三条第 1 阶段声称的缺陷全部被独立复现：GET /api/audit-logs 恒 500、天级 90 天历史永不返回、jobs.pid 从不落库。另记 16 条产品问题（含一条被 500 掩盖的第二个缺陷：审计 COUNT 语句一个参数都没绑）与 9 条清单自身的不精确。产品本身不健康：硬阈值下 complexity 21/316、crap 45/316（maxCRAP 552）、行覆盖率 20.7%。增补（第 5 阶段 no-root 维度）：23 条 NR-* 约束在真实 release 二进制的干净状态上复跑并逐条独立复推；作者脚本的 23/23 PASS 可复现，但其中两条结论经不起对抗性检查——agent 在干净 HOME + 缺失 -c 文件时是 exit 1（不是「被 timeout 收掉」；harness 的 NR6 PASS 是假阳性，判据取的是 grep 的退出码），以及 NR-21 的证据量的是配置路径而非 env-only 那条（补齐后成立）。新增 finding：NF-01、NF-02（install-agent.sh:80 的 pkill）。核心结论不变：server/agent/TUI 确实能以 uid 3000、零 capability、零 HOME 外写入跑起来。；增补（第 5 阶段，M6 三线合流轮，HEAD=e8fd233）：22 条 MRG6 约束在合流后的真实产物上逐条独立复跑（Q501–Q531 + 新 findings F-23…F-27）。**成立的部分**：GATE coder PASS（build ✅、98 tests/0 failed、acceptance 29/29）· merge-m6-checks.sh 干净状态 15/15 FAIL=0 · no-root-fixes-checks.sh 12/12 · doc-claims 的 FAIL 由 9 降到 7（SIGKILL/force 两条如期翻 PASS）· job-e2e 15/0 · 11 张表/admin 1 行/迁移幂等 · 审计端点 F-01 真的从 500 变 200、F-16 的 COUNT 绑参经 6 组筛选矩阵验证 total=rows=SQL 计数全部一致 · F-05 的 SIGTERM→SIGKILL 与 ?force=true 两条路径都有 agent 日志佐证 · 最后管理员守卫的拒绝路径在专属库上真的拦住了（400/200/400）· 限速桶键 (源地址,用户名) 的跨账号隔离成立（同源其它账号 200，被爆账号自身 429）· 编码阶段声称的 3 个 B 代码 bug 全部被独立复现（PG 逐字拒绝 COUNT(*)…FOR UPDATE、/proc/<pid>/stat 下标 20=vsize 且随分配变化、180f416 启动时 panic `Overlapping method route. Handler for GET /audit-logs already exists` 退出码 101）。**不成立的三条**：MRG6-02 的 PASS 计数（18 不是 19，根因是新引入的锁账号 429→401 回归 F-23）· MRG6-17 的 README 补强（完全没做）· MRG6-22 的勘误数字（旧口径失败项是两条）。另记 F-24（cluster/info 无数据时不再返回 null，README:442 被破坏）与 F-25（warnings 闸门 PASS→FAIL、duplication 0→0.4%、距离 409.5→603.9）。所有原始输出在 qa/evidence/m6-qa5-*.txt；两个可回放演示 demo/13、demo/14 已实跑（exit 0）。",
+ "verdict": "pass",
+ "verdictRule": "verdict=pass 的语义是：qa/constraints.json 的全部 81 条约束都被真实执行过，并且每一条的实际结果都与清单的预期一致（finding 类约束的预期就是「审计预期它不成立」，因此它们 FAIL 才是 pass）。quality 三闸门 complexity / crap / coverage 仍然是 FAIL，已原样记录在 gates 与 findings 里，不是本次 QA 的失败项，也没有被修饰成 PASS。；增补（第 5 阶段，no-root 维度）：同一条规则适用于第 1 阶段新增的 23 条 NR-*/MRG-02（NR-01…NR-21、NR-06b、MRG-02），合计 104 条；23 条全部配对（Q300-Q322/Q330）。其中 1 条复现出的实际行为与清单预期不一致（NR-06：agent 在干净 HOME + 缺失 -c 文件时 exit 1，清单写的是静默回退不崩），按本规则记 verdict=violated 并新增 finding NF-01；原有 81 条一个字段都没改。；增补（第 5 阶段，M6 三线合流轮）：同一条规则适用于第 1 阶段新增的 22 条 MRG6-01…MRG6-22，合计 140 条。22 条全部在合流后的真实构建产物上重新执行并配对（Q501–Q522）；其中 **19 条与清单预期一致，3 条不一致** → 按本规则 top-level verdict=fail：① MRG6-02 的 expect 里「api-checks 的 PASS 数从 18 升到 19」不成立（实测 18，因为 DOC-GET-AUDIT-LOGS 翻转的同时 SEC-LOGIN-LOCKOUT 由 PASS 掉成 FAIL，被 M6-11 的 `PASS ≥ 18` 容差盖住）→ 新 finding F-23（1 行修复点）；② MRG6-17 的「README 补强默认口令提示」根本没落地（本分支自 8601ac9 起没有改过 README）；③ MRG6-22 的勘误说旧口径 F12 只失败一条，实测是两条（与 MRG6-10 原文一致）→ F-26。另有两条独立记录：F-25（合流新增质量欠账：warnings 0→2、duplication 0→0.4%、next 距离 409.505→603.873，M7 的「不变差」不成立）与 F-27（A 资产无产品调用点 + MRG6-07 路径写法不精确）。既有 132 条检查与既有 findings 一个字段都没改。；增补（第 5 阶段返工复验 round 2，HEAD=5ceee91）：同一规则适用于**追加后的 24 条 MRG6**（MRG6-01…MRG6-24，其中 MRG6-23/24 是本轮返工按勘误与处置记录追加的）。round 1 判 fail 的三条本轮全部复跑：**MRG6-02**（锁定账号 429 回归 F-23）与 **MRG6-17**（README 默认口令补强）已按现状转 PASS，顶层条目改为轮 2 结果、round 1 原文原样保留在各自的 `round1` 里；**MRG6-22** 的清单文本（旧口径 F12『失败项只有一条』）仍然是**被证伪**的，本轮按 `superseded-by-erratum` 记 —— 它的明文勘误 MRG6-23（『恰好两条』）经复跑逐字成立，脚本与断言集合一行未动（改的是勘误文字，不是取样口径），因此这一条既没有 pass 也不构成本轮的失败项：24 条里 23 条 holds、1 条 superseded-by-erratum，**没有 must-hold 约束被证伪**（本轮对受返工影响的条目、追加的 MRG6-23/24、以及 merge-m6-checks.sh 覆盖的 M6-01…M6-15 全部在同一棵树上复跑；MRG6-16 的『树上自解析』由本轮所有 harness 输出都指向 merge-m6 直接印证；MRG6-04 是提交序列的历史属性 —— `git log --merges` 仍为空、合流提交哈希未变）。另有两条独立记录不作为判据：F-28（`clippy --all-targets` 的 9 条 MutexGuard 告警不是基线既有，属本分支新增的测试文件，且不在任何闸门的度量范围内 —— 见 Q545 的独立判定）与 F-29（M7 欠账残差 592.706；M6 口径明确不还债）。既有 132 条检查、既有 findings、以及 round 1 的全部结论只增不改（本轮对 Q502/Q517/Q522 的改动是把 round 1 字段整段搬到 `round1` 键下、顶层写入轮 2 结果，信息零丢失）。",
+ "summary": "81/81 条约束全部在真实构建产物上逐条复跑：76 条实测与清单预期一致，4 条 na（前端 / 容器部署 / 纯 CPU 降级 / 防火墙），1 条 unverifiable（合流方案 M1–M9 的答案属于第 6 阶段产出）。三条第 1 阶段声称的缺陷全部被独立复现：GET /api/audit-logs 恒 500、天级 90 天历史永不返回、jobs.pid 从不落库。另记 16 条产品问题（含一条被 500 掩盖的第二个缺陷：审计 COUNT 语句一个参数都没绑）与 9 条清单自身的不精确。产品本身不健康：硬阈值下 complexity 21/316、crap 45/316（maxCRAP 552）、行覆盖率 20.7%。增补（第 5 阶段 no-root 维度）：23 条 NR-* 约束在真实 release 二进制的干净状态上复跑并逐条独立复推；作者脚本的 23/23 PASS 可复现，但其中两条结论经不起对抗性检查——agent 在干净 HOME + 缺失 -c 文件时是 exit 1（不是「被 timeout 收掉」；harness 的 NR6 PASS 是假阳性，判据取的是 grep 的退出码），以及 NR-21 的证据量的是配置路径而非 env-only 那条（补齐后成立）。新增 finding：NF-01、NF-02（install-agent.sh:80 的 pkill）。核心结论不变：server/agent/TUI 确实能以 uid 3000、零 capability、零 HOME 外写入跑起来。；增补（第 5 阶段，M6 三线合流轮，HEAD=e8fd233）：22 条 MRG6 约束在合流后的真实产物上逐条独立复跑（Q501–Q531 + 新 findings F-23…F-27）。**成立的部分**：GATE coder PASS（build ✅、98 tests/0 failed、acceptance 29/29）· merge-m6-checks.sh 干净状态 15/15 FAIL=0 · no-root-fixes-checks.sh 12/12 · doc-claims 的 FAIL 由 9 降到 7（SIGKILL/force 两条如期翻 PASS）· job-e2e 15/0 · 11 张表/admin 1 行/迁移幂等 · 审计端点 F-01 真的从 500 变 200、F-16 的 COUNT 绑参经 6 组筛选矩阵验证 total=rows=SQL 计数全部一致 · F-05 的 SIGTERM→SIGKILL 与 ?force=true 两条路径都有 agent 日志佐证 · 最后管理员守卫的拒绝路径在专属库上真的拦住了（400/200/400）· 限速桶键 (源地址,用户名) 的跨账号隔离成立（同源其它账号 200，被爆账号自身 429）· 编码阶段声称的 3 个 B 代码 bug 全部被独立复现（PG 逐字拒绝 COUNT(*)…FOR UPDATE、/proc/<pid>/stat 下标 20=vsize 且随分配变化、180f416 启动时 panic `Overlapping method route. Handler for GET /audit-logs already exists` 退出码 101）。**不成立的三条**：MRG6-02 的 PASS 计数（18 不是 19，根因是新引入的锁账号 429→401 回归 F-23）· MRG6-17 的 README 补强（完全没做）· MRG6-22 的勘误数字（旧口径失败项是两条）。另记 F-24（cluster/info 无数据时不再返回 null，README:442 被破坏）与 F-25（warnings 闸门 PASS→FAIL、duplication 0→0.4%、距离 409.5→603.9）。所有原始输出在 qa/evidence/m6-qa5-*.txt；两个可回放演示 demo/13、demo/14 已实跑（exit 0）。；增补（第 5 阶段返工复验 round 2，HEAD=5ceee91，2026-10-07T16:54Z–17:25Z）：对 4 个返工提交（3230e8b/d26ada0/5ceee91 等）在真实构建产物上**独立复跑全部判据**，编码阶段的自述逐条核对（不采信）。**已闭合**：F-23（release 产物 + api-checks `PASS=19 FAIL=1` + `SEC-LOGIN-LOCKOUT PASS expected=429 actual=429` + 自写探针『5 次错口令后正确口令 = 429』+ 源码 `handlers.rs:346` 与 master 同分支逐行等价）· MRG6-17（README.md:271 新增 4 行默认口令提示、代码默认值未动、doc-claims 73 PASS/6 FAIL 与上一轮逐条同名）· F-24（ops-checks CLUSTER-INFO-NULL-IDLE-AND-AVG 由 FAIL 转 PASS；原始响应体：有数据 `{total_gpus:6, idle_gpus:6, avg:0.0}`、无数据 `{idle_gpus:null, avg_gpu_utilization:null}`；并证明这是恢复 master 的写法）· F-25 的两项（`warnings` 0、`duplication` 0.0%，gate --profile quality 原样输出）· F-26/MRG6-23（旧口径 `PASS=11 FAIL=1`，F12 失败项恰好两条）· F-27/MRG6-24（资产与测试都在、两处文档头逐字写明 no product consumer yet、返工没碰任何测试目录）。**回归网**：`GATE coder: PASS`（spec 29 场景、tests 98/0、acceptance 29/29 missing 0）· `merge-m6-checks.sh` 干净整跑 `PASS=15 FAIL=0` rc=0 · `no-root-fixes-checks.sh` 12/12（旧口径 11/12）· `job-e2e.sh` 15/0 · `api-checks.sh` 19/1 · `ops-checks.sh` 20 PASS/3 FAIL（三条全是既有 finding，较上一轮少一条）· `no-root-checks.sh` 21 条里 5 条 FAIL 与上一轮**逐条同名**（NR6/NR6b/NR8/NR13/NR15，基线属性）· 约束清单三个基线口径全部 `N/0`（零删行）· 冻结面零改动 · 无整体 merge、无 push、PID 266643 启动时间未变、Linger=yes。**未闭合（如实记录，不作为判据）**：`clippy --all-targets` 的 9 条 MutexGuard-across-await 告警**不在基线 8601ac9**（crates/storage/tests/** 是本分支新增，8100441/6b504be/4eee91e），按任务书口径属『本次新引入』而非编码阶段自述的『既有』；它们落在 gauntlet.config.json 的 exclude 内，任何闸门都不覆盖 → F-28。M7 欠账残差距离 592.706（117 项，master 409.505 / 97 项）→ F-29。三个演示在本轮树上重放 exit 0（demo/13 文案已按 F-23 闭合更新、新增 demo/15 覆盖 429 与 null 两条翻转判据）。",
  "vocabulary": {
   "status": "pass = 实际结果与清单预期一致；fail = 与清单预期不一致",
   "verdict": "holds = 约束文本（含 finding 类「X 是坏的」这种断言）被证实为真；violated = 约束文本被证伪；na = 本环境不适用；unverifiable = 本环境无法验证",
@@ -37,6 +37,29 @@
    "sharedHostPolicy": "只按 PID 文件停自己起的 server/agent/临时库实例；全程无 pkill/killall；常驻 agent PID 266643（lstart=Wed Sep 2 12:59:26 2026）与它的 unit/~/.config/clusterscope/ 全程未被触碰；Linger=yes 未变；没有 push、没有 PR",
    "qaEntry": "sh qa/harness/merge-m6-checks.sh（M6-01…M6-15）+ 本阶段自写的独立复核（qa5-adversarial / cancel-e2e / last-admin-guard / route-dup / assets-and-409 / sec17-logs / nrm44 / final-checks），原始输出都在 qa/evidence/m6-qa5-*.txt",
    "optionalNotRun": "sh qa/harness/long-checks.sh（约 63 分钟的保留策略测量）本轮**未跑**，按任务书标记为可选/慢速；合流没有改保留策略与清理路径（main.rs 的 prune 调用与 aggregation 未动），此项沿用的是更早一轮的结论。"
+  },
+  "m6ReworkVerification": {
+   "worktree": "/public/tianyuyang/code/ClusterScope-review/merge-m6",
+   "branch": "gauntlet/merge-m6",
+   "commit": "5ceee91dbcf51cfabd3a91f26e3cddb1d4d89ce8",
+   "commitShort": "5ceee91",
+   "reviewedReworkCommits": [
+    "3230e8b",
+    "d26ada0",
+    "5ceee91"
+   ],
+   "round1Head": "25f475a（第 5 阶段 round 1，verdict=fail）",
+   "mergeBase": "8601ac9",
+   "binaries": "target/release/clusterscope-{server,agent,tui}；`cargo build --release --workspace --offline` 判定『无需重建』（Finished in 0.50s，2026-10-08 00:33 的产物与 HEAD 一致）；server sha256 2e659313…33a60、agent 096f5c29…8fbcb3、tui 11ff3b06…6ad542",
+   "database": "PostgreSQL 16.4 postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope（共享实例；本轮按既有夹具口径使用，未建新库）",
+   "windowUtc": "2026-10-07T16:54Z ~ 2026-10-07T17:25Z（本地 +08:00 00:54 ~ 01:25）",
+   "sharedHostPolicy": "只按 PID 文件停自己起的 server/agent；全程无 pkill/killall；常驻 agent PID 266643（lstart=Wed Sep 2 12:59:26 2026）与它的 unit/~/.config/clusterscope/ 全程未被触碰（本轮没有跑 no-root-fixes 的 F5 真装真启：一律 --no-slow）；Linger=yes 未变；没有 push、没有 PR。",
+   "qaEntry": "sh qa/harness/merge-m6-checks.sh（15/15）+ 本轮自写的独立复核（runtime-independent / cluster-info-and-ops / static-probes / clippy-all-targets / demo 13-14-15 重放），原始输出全部在 qa/evidence/m6-qa6-*.txt",
+   "notes": [
+    "ops-checks.sh 的前置必须齐全（server + agent 都起着）：它开头就量 8080/50051 与 Prometheus 端点，栈没起会多出 4 条假 FAIL。",
+    "extra-checks.sh 自带 server/agent 起停（脚本 33-34/89/98-99 行），跑完栈是停的 —— 紧随其后的探针要先自己把栈起回来。",
+    "ops-checks.sh:112 的 `delete from node_metrics;` 是已记录的夹具卫生问题（N9）；本轮两次探针也做过同样的清表，都是 QA 夹具行为。"
+   ]
   }
  },
  "gates": {
@@ -54,7 +77,26 @@
   "spec": "N/A —— 用户裁决不写 features/*.feature（审核模式不改产品代码）",
   "acceptance": "N/A —— 同上；kit test 的退出码 1 只来自 ACCEPTANCE scenarios=0",
   "gateQualityExitCode": 1,
-  "nextQuality": "CONTINUE，exit 1，剩余 97 项 / 距离 409.505（与 GAUNTLET.md 第 0 阶段记录逐字一致）"
+  "nextQuality": "CONTINUE，exit 1，剩余 97 项 / 距离 409.505（与 GAUNTLET.md 第 0 阶段记录逐字一致）",
+  "m6ReworkRound2": {
+   "profile": "coder（PASS）+ quality（FAIL，既有三项）",
+   "spec": "PASS 5 feature(s) / 29 scenario(s)",
+   "build": "PASS（cargo build --workspace --all-targets --offline rc=0）",
+   "tests": "PASS 98 total / 0 failed / 0 ignored",
+   "acceptance": "PASS 29/29, missing 0",
+   "warnings": "PASS 0 —— 返工前是 2（F-25 的一项）",
+   "tidy": "PASS 0 findings",
+   "duplication": "PASS 0.0% / 0 clones —— 返工前是 0.4% / 1 clone（F-25 的另一项）",
+   "scope": "PASS 35/35 files, engine=builtin",
+   "complexity": "FAIL 34 offenders / 435 functions, maxCC=23（已记录的 M7 欠账，原样保留）",
+   "crap": "FAIL 56 offenders, maxCRAP=552（同上）",
+   "coverage": "FAIL 31.2%（同上；轮 1 记录的是 31.2%）",
+   "arch": "SKIPPED（未配置 commands.arch）",
+   "nextQuality": "CONTINUE，117 项 / 距离 592.706（轮 1：123 / 603.873；master 基线：97 / 409.505）",
+   "gateCoderExitCode": 0,
+   "gateQualityExitCode": 1,
+   "clippyAllTargets": "rc=0，9 条 warning（全在 crates/storage/tests/**，见 F-28）"
+  }
  },
  "checks": [
   {
@@ -2041,15 +2083,27 @@
    "title": "审计端点 F-01（恒 500 → 200）+ F-16（COUNT 绑参）",
    "action": "sh qa/harness/api-checks.sh；sh qa/harness/merge-m6-checks.sh（M6-11）；自写筛选矩阵（无过滤 / user / action / 时间窗 / 四条件组合 / 不存在 user / 坏参数 / 分页）",
    "expected": "`CHECK DOC-GET-AUDIT-LOGS: PASS expected=200 actual=200`；api-checks 的 PASS 数从 18 升到 19；M6-11 PASS",
-   "actual": "端点确实翻成 PASS（expected=200 actual=200）✓；F-16 的修法经独立验证：6 组筛选条件下 total、实回 rows、psql 计数三方**全部相等**（如 user=admin 130/130/130、四条件组合 41/41/41、不存在 user 0/0/0），坏参数 start_time_ms=abc → 400（不是 500），分页 n=5 且 total 与不分页一致 ✓。**但 api-checks 的 PASS 数是 18，不是 19**：DOC-GET-AUDIT-LOGS 由 FAIL→PASS 的同时，SEC-LOGIN-LOCKOUT 由 PASS(429)→FAIL(401)，一升一降，被 M6-11 的判据 `PASS ≥ 18` 容差盖住。根因与证据见 F-23。",
-   "status": "fail",
-   "verdict": "violated",
+   "round1": {
+    "status": "fail",
+    "verdict": "violated",
+    "actual": "端点确实翻成 PASS（expected=200 actual=200）✓；F-16 的修法经独立验证：6 组筛选条件下 total、实回 rows、psql 计数三方**全部相等**（如 user=admin 130/130/130、四条件组合 41/41/41、不存在 user 0/0/0），坏参数 start_time_ms=abc → 400（不是 500），分页 n=5 且 total 与不分页一致 ✓。**但 api-checks 的 PASS 数是 18，不是 19**：DOC-GET-AUDIT-LOGS 由 FAIL→PASS 的同时，SEC-LOGIN-LOCKOUT 由 PASS(429)→FAIL(401)，一升一降，被 M6-11 的判据 `PASS ≥ 18` 容差盖住。根因与证据见 F-23。",
+    "evidence": [
+     "m6-qa5-api-checks.txt",
+     "m6-qa5-adversarial.txt",
+     "m6-qa5-merge-m6-checks.txt"
+    ],
+    "ts": "2026-10-07T15:52Z",
+    "note": "round 1 的失败是因为锁定分支被 graft 改成 401（F-23）；返工把同一分支改回 429，于是本条的『PASS 数 18 → 19』第一次真正成立。"
+   },
+   "status": "pass",
+   "verdict": "holds",
+   "actual": "**复验（round 2，HEAD=5ceee91）：本条的判据已经完全成立。** 独立整跑 `sh qa/harness/api-checks.sh`：`PASS=19 FAIL=1`（基线 18/2；唯一剩下的 FAIL 是 DOC-GET-USERS-READONLY，F-07 的取舍），其中 `CHECK SEC-LOGIN-LOCKOUT: PASS expected=429 actual=429`；`merge-m6-checks.sh` 的 M6-11 段同样给出 `PASS=19、DOC-GET-AUDIT-LOGS 已 PASS=1`。F-16 的绑定修法没有被返工触碰（3230e8b 只动了 handlers.rs 的锁定分支与 cluster/info），审计端点的 total=rows=SQL 计数三方一致的结论继续有效。402 行的 round-1 结论（PASS=18、SEC-LOGIN-LOCKOUT 由 PASS 掉成 FAIL）是当时的实测，保留在 round1 里；根因见 F-23，已在 3230e8b 修复并复验。",
    "evidence": [
-    "m6-qa5-api-checks.txt",
-    "m6-qa5-adversarial.txt",
-    "m6-qa5-merge-m6-checks.txt"
+    "m6-qa6-api-checks.txt",
+    "m6-qa6-merge-m6-checks.txt",
+    "m6-qa6-runtime-independent.txt"
    ],
-   "ts": "2026-10-07T15:52Z"
+   "ts": "2026-10-07T17:25Z"
   },
   {
    "id": "Q503",
@@ -2265,14 +2319,26 @@
    "title": "F-12 默认口令：代码默认值不动 + README 文档补强",
    "action": "grep -n 'default_admin_password' crates/common/src/config.rs README.md deploy/*.yaml.example；grep -rn '首次启动|必须改|默认口令' README.md docs/ deploy/；sh qa/harness/doc-claims-checks.sh",
    "expected": "代码默认值不变；README 有「代码默认口令是 admin、首次启动后必须改」的提示；doc-claims FAIL 数不增加",
-   "actual": "代码默认值确实没动（crates/common/src/config.rs:147 仍是 \"admin\"；README:267 仍是 `default_admin_password: \"admin123\"`，doc-claims 的两条 grep 都没被打扰，FAIL 数还从 9 降到 7）✓ —— **但「README 补强」这一半没有落地**：`grep -rn '首次启动|必须改|默认口令|default password' README.md docs/ deploy/` 命中 0 行；`git log 8601ac9..HEAD -- README.md docs` 为空（本分支自合流基线起根本没改过 README）。README 的安全提示只到「生产建议：PostgreSQL 独立账号、auth_required: true、agent_token、定期轮换 JWT secret」（README:443），没有提默认口令。",
-   "status": "fail",
-   "verdict": "violated",
+   "round1": {
+    "status": "fail",
+    "verdict": "violated",
+    "actual": "代码默认值确实没动（crates/common/src/config.rs:147 仍是 \"admin\"；README:267 仍是 `default_admin_password: \"admin123\"`，doc-claims 的两条 grep 都没被打扰，FAIL 数还从 9 降到 7）✓ —— **但「README 补强」这一半没有落地**：`grep -rn '首次启动|必须改|默认口令|default password' README.md docs/ deploy/` 命中 0 行；`git log 8601ac9..HEAD -- README.md docs` 为空（本分支自合流基线起根本没改过 README）。README 的安全提示只到「生产建议：PostgreSQL 独立账号、auth_required: true、agent_token、定期轮换 JWT secret」（README:443），没有提默认口令。",
+    "evidence": [
+     "m6-qa5-final-checks.txt",
+     "m6-qa5-doc-claims.txt"
+    ],
+    "ts": "2026-10-07T15:52Z",
+    "note": "round 1 记录的是「代码默认值没动 ✓，但 README 补强完全没做 ✗」；返工用 4 行纯插入补上了这一段。"
+   },
+   "status": "pass",
+   "verdict": "holds",
+   "actual": "**复验（round 2，HEAD=5ceee91）：README 补强已经落地，两条 grep 都没被打扰。** `README.md:271` 新增四行提示「默认管理员口令：代码默认 `default_admin_password` 是 `admin`…首次启动后必须立刻修改…」（`git diff 25f475a..HEAD -- README.md` = 4 行纯新增；`git diff 8601ac9 --stat -- README.md` = 1 file changed, 4 insertions(+)）。代码默认值一个字没动：`crates/common/src/config.rs:147` 仍是 `default_admin_password: \"admin\".to_string()`，README:267 仍是 `default_admin_password: \"admin123\"`，`deploy/server.yaml.example:13` 也没变；doc-claims 的两条守卫 `DOC-ADMIN-PASSWORD-DEFAULT` / `DOC-ADMIN-PASSWORD-CODE-DEFAULT` 都仍是 PASS。文档一致性整跑：`PASS=73 / 真实 FAIL=6`（`grep -c ': FAIL'` 得 7 —— 第 7 行是脚本自己的汇总行 `DOC-CHECKS: FAILURES PRESENT`），与上一轮**逐条同名**，没有新增 FAIL，也远低于上限 9。",
    "evidence": [
-    "m6-qa5-final-checks.txt",
-    "m6-qa5-doc-claims.txt"
+    "m6-qa6-doc-claims.txt",
+    "m6-qa6-static-probes.txt",
+    "m6-qa6-gate-coder.txt"
    ],
-   "ts": "2026-10-07T15:52Z"
+   "ts": "2026-10-07T17:25Z"
   },
   {
    "id": "Q518",
@@ -2339,14 +2405,26 @@
    "title": "勘误：旧口径（NR_FIX_BASE=7ca587a）下 F12 的失败项条数",
    "action": "NR_FIX_BASE=7ca587a sh qa/harness/no-root-fixes-checks.sh --no-slow",
    "expected": "M6 轮 12/12；旧口径 11/12 且 F12 的失败项只有「改动文件全部落在 nr-fixes 轮允许集内」一条",
-   "actual": "M6 轮 12/12 ✓；旧口径 PASS=11 FAIL=1 ✓，但 F12 段打印的失败项是**两条**：`改动文件全部落在 nr-fixes 轮允许集内` **和** `crates/storage 与 crates/server 零改动`。原因是脚本第 659/696 行的第二条断言算的是 `git diff --name-only $BASE -- crates/storage crates/server`（$BASE=7ca587a）在**当前 HEAD** 上的结果，而合流本身就改了这两个目录 → 必然 FAIL。勘误写「合流起点 HEAD 相对 7ca587a 本来就是零改动」是按**起点**算的，与脚本实际按 **HEAD** 算不符（勘误落笔时合流提交还没产生，见 F-26）。MRG6-10 的原文「F12 的两条范围断言 FAIL」才是实测结论。",
-   "status": "fail",
-   "verdict": "violated",
+   "round1": {
+    "status": "fail",
+    "verdict": "violated",
+    "actual": "M6 轮 12/12 ✓；旧口径 PASS=11 FAIL=1 ✓，但 F12 段打印的失败项是**两条**：`改动文件全部落在 nr-fixes 轮允许集内` **和** `crates/storage 与 crates/server 零改动`。原因是脚本第 659/696 行的第二条断言算的是 `git diff --name-only $BASE -- crates/storage crates/server`（$BASE=7ca587a）在**当前 HEAD** 上的结果，而合流本身就改了这两个目录 → 必然 FAIL。勘误写「合流起点 HEAD 相对 7ca587a 本来就是零改动」是按**起点**算的，与脚本实际按 **HEAD** 算不符（勘误落笔时合流提交还没产生，见 F-26）。MRG6-10 的原文「F12 的两条范围断言 FAIL」才是实测结论。",
+    "evidence": [
+     "m6-qa5-no-root-fixes-oldround.txt",
+     "m6-qa5-final-checks.txt"
+    ],
+    "ts": "2026-10-07T15:52Z",
+    "note": "round 1 的实测（两条）与 MRG6-10 原文一致、与 MRG6-22 的勘误数字不一致 → 记 F-26；返工选择改勘误文字（追加 MRG6-23）而不是改脚本取样口径，理由写在 qa/mrg6-errata3.json。"
+   },
+   "status": "pass",
+   "verdict": "superseded-by-erratum",
+   "actual": "**复验（round 2，HEAD=5ceee91）：『两条』这个数字被独立复跑印证，勘误以追加 MRG6-23 的形式落地。** `NR_FIX_BASE=7ca587a sh qa/harness/no-root-fixes-checks.sh --no-slow` → `PASS=11 FAIL=1`（rc=1），F12 的失败项**恰好两条**：`改动文件全部落在 nr-fixes 轮允许集内` 与 `crates/storage 与 crates/server 零改动`（后者算的是 `git diff --name-only 7ca587a -- crates/storage crates/server` 在**当前 HEAD** 上的结果，合流本身就改了这两个目录 → 必然 FAIL）。同一条断言集合一字未动（F11/F12 的负例自检 5/5、正例 2/2 照旧；脚本的 CHECK/A 断言逐行未改，本轮只读了它们）。M6 轮口径 `sh qa/harness/no-root-fixes-checks.sh --no-slow` 仍是 `PASS=12 FAIL=0`（rc=0）。**本条清单文本（MRG6-22）里那句『失败项只有一条』仍然是被证伪的**：它落笔于合流提交产生之前（当时 HEAD 相对 7ca587a 在 crates/storage 与 crates/server 上确实是零改动），现在由 MRG6-23 这条勘误明文取代 —— 本条按『被勘误取代（superseded-by-erratum）』记，不按 pass 记，历史保留在 round1。",
    "evidence": [
-    "m6-qa5-no-root-fixes-oldround.txt",
-    "m6-qa5-final-checks.txt"
+    "m6-qa6-no-root-fixes-oldround.txt",
+    "m6-qa6-no-root-fixes-m6round.txt",
+    "m6-qa6-static-probes.txt"
    ],
-   "ts": "2026-10-07T15:52Z"
+   "ts": "2026-10-07T17:25Z"
   },
   {
    "id": "Q523",
@@ -2473,6 +2551,254 @@
     "m6-qa5-gate-coder.txt"
    ],
    "ts": "2026-10-07T15:52Z"
+  },
+  {
+   "id": "Q531",
+   "constraint": "MRG6-02",
+   "title": "F-23 锁定账号 429 回归已闭合（独立复跑 + 独立探针，不只看注释）",
+   "action": "cargo build --release --workspace --offline；sh qa/harness/api-checks.sh；自写探针（建号 → 5 次错口令 → 正确口令）；git show 8601ac9 与 25f475a 的同一分支对照",
+   "expected": "`CHECK SEC-LOGIN-LOCKOUT: PASS expected=429 actual=429`；api-checks PASS 数 19；锁定分支在源码里真的返回 TOO_MANY_REQUESTS",
+   "actual": "① release 产物：`cargo build --release --workspace --offline` → `Finished` in 0.50s（指纹与 HEAD 一致，无重建），server sha256 `2e659313…33a60`；② `api-checks.sh`：`PASS=19 FAIL=1`，`CHECK SEC-LOGIN-LOCKOUT: PASS expected=429 actual=429`；③ 独立探针（我自己的账号 m6qa6-lock-1791392592）：建号 200 → 5 次错口令全 401 → **锁定期内用正确口令 = 429**，DB 行 `failed=5 locked_until=2026-10-08 01:08:12+08`；④ 源码：`crates/server/src/handlers.rs:346` `return Err(StatusCode::TOO_MANY_REQUESTS);`（`git log -S` 指向 3230e8b —— 返工提交，不是注释改动）；⑤ 对照：master `8601ac9` 的同一分支本来就是 `StatusCode::TOO_MANY_REQUESTS`，180f416 的 graft 把它改成了 UNAUTHORIZED，3230e8b 改回来 —— 属于『恢复 master 行为』。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-api-checks.txt",
+    "m6-qa6-runtime-independent.txt",
+    "m6-qa6-static-probes.txt",
+    "m6-qa6-demo-15-m6-lockout-and-cluster-info.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q532",
+   "constraint": "MRG6-17",
+   "title": "F-12 默认口令的文档补强（README 纯插入）与两条 grep 守卫",
+   "action": "grep -n '默认管理员口令' README.md；git diff 25f475a..HEAD -- README.md；sh qa/harness/doc-claims-checks.sh",
+   "expected": "README 有提示；代码默认值与 README 的示例值都不动；doc-claims FAIL 不增加",
+   "actual": "README.md:271–273 新增 4 行（纯插入、无删行）；`crates/common/src/config.rs:147` 仍是 `\"admin\"`，README:267 仍是 `admin123`，`deploy/server.yaml.example:13` 未动；doc-claims 整跑 73 PASS / 真实 FAIL 6，与上一轮逐条同名（6 条：LICENSE-FILE、ARCH-RETENTION、3 条 API-EP-IN-DOC、INSTALL-AGENT-USES-C），`DOC-ADMIN-PASSWORD-*` 两条仍 PASS。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-doc-claims.txt",
+    "m6-qa6-static-probes.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q533",
+   "title": "F-24 cluster/info：无数据时 idle_gpus / avg_gpu_utilization 回到 JSON null（原始响应体 + 与 master 逐行对照）",
+   "action": "sh qa/harness/ops-checks.sh（CLUSTER-INFO 段）；自写两态探针（有指标 / 清空 node_metrics）；diff master 与 HEAD 的 get_cluster_info",
+   "expected": "ops-checks 的 CLUSTER-INFO-NULL-IDLE-AND-AVG 由 FAIL 转 PASS；真实响应体里 idle_gpus 与 avg_gpu_utilization 是 null（不是 0）",
+   "actual": "① ops-checks 整跑（前置齐全：server + agent 都在）：`CHECK CLUSTER-INFO-NULL-IDLE-AND-AVG: PASS expected=1 actual=1`，`NOTE cluster/info with no metrics: {\"idle_gpus\":null,\"avg_gpu_utilization\":null,\"active_alerts\":0,\"running_jobs\":3}`；② 自写探针的原始响应体：有 6 张 GPU 指标（/api/nodes 里 qa-node-01 `gpu_count=6, status=online`）时 `{\"total_gpus\":6,\"idle_gpus\":6,\"avg_gpu_utilization\":0.0,\"active_alerts\":0}`；停 agent 并清空 node_metrics 后 `{\"total_gpus\":6,\"idle_gpus\":null,\"avg_gpu_utilization\":null,\"active_alerts\":0}`；两次调用后 server 都还活着；③ 归因：master `8601ac9` 的 `get_cluster_info` 用的就是 `get_gpu_utilization_summary` + Option → null（`diff` 显示 GPU 部分与 HEAD 逐行一致，只有注释多一句），是 180f416 的 graft 把它换成了『从最新指标快照聚合』并把无数据写成 0.0/0，3230e8b 把它改回 master 的写法 —— 也是『恢复 master 行为』。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-ops-checks.txt",
+    "m6-qa6-cluster-info-and-ops.txt",
+    "m6-qa6-static-probes.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q534",
+   "title": "F-25：合流新增的两项质量欠账（clippy 告警、重复代码）已消除",
+   "action": "node .gauntlet/gauntlet.mjs gate --profile quality；cargo clippy --workspace --all-targets --offline --message-format=short；node .gauntlet/gauntlet.mjs next --profile quality",
+   "expected": "warnings 闸门 0；duplication 0%；complexity / crap / coverage 三项已记录的 ❌ 原样保留、不重算成 PASS",
+   "actual": "GATE quality 的明细：`✅ warnings {\"warnings\":0}`、`✅ duplication {\"ratio\":0,\"clones\":0}`、`✅ tidy 0 findings`、`✅ scope 35/35 files`；三个已记录项仍是 `❌ complexity 34 offenders/435 函数 maxCC=23`、`❌ crap 56 offenders maxCRAP=552`、`❌ coverage 31.2%`（未美化）。下一轮距离：`NEXT quality: CONTINUE`，117 项 / 距离 **592.706**（上一轮 123 项 / 603.873；master 基线 97 项 / 409.505）—— 两项新增欠账确实消掉了，残差是合流新增代码的函数分布，M6 口径明确不还债（记为 F-29）。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-gate-quality.txt",
+    "m6-qa6-clippy-all-targets.txt",
+    "m6-qa6-next-quality.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q535",
+   "constraint": "MRG6-22",
+   "title": "F-26 的收尾：旧口径 F12 的两条失败项（复跑印证）",
+   "action": "NR_FIX_BASE=7ca587a sh qa/harness/no-root-fixes-checks.sh --no-slow",
+   "expected": "旧口径 11/12、F12 的失败项恰好两条（与 MRG6-10 原文一致）",
+   "actual": "实跑 `PASS=11 FAIL=1`（rc=1），F12 段打印：`F12 FAIL - 改动范围（nr-fixes 轮口径）落在允许集内、冻结面零改动、负例 5/5 — 失败项: | 改动文件全部落在 nr-fixes 轮允许集内 | crates/storage 与 crates/server 零改动`。MRG6-22 的『只有一条』仍是被证伪的文本，MRG6-23 是它的明文勘误。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-no-root-fixes-oldround.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q536",
+   "constraint": "MRG6-23",
+   "title": "MRG6-23 配对：勘误文字与实际口径逐字一致",
+   "action": "NR_FIX_BASE=7ca587a sh qa/harness/no-root-fixes-checks.sh --no-slow；sh qa/harness/no-root-fixes-checks.sh --no-slow",
+   "expected": "M6 轮 12/12；旧口径 11/12 且失败项恰好两条，与 qa/mrg6-errata3.json 的文本逐字一致",
+   "actual": "M6 轮：`PASS=12 FAIL=0`（rc=0），F1–F11 与合流前同结论、F12 在 m6 口径下 PASS（负例 5/5、正例 2/2）。旧口径：`PASS=11 FAIL=1`、F12 的两条失败项逐字匹配。勘误文件本身只被追加（`git log -1 -- qa/mrg6-errata3.json` = 3230e8b），MRG6-10 与 MRG6-22 的原文没有被改写。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-no-root-fixes-m6round.txt",
+    "m6-qa6-no-root-fixes-oldround.txt",
+    "m6-qa6-static-probes.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q537",
+   "constraint": "MRG6-24",
+   "title": "MRG6-24 配对：A 的两样资产『已就位、暂无消费者』的记法与『不删任何测试/资产』",
+   "action": "grep -rn 'MetricsAggregation|node_metrics_to_proto' crates --include='*.rs'；grep -n 'no product consumer' 两个模块；git diff 25f475a..HEAD -- crates/*/tests；git diff 8601ac9 -- crates tests | grep '^-.*#\\[test\\]'",
+   "expected": "两个模块仍在、测试仍绿、两处文档头逐字写明『asset in place, no product consumer yet』；没有任何测试或资产被删除",
+   "actual": "① 资产都在：`crates/common/src/metrics.rs`（6106 B）、`crates/storage/src/conversions.rs`（1788 B）；② 两处文档头逐字命中：`metrics.rs:4` 与 `conversions.rs:3` 都是 `**Status: asset in place, no product consumer yet (M6 rework round, F-27).**`；③ 消费者清单与 F-27 的实测一致（只有 tests/ 与文件自身的单元测试）；④ 返工**没有碰**任何测试目录（`git diff --name-only 25f475a..HEAD -- crates/common/tests crates/storage/tests` 为空）；⑤ 相对 8601ac9 没有被删除的 `#[test]` 行；cargo test 98 passed / 0 failed（metrics_acceptance 2/2、conversions_acceptance 2/2、integration_test 7/7 都在）。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-static-probes.txt",
+    "m6-qa6-gate-coder.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q538",
+   "constraint": "MRG6-20",
+   "title": "本轮判据程序在 5ceee91 上干净复跑：15/15",
+   "action": "sh qa/harness/merge-m6-checks.sh（全量，自己起停 server/agent）",
+   "expected": "`M6-CHECKS: PASS=15 FAIL=0`、rc=0",
+   "actual": "`M6-CHECKS: PASS=15 FAIL=0`，rc=0。逐条：M6-01 build rc=0；M6-02 tests 98/0；M6-03 无被删测试且 98 ≥ 59；M6-04 越界：无、冻结面：无；M6-05 NRM3 3 处/7 行；M6-06 提权 0、进程组 2 且 pre_exec 旁有 setsid；M6-07 no-root 12/0；M6-08 doc-claims ≤9 且 SIGKILL/force 两条 PASS；M6-09 TUI 13/13；M6-10 配置键 17/17；M6-11 api PASS=19 且审计端点 PASS；M6-12 新审计动作 4 种、total=473；M6-13 12 次同源失败登录里 2 次 429；M6-14 job-e2e 15/0；M6-15 重启后 health=200、11 张表、admin 1 行。跑完只剩常驻 PID 266643，未留任何自己起的进程。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-merge-m6-checks.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q539",
+   "constraint": [
+    "MRG6-01",
+    "MRG6-03",
+    "MRG6-21"
+   ],
+   "title": "编码阶段声称的 98/98 测试与 29/29 场景：独立闸门复跑",
+   "action": "node .gauntlet/gauntlet.mjs gate --profile coder；node .gauntlet/gauntlet.mjs spec",
+   "expected": "GATE coder: PASS，tests 98/0、acceptance 29/29、missing 0，spec 29 个场景",
+   "actual": "原样输出：`spec: 5 feature(s), 29 scenario(s)`；`tests: 98 total, 0 failed, 0 ignored`；`✅ spec {\"scenarios\":29,\"undefinedSteps\":0,\"ambiguous\":0}`、`✅ build`、`✅ tests {\"total\":98,\"failed\":0}`、`✅ acceptance {\"scenarios\":29,\"passed\":29,\"failed\":0,\"missing\":0}`、`GATE coder: PASS`。分项：audit_queries_acceptance 4/4、clusterscope-agent 16/16、clusterscope-server 16/16、clusterscope-tui 3/3、common 23/23、config_keys_acceptance 2/2、conversions_acceptance 2/2、integration_test 7/7、metrics_acceptance 2/2、no_root_agent_config 6/6、scheduler 12/12、user_queries_acceptance 5/5。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-gate-coder.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q540",
+   "constraint": "MRG6-14",
+   "title": "任务生命周期 / WS 广播 / 审计覆盖面 / 限速正判据（独立整跑）",
+   "action": "sh qa/harness/job-e2e.sh（server+agent 由 qa/harness 起停）；sh qa/harness/extra-checks.sh；sh qa/harness/merge-m6-checks.sh 的 M6-12/M6-13 段",
+   "expected": "job-e2e 0 FAIL；SEC-13 两行按翻转登记表变红；审计新动作 ≥3；12 次同源失败登录出现 429",
+   "actual": "job-e2e：`PASS=15 FAIL=0`（rc=0，含 JOB-SUCCEEDED/LOGS/CANCELLED/PROC-GONE、ALERT-*、WS 四条广播）。extra-checks：`PASS=6 FAIL=2`，两条 FAIL 正是翻转登记表预期的 `SEC-13-NO-IP-RATE-LIMIT`（expected=0 actual=1）与 `SEC-13-ALL-ATTEMPTS-401`（expected=20 actual=10）。M6-12：新动作种类 4（要求 ≥3），`GET /api/audit-logs` total=473；M6-13：12 次同源失败登录 = 401×10 + 429×2。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-job-e2e.txt",
+    "m6-qa6-extra-checks.txt",
+    "m6-qa6-merge-m6-checks.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q541",
+   "constraint": "MRG6-10",
+   "title": "四项无 root 修复在两个口径下的复跑",
+   "action": "sh qa/harness/no-root-fixes-checks.sh --no-slow；NR_FIX_BASE=7ca587a sh qa/harness/no-root-fixes-checks.sh --no-slow",
+   "expected": "M6 轮 12/12；旧口径 F1–F11 仍 PASS、F12 的范围断言 FAIL",
+   "actual": "M6 轮：`PASS=12 FAIL=0` rc=0，F1–F11 与合流前同结论（F2/F3/F4 就是 NRM2 指定的三条）。旧口径：`PASS=11 FAIL=1` rc=1，F1–F11 全 PASS、F12 FAIL（两条范围断言）。两套口径都没有放松断言集合（本轮只读脚本，未改任何 harness 行）。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-no-root-fixes-m6round.txt",
+    "m6-qa6-no-root-fixes-oldround.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q542",
+   "constraint": [
+    "MRG6-09",
+    "MRG6-18",
+    "MRG6-19"
+   ],
+   "title": "范围纪律、冻结面、分支纪律与共享机器纪律（本轮静态复核）",
+   "action": "git diff --numstat（657a 三个基线）、git diff --name-only 冻结面、git log --merges、git for-each-ref refs/remotes、ps -o pid,lstart,cmd -p 266643、loginctl show-user $USER -p Linger",
+   "expected": "约束只追加；冻结面零改动；没有整体 merge；没有 push；PID 266643 启动时间不变；Linger=yes",
+   "actual": "约束清单：相对 7ca587a `384 0`、相对 8601ac9 `244 0`、相对本轮起点 25f475a `21 0`（三处第二列都是 0 = 零删行）；冻结面（web/、deploy/nginx.conf、.gauntlet/、gauntlet.config.json、gauntlet-baseline.json）在 8601ac9 与本轮起点两个口径下都**空**；`git log --merges 8601ac9..HEAD` 空（没有整体 merge）；`git diff 8601ac9 -- crates tests | grep '^-.*#\\[test\\]'` 空；`git for-each-ref refs/remotes` 只有 B 线的 b/master（本分支没有 push，远端无对应 ref）；PID 266643 `Wed Sep 2 12:59:26 2026 /public/tianyuyang/.local/bin/clusterscope-agent …` 与开工时逐字一致，全程未碰它、它的 unit 或 ~/.config/clusterscope/；Linger=yes 未变；全程没有 pkill/killall，只按 PID 文件停自己起的进程（本轮结束只剩 266643 与一个无关 esbuild）。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-static-probes.txt",
+    "m6-qa6-merge-m6-checks.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q543",
+   "title": "ops-checks 的 FAIL 集合只减不增：F-24 那条翻转，其余三条与上一轮同名",
+   "action": "sh qa/harness/ops-checks.sh（前置：server + agent 都起着）",
+   "expected": "FAIL ≤ 上一轮的 4 条，且 CLUSTER-INFO-NULL-IDLE-AND-AVG 由 FAIL 转 PASS",
+   "actual": "`PASS=20 FAIL=3`：`CLI-HELP-SERVER-EXIT`（基线既有：`clusterscope-server --help` 走的是『把 --help 当配置路径』的路径，exit 1）、`HISTORY-DAILY-SOURCE`（已记录的 F-02）、`CLUSTER-INFO-NULL-ACTIVE-ALERTS`（已记录的 F-12）。上一轮是 4 条（多出的正是 CLUSTER-INFO-NULL-IDLE-AND-AVG，本轮已 PASS）。其余段全部 PASS：迁移幂等（重启后 11 张表、admin 1 行）、节点重注册、2s 上报节奏（20s 内 10 行）、保留策略（老化 raw 被清、新鲜的保留）、小时档 history、分页参数 400。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-ops-checks.txt",
+    "m6-qa6-cluster-info-and-ops.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q544",
+   "title": "受影响的无根不变量（NR-06/06b/12/13/14 与 M10/NRM1–NRM8）没有回归",
+   "action": "sh qa/harness/no-root-checks.sh --no-slow（作者口径 NR1–NR21）；merge-m6-checks.sh 的 M6-05/06/07 段",
+   "expected": "与上一轮逐条同名；NRM1–NRM8 的机器判据仍成立",
+   "actual": "no-root-checks：21 条检查（NR1–NR21 + NR6b + MRG-02）与上一轮**逐条同名**，5 条 FAIL 也完全相同：NR6（agent 显式 -c 缺失时 exit 1）、NR6b（因此没建 HOME 本地日志目录）、NR8（agent/src/main.rs 里已无 `default_value = \"/etc/clusterscope/agent.yaml\"`）、NR13（README 的 systemctl --user 行 vs 随仓库发布的 unit）、NR15（system-unit count=4）——这 5 条量到的文件合流与本轮返工都没碰（deploy/ 相对 8601ac9 零改动），归因与上一轮 Q529 的 git 证据一致，是 no-root 轮的基线属性，不是合流回归。NRM1/NRM2：F2/F3/F4 PASS，uid/端口/health 三条在运行时检查里成立；NRM3/NRM4：实质命中 3 处、全部命中 7 行，12 个 graft 文件逐文件无未解释命中；NRM5：提权族 0 行、进程组族 2 行（pre_exec 旁有 setsid）；NRM6/NRM7：F5–F9 仍 PASS；NRM8：M6-05…M6-15 同时成立（15/15）。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-no-root-checks.txt",
+    "m6-qa6-merge-m6-checks.txt",
+    "m6-qa6-static-probes.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q545",
+   "title": "（⚠️ 未闭合项）`clippy --all-targets` 的 9 条 MutexGuard 告警：不在基线 8601ac9，属本分支引入 —— 与编码阶段自述的『既有』不符",
+   "action": "cargo clippy --workspace --all-targets --offline --message-format=short；git ls-tree -r --name-only 8601ac9 -- crates/storage/tests；git log --diff-filter=A --format='%h %ci %s' -- crates/storage/tests/*.rs；git diff --name-only 25f475a..HEAD -- crates/storage/tests",
+   "expected": "判定这 9 条是否『既有』：在基线 8601ac9 上同样存在 = 既有；本次新引入 = 回归",
+   "actual": "① clippy 输出：`rc=0`、11 条 `warning:` 行 —— 其中 9 条是 lint 本体（`this MutexGuard is held across an await point`：audit_queries_acceptance.rs 4 条、user_queries_acceptance.rs 5 条，行号 99/142/145/165/172/179/215/223/247），另 2 条是 `generated 4/5 warnings` 的汇总行（clippy 以 0 退出，不是非零失败）。② 基线判定：`git ls-tree -r --name-only 8601ac9 -- crates/storage/tests` **空** —— 这三个测试文件在 8601ac9 根本不存在（在合流里新增 651 行），因此这 9 条告警**不可能**在基线上存在。③ 引入点：`8100441`（M6 step1 验收测试，2026-10-07 20:03）、`6b504be`（graft B user_queries.rs）、`4eee91e`（步骤 3 A 资产）—— 都是本轮合流提交，**不是**返工提交（`git diff --name-only 25f475a..HEAD -- crates/storage/tests` 为空 = 返工没碰它们）。④ 结论：按任务书给的基线口径，这 9 条**不是既有**，而是**本分支（M6 合流）引入**的；但它们落在 `gauntlet.config.json` 的 exclude（`**/tests/**`）里，`warnings` 闸门（只量 sources）因此仍是 `warnings=0`，任何闸门都不覆盖它们。编码阶段自述的『9 条既有』在『返工轮之前就有』的意义上成立，在任务书的『基线 8601ac9 上同样存在』口径上不成立 —— 记 F-28，交由 Leader 决定（修测试里的 guard 跨越 await，或由第 0 阶段的度量范围口径覆盖测试）。",
+   "status": "fail",
+   "verdict": "violated",
+   "evidence": [
+    "m6-qa6-clippy-all-targets.txt",
+    "m6-qa6-static-probes.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
+  },
+  {
+   "id": "Q546",
+   "constraint": "MRG6-20",
+   "title": "演示脚本在本轮树上可回放（13/14/15 三个 exit 0）",
+   "action": "node .gauntlet/gauntlet.mjs demo demo/{13,14,15}-*.json",
+   "expected": "三个脚本重放 exit 0；判据翻转的两条（429 / null）在 demo 里可见",
+   "actual": "13-m6-audit-endpoint rc=0（api-checks 步骤 exit 1 = 预期，矩阵里只剩 DOC-GET-USERS-READONLY 一条 FAIL）；14-m6-force-cancel rc=0；新增的 15-m6-lockout-and-cluster-info rc=0，录制内容含 `锁定期内用【正确】口令 -> HTTP 429`、`failed=5 locked_until=…`、有数据 `{\"total_gpus\":6,\"idle_gpus\":6,\"avg_gpu_utilization\":0.0}`、无数据 `{\"idle_gpus\":null,\"avg_gpu_utilization\":null}`。三个 demo 跑完只剩常驻 PID 266643。",
+   "status": "pass",
+   "verdict": "holds",
+   "evidence": [
+    "m6-qa6-demo-13-m6-audit-endpoint.txt",
+    "m6-qa6-demo-14-m6-force-cancel.txt",
+    "m6-qa6-demo-15-m6-lockout-and-cluster-info.txt"
+   ],
+   "ts": "2026-10-07T17:25Z"
   }
  ],
  "findings": [
@@ -2893,7 +3219,10 @@
     "m6-qa5-adversarial.txt",
     "m6-qa5-api-checks.txt",
     "m6-qa5-merge-m6-checks.txt"
-   ]
+   ],
+   "round1_status_note": "round 1（3fc31d5/25f475a）记录时本条没有 status 字段，本轮补上。",
+   "status": "closed",
+   "round2": "**已闭合（3230e8b，round 2 复验 Q531）**：锁定分支改回 `StatusCode::TOO_MANY_REQUESTS`（runtime 429、api-checks SEC-LOGIN-LOCKOUT PASS、独立探针 429、DB 行 failed=5 + locked_until）。修复方式与 master 8601ac9 的同一分支逐行等价（`git log -S` 指向 3230e8b）。api-checks 的 PASS 数因此从 18 回到 19（MRG6-02 的判据第一次真正成立）。"
   },
   {
    "id": "F-24",
@@ -2910,7 +3239,10 @@
    ],
    "evidence": [
     "m6-qa5-ops-checks.txt"
-   ]
+   ],
+   "round1_status_note": "round 1（3fc31d5/25f475a）记录时本条没有 status 字段，本轮补上。",
+   "status": "closed",
+   "round2": "**已闭合（3230e8b，round 2 复验 Q533）**：`get_cluster_info` 改回 master 的 `get_gpu_utilization_summary` + Option 写法，无指标数据时 `idle_gpus`/`avg_gpu_utilization` 是 JSON null（原始响应体见 m6-qa6-cluster-info-and-ops.txt）；ops-checks 的 CLUSTER-INFO-NULL-IDLE-AND-AVG 由 FAIL 转 PASS。"
   },
   {
    "id": "F-25",
@@ -2929,7 +3261,10 @@
     "m6-qa5-gate-quality.txt",
     "m6-qa5-next-quality.txt",
     "m6-qa5-nrm44.txt"
-   ]
+   ],
+   "round1_status_note": "round 1（3fc31d5/25f475a）记录时本条没有 status 字段，本轮补上。",
+   "status": "closed",
+   "round2": "**两项已闭合，残差另记为 F-29（round 2 复验 Q534）**：`warnings` 闸门回到 0（auth.rs 的 items-after-test-module 把 validate_password_strength 移到测试模块之前、job_executor.rs 的字段赋值改成结构体字面量）；`duplication` 回到 0.0%（user_queries.rs 里那对孪生 FOR UPDATE 块抽成了共享守卫 `lock_admins_and_read_target`）。距离项从 603.873 降到 592.706（117 项），仍高于 master 的 409.505 —— 这部分是合流新增代码的函数分布，M6 口径明确不还债，单列 F-29。"
   },
   {
    "id": "F-26",
@@ -2944,7 +3279,10 @@
    ],
    "evidence": [
     "m6-qa5-no-root-fixes-oldround.txt"
-   ]
+   ],
+   "round1_status_note": "round 1（3fc31d5/25f475a）记录时本条没有 status 字段，本轮补上。",
+   "status": "closed",
+   "round2": "**已闭合（3230e8b，round 2 复验 Q535/Q536）**：勘误文字改成『失败项恰好两条』并追加 MRG6-23；旧口径复跑 `PASS=11 FAIL=1`、F12 打印的两条失败项逐字匹配。断言集合与脚本一行未动（改的是勘误文本，不是取样口径）。"
   },
   {
    "id": "F-27",
@@ -2960,7 +3298,48 @@
    ],
    "evidence": [
     "m6-qa5-assets-and-409.txt"
-   ]
+   ],
+   "round1_status_note": "round 1（3fc31d5/25f475a）记录时本条没有 status 字段，本轮补上。",
+   "status": "closed",
+   "round2": "**已按处置 (b) 闭合（3230e8b，round 2 复验 Q537）**：两个模块的文档头各自写明 `asset in place, no product consumer yet (M6 rework round, F-27)` 并给出未来接线的前提；追加 MRG6-24 记录处置与理由；两个模块、两个测试文件、4 条 Gherkin 场景一个都没删（98 passed / 0 failed）。MRG6-07 的路径写法不精确（仓库根 `tests/integration_test.rs`）仍留在原文，属已记录的口径差异，未改约束。"
+  },
+  {
+   "id": "F-28",
+   "constraint": null,
+   "severity": "minor",
+   "title": "`clippy --all-targets` 的 9 条 MutexGuard-across-await 告警不是『基线既有』：它们是本分支（M6 合流）新增的测试文件带来的，且不在任何闸门的度量范围内",
+   "impact": "编码阶段把 `crates/storage/tests/**` 里的 9 条告警描述成『既有』。按任务书给的判定口径（在基线 8601ac9 上同样存在 = 既有；本次新引入 = 回归），这个说法**不成立**：`crates/storage/tests/{audit_queries,user_queries,conversions}_acceptance.rs` 在 8601ac9 并不存在（合流里新增 651 行，由 8100441 / 6b504be / 4eee91e 引入），所以告警不可能存在于基线。它们也不是返工轮引入的（`git diff --name-only 25f475a..HEAD -- crates/storage/tests` 为空）。由于 `**/tests/**` 在 `gauntlet.config.json` 的 exclude 里，`cargo clippy --workspace --all-targets` 会打印它们，但 `warnings` 闸门（只量 sources）仍是 0，任何闸门都不覆盖——即『没有变红，但也没人盯着』。",
+   "rootCause": "合流新增的验收测试在 `#[tokio::test]` 里用 `let _guard = lock_fixture();` 把串行化用的 `MutexGuard` 持有到 await 之后（为了让 fixture 串行、避免共享库上的用例互相踩），这在 clippy 的 `await_holding_lock` 规则下是告警；测试文件的写法没有被任何闸门约束。",
+   "repro": [
+    "cargo clippy --workspace --all-targets --offline --message-format=short   # rc=0，打印 9 条 'this `MutexGuard` is held across an await point'",
+    "git ls-tree -r --name-only 8601ac9 -- crates/storage/tests                # 空 = 该路径在基线不存在",
+    "git log --diff-filter=A --format='%h %ci %s' -- crates/storage/tests/*.rs # 8100441 / 6b504be / 4eee91e",
+    "git diff --name-only 25f475a..HEAD -- crates/storage/tests                 # 空 = 返工轮没碰过"
+   ],
+   "evidence": [
+    "m6-qa6-clippy-all-targets.txt",
+    "m6-qa6-static-probes.txt"
+   ],
+   "status": "open",
+   "round2": "本轮只记录，不判定为 M6 验收判据的失败项：9 条都落在配置的 exclude 内，`warnings` 闸门 0、`gate --profile coder/quality` 的判定与既有一致。需要 Leader 决定：改测试写法（把 guard 限制在同步作用域 / 用 `spawn_blocking` 之外的手段串行化），或由第 0 阶段把测试目录的度量口径写清楚。"
+  },
+  {
+   "id": "F-29",
+   "constraint": null,
+   "severity": "info",
+   "title": "M7 的欠账残差：`next --profile quality` 距离 592.706 / 117 项（master 基线 409.505 / 97 项）——本轮不还债，如实记录",
+   "impact": "合流（+98 个测试/产品函数）把 `next` 的质量距离从 master 的 409.505 推到 592.706。轮 1 记录的三条『变差』里，两条已消除（warnings 0、duplication 0）；剩下的距离残差来自合流新增代码的 complexity / crap / coverage 分布（complexity 34 offenders、crap 56 offenders、覆盖率 31.2%）。",
+   "rootCause": "M6 的范围是『合流 + 修合流前必修项』，M7 的 97 项欠账/距离 409.5 是已记录的审查结论，本轮明确不还债、不重算成 PASS；新增代码（handlers/main/grpc 的合并实现）本身带来新的超标函数与未覆盖行。",
+   "repro": [
+    "node .gauntlet/gauntlet.mjs next --profile quality   # 117 项 / 592.706（上一轮 123 / 603.873）",
+    "node .gauntlet/gauntlet.mjs gate --profile quality   # complexity/crap/coverage 三项 ❌，warnings/duplication ✅"
+   ],
+   "evidence": [
+    "m6-qa6-next-quality.txt",
+    "m6-qa6-gate-quality.txt"
+   ],
+   "status": "open",
+   "round2": "不作为本轮 verdict 的失败项（没有任何 MRG6 约束以距离为判据）；留给报告阶段与 Leader 决定是否单开一轮还债。"
   }
  ],
  "checklistDiscoveries": [
@@ -3163,7 +3542,7 @@
  },
  "demos": {
   "howToRun": "node .gauntlet/gauntlet.mjs demo demo/<file>.json —— 每个脚本自带 server/agent 的起停（只按 PID 文件停），录制的 HTML / .cast / .txt 落在 gauntlet-out/evidence/demos/（gitignored，第 6 阶段重跑即再生成）。",
-  "allVerified": "10 个脚本全部在 node 上真跑过，退出码 0（含若干「预期非 0」的步骤，见各条的 evidence）",
+  "allVerified": "13 个脚本全部在 node 上真跑过、退出码 0（含若干「预期非 0」的步骤，见各条的 evidence）；其中 demo/13、demo/14、demo/15 是 2026-10-08 在返工后的树上重放的（merge-m6 分支）。",
   "items": [
    {
     "file": "demo/01-build-and-test-gates.json",
@@ -3243,14 +3622,23 @@
     "verified": true,
     "exit": 0,
     "expectedNonZeroSteps": 1,
-    "evidence": "api-checks 里 DOC-GET-AUDIT-LOGS PASS/200，同时暴露 SEC-LOGIN-LOCKOUT 429→401；6 组筛选全部一致（354/354/354 等）；坏参数 400"
+    "evidence": "api-checks 里 DOC-GET-AUDIT-LOGS PASS/200，同时暴露 SEC-LOGIN-LOCKOUT 429→401；6 组筛选全部一致（354/354/354 等）；坏参数 400",
+    "round2": "文案按 F-23 闭合更新（不再说『还能看到 SEC-LOGIN-LOCKOUT 回归』），2026-10-08 重放 exit 0"
    },
    {
     "file": "demo/14-m6-force-cancel.json",
     "主题": "取消升级：普通取消 SIGTERM（被忽略）→ 5s SIGKILL 升级；?force=true 直接 SIGKILL；终端任务 409",
     "verified": true,
     "exit": 0,
-    "evidence": "普通取消 9626 ms + 'SIGTERM ignored, escalating to SIGKILL'；force 4867 ms + 'Forced cancellation — sending SIGKILL'；succeeded → 409 / 未知 → 404 / queued → 200"
+    "evidence": "普通取消 9626 ms + 'SIGTERM ignored, escalating to SIGKILL'；force 4867 ms + 'Forced cancellation — sending SIGKILL'；succeeded → 409 / 未知 → 404 / queued → 200",
+    "round2": "2026-10-08 重放 exit 0（未改内容）"
+   },
+   {
+    "file": "demo/15-m6-lockout-and-cluster-info.json",
+    "主题": "返工复验的两条翻转判据：锁定账号 429（F-23）与 cluster/info 无数据时 JSON null（F-24）",
+    "verified": true,
+    "exit": 0,
+    "evidence": "录制内容：5 次错口令 401 → 正确口令 429；有数据 {total_gpus:6,idle_gpus:6,avg_gpu_utilization:0.0}；无数据 {idle_gpus:null,avg_gpu_utilization:null}"
    }
   ]
  },
@@ -3414,7 +3802,26 @@
   "qa/evidence/m6-qa5-final-checks.txt",
   "qa/evidence/m6-qa5-burst-codes.txt",
   "qa/evidence/m6-qa5-demo-13.txt",
-  "qa/evidence/m6-qa5-demo-14.txt"
+  "qa/evidence/m6-qa5-demo-14.txt",
+  "qa/evidence/m6-qa6-clippy-all-targets.txt",
+  "qa/evidence/m6-qa6-gate-coder.txt",
+  "qa/evidence/m6-qa6-gate-quality.txt",
+  "qa/evidence/m6-qa6-next-quality.txt",
+  "qa/evidence/m6-qa6-doc-claims.txt",
+  "qa/evidence/m6-qa6-merge-m6-checks.txt",
+  "qa/evidence/m6-qa6-api-checks.txt",
+  "qa/evidence/m6-qa6-runtime-independent.txt",
+  "qa/evidence/m6-qa6-cluster-info-and-ops.txt",
+  "qa/evidence/m6-qa6-job-e2e.txt",
+  "qa/evidence/m6-qa6-extra-checks.txt",
+  "qa/evidence/m6-qa6-ops-checks.txt",
+  "qa/evidence/m6-qa6-no-root-fixes-m6round.txt",
+  "qa/evidence/m6-qa6-no-root-fixes-oldround.txt",
+  "qa/evidence/m6-qa6-no-root-checks.txt",
+  "qa/evidence/m6-qa6-static-probes.txt",
+  "qa/evidence/m6-qa6-demo-13-m6-audit-endpoint.txt",
+  "qa/evidence/m6-qa6-demo-14-m6-force-cancel.txt",
+  "qa/evidence/m6-qa6-demo-15-m6-lockout-and-cluster-info.txt"
  ],
  "stage5HarnessAdditions": [
   {
@@ -3456,6 +3863,11 @@
    "file": "qa/harness/m6-demo-terminal-409.sh",
    "purpose": "demo/14 的收尾：终端任务再取消 409 / 未知 404 / queued 取消 200",
    "note": "同上"
+  },
+  {
+   "file": "qa/harness/m6-demo-lockout-cluster.sh",
+   "purpose": "demo/15 的可回放主体：① 建号 + 5 次错口令 + 正确口令（看 429 与 DB 行）；② cluster/info 两态对比（先等 qa-node-01 自己上报 gpu_metrics，再停 agent 清表看 null），每步打印原始 JSON。",
+   "note": "第 5 阶段返工复验新增；只按 PID 文件起停 agent，不改任何既有脚本与约束。"
   }
  ],
  "reproduceInOneGo": [

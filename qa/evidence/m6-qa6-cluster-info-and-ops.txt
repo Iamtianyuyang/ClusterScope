@@ -1,0 +1,104 @@
+server up (pid 3862224), config /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/server.yaml, log /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/server.log
+agent started (pid 3862375), config /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/agent.yaml, log /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/agent.log
+== node_metrics rows with gpu_metrics: 1 (total 1) after 1x2s ==
+== gpu_metrics sample ==
+[
+    {
+        "name": "NVIDIA L20",
+        "uuid": "GPU-2eef3d29-56fd-cfe3-9ada-4031de98b34b",
+        "index": 0,
+        "mig_enabled": false,
+        "power_watts": 36.625999450683594,
+        "utilization_gpu": 0.0,
+        "fan_speed_percent": null,
+        "memory_used_bytes": 10158080,
+        "memory_total_bytes": 48305799168,
+        "utilization_memory": 0.0,
+        "temperature_celsius": 31.0
+    },
+    {
+        "name": "NVIDIA L20",
+        "uuid": "GPU-b4cc679d-b31c-a384-ecb1-224961407349",
+        "index": 1,
+        "mig_enabled": false,
+        "power_watts": 35.667999267578125,
+        "utilization_gpu": 0.0,
+        "fan_speed_percent": null,
+        "memory_used_bytes": 10092544,
+        "memory_total_bytes": 48305799168,
+        "utilization_memory": 0.0,
+        "temperature_celsius": 30.0
+    },
+    {
+        "name": "NVIDIA L20",
+        "uuid": "GPU-b4164bcb-e2d1-96b2-431f-3676fad8fdc0",
+        "index": 2,
+        "mig_enabled": false,
+        "power_watts": 35.20600128173828,
+        "utilization_gpu": 0.0,
+        "fan_speed_percent": null,
+        "memory_used_bytes": 10092544,
+        "memory_total_bytes": 48305799168,
+        "utilization_memory": 0.0,
+        "temperature_celsius": 29.0
+    },
+    {
+        "name": "NVIDIA L20",
+        "uuid": "GPU-90e56ca1-2247-2367-1c93-a1374cf7fabc",
+        "index": 3,
+        "mig_enabled": false,
+        "power_watts": 33.98699951171875,
+        "utilization_gpu": 0.0,
+        "fan_speed_percent": null,
+        "memory_used_bytes": 10092544,
+        "memory_total_bytes": 48305799168,
+        "utilization_memory": 0.0,
+        "temperature_celsius": 29.0
+    },
+    {
+        "name": "NVIDIA L20",
+        "uuid": "GPU-f89812fe-ad14-1e18-7c76-be9cece275fb",
+        "index": 4,
+        "mig_enabled": false,
+        "power_watts": 32.80799865722656,
+        "utilization_gpu": 0.0,
+        "fan_speed_percent": null,
+        "memory_used_bytes": 10092544,
+        "memory_total_bytes": 48305799168,
+        "utilization_memory": 0.0,
+        "temperature_celsius": 30.0
+    },
+    {
+        "name": "NVIDIA L20",
+        "uuid": "GPU-91ff8843-f6f4-ee4b-d4b5-af394f39ae57",
+        "index": 5,
+        "mig_enabled": false,
+        "power_watts": 34.948001861572266,
+        "utilization_gpu": 0.0,
+        "fan_speed_percent": null,
+        "memory_used_bytes": 10092544,
+        "memory_total_bytes": 48305799168,
+        "utilization_memory": 0.0,
+        "temperature_celsius": 28.0
+    }
+]
+== GET /api/cluster/info WITH metrics: http_code + raw body ==
+http_code=200
+{"active_alerts":0,"avg_gpu_utilization":0.0,"degraded_nodes":0,"idle_gpus":6,"offline_nodes":0,"online_nodes":1,"running_jobs":3,"total_gpus":6,"total_nodes":1}
+== and jq view ==
+{"idle_gpus":6,"avg_gpu_utilization":0.0,"active_alerts":0,"total_gpus":6,"running_jobs":3,"online_nodes":1,"total_nodes":1}
+== server alive after the call? ==
+yes (pid 3862224)
+agent stopped (pid 3862375)
+DELETE 1
+== node_metrics rows now: 0 ==
+== GET /api/cluster/info WITH NO DATA: http_code + raw body ==
+http_code=200
+{"active_alerts":0,"avg_gpu_utilization":null,"degraded_nodes":0,"idle_gpus":null,"offline_nodes":0,"online_nodes":1,"running_jobs":3,"total_gpus":6,"total_nodes":1}
+== and jq view ==
+{"idle_gpus":null,"avg_gpu_utilization":null,"active_alerts":0,"total_gpus":6,"running_jobs":3}
+== server alive after the call? ==
+yes (pid 3862224)
+agent started (pid 3863016), config /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/agent.yaml, log /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/qa/agent.log
+agent stopped (pid 3863016)
+server stopped (pid 3863859)

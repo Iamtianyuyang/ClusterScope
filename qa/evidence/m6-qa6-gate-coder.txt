@@ -1,0 +1,31 @@
+spec: 5 feature(s), 29 scenario(s)（commands 适配器：场景与测试按名称对应）
+$ sh -c "export PATH=$HOME/.cargo/bin:$PATH; cargo build --workspace --all-targets --offline"
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.32s
+$ sh -c "export PATH=$HOME/.cargo/bin:$PATH; node gauntlet-tools/rust-gate.mjs --out gauntlet-out"
+$ cargo test --workspace --offline --no-run   (CARGO_TARGET_DIR=/public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target)
+  build+link of test targets: 0.3s, 14 test binaries (+1 product binary/binaries, built for CARGO_BIN_EXE_*, not run)
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/audit_queries_acceptance-2d04a077a0124632
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/clusterscope_agent-111271eff9ab18e4
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/clusterscope_server-94371fd6df4775f1
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/clusterscope_tui-8016a4e51149779b
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/common-a03f0975af0850ce
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/config_keys_acceptance-27b3581892acfaa9
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/conversions_acceptance-e20f5ca3a8f6907c
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/integration_test-3992251384f32bd0
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/metrics_acceptance-fa3fc5647013618a
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/no_root_agent_config-edda0de4e4926171
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/protocol-b759908bedaf5eb2
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/scheduler-661f5b02c34ac966
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/storage-b583c53242347bde
+$ /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/cov-target/debug/deps/user_queries_acceptance-4f0af94ec9596244
+tests: 98 total, 0 failed, 0 ignored -> /public/tianyuyang/code/ClusterScope-review/merge-m6/gauntlet-out/junit.xml
+  audit_queries_acceptance (test): 4/4, clusterscope-agent (bin): 16/16, clusterscope-server (bin): 16/16, clusterscope-tui (bin): 3/3, common (lib): 23/23, config_keys_acceptance (test): 2/2, conversions_acceptance (test): 2/2, integration_test (test): 7/7, metrics_acceptance (test): 2/2, no_root_agent_config (test): 6/6, protocol (lib): 0/0, scheduler (lib): 12/12, storage (lib): 0/0, user_queries_acceptance (test): 5/5, Doc-tests common: 0/0, Doc-tests protocol: 0/0, Doc-tests scheduler: 0/0, Doc-tests storage: 0/0
+coverage: 38 instrumented file(s) in lcov.info
+
+══ GATE (coder) ══
+  ✅ spec         {"scenarios":29,"undefinedSteps":0,"ambiguous":0}
+  ✅ build        {}
+  ✅ tests        {"total":98,"failed":0}
+  ✅ acceptance   {"scenarios":29,"passed":29,"failed":0,"missing":0,"failedScenarios":[],"missingScenarios":[]}
+
+GATE coder: PASS

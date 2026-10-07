@@ -4,7 +4,7 @@
   "steps": [
     { "say": "起一个只读模式（auth_required:false）的 server，连本机 PostgreSQL 16.4" },
     { "run": "sh qa/harness/server-up.sh false", "timeoutSec": 90 },
-    { "say": "20 条 REST 安全矩阵：DOC-GET-AUDIT-LOGS 已从 500 翻成 200；同一矩阵里还能看到新引入的 SEC-LOGIN-LOCKOUT 回归（429 → 401，见 qa/qa-report.json 的 F-23）" },
+    { "say": "20 条 REST 安全矩阵：DOC-GET-AUDIT-LOGS 已从 500 翻成 200；SEC-LOGIN-LOCKOUT 在返工后回到 429（F-23 已闭合，见 qa/qa-report.json）——矩阵里唯一剩下的 FAIL 是 DOC-GET-USERS-READONLY（F-07 的取舍），所以退出码仍是 1" },
     { "run": "sh qa/harness/api-checks.sh", "timeoutSec": 180, "expectCode": 1 },
     { "say": "核心判据：任何筛选条件都要让 total 等于实回条数（F-16 的 COUNT 语句必须绑上自己的参数），并与 psql 的计数对齐" },
     { "run": "sh qa/harness/m6-demo-audit.sh", "timeoutSec": 120 },
