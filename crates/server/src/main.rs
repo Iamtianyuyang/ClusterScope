@@ -465,9 +465,13 @@ async fn run_scheduler_cycle(state: &Arc<AppState>) {
     }
 
     // Load queued jobs (oldest first) and hand them to the capacity-aware
-    // scheduler. The scheduler dedups by job_id, so reloading every cycle is
-    // safe and never grows the queue while jobs wait for capacity.
-    if let Ok(rows) = storage::job_queries::list_queued_jobs(state.database.pool(), 1000).await {
+    // scheduler. Newest-first with a page cap would starve the oldest jobs
+    // whenever more than one page is queued. All queued jobs are loaded —
+    // the in-memory queue dedups on job_id, and capping the scan would
+    // head-of-line-block newer jobs behind the oldest unschedulable ones.
+    if let Ok(rows) = storage::job_queries::list_queued_jobs_for_scheduling(
+        state.database.pool(),
+    ).await {
         for row in rows {
             if let Some(job) = job_row_to_job(&row) {
                 state.scheduler.enqueue(job).await;

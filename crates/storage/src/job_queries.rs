@@ -134,6 +134,35 @@ pub async fn list_jobs(
     Ok((jobs, total))
 }
 
+/// Oldest-first scan of queued jobs for the scheduler.
+///
+/// The API-facing [`list_jobs`] is newest-first and capped at one page, so a
+/// scheduler reusing it would starve the oldest jobs: whenever more than
+/// `page_size` jobs are queued, every cycle would re-scan the same newest
+/// 100 while older jobs never enter the in-memory queue. Oldest-first keeps
+/// FIFO ordering (a job waits while the jobs ahead of it wait).
+///
+/// All queued jobs are loaded (no page cap): the in-memory scheduler queue
+/// dedups on job_id, so a cap here would let the N oldest unschedulable jobs
+/// (e.g. all pinned to one busy node) occupy the queue forever while newer
+/// jobs — that could run on free nodes — never get a chance (head-of-line
+/// blocking).
+pub async fn list_queued_jobs_for_scheduling(pool: &PgPool) -> Result<Vec<JobRow>> {
+    sqlx::query_as::<_, JobRow>(
+        r#"
+        SELECT job_id, COALESCE(node_id, '') AS node_id, name, executable, arguments,
+       working_directory, environment, status, pid, exit_code, error_message,
+       created_at, started_at, finished_at, created_by, resource_quota,
+       retry_count, max_retries FROM jobs
+        WHERE status = 'queued'
+        ORDER BY created_at ASC
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+    .context("Failed to list queued jobs for scheduling")
+}
+
 /// Fetch jobs for a node that need agent attention: assigned (`starting`)
 /// and cancellation requests (`stopping`).
 pub async fn get_jobs_for_node(pool: &PgPool, node_id: &str) -> Result<Vec<JobRow>> {
