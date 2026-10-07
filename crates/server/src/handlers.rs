@@ -321,9 +321,12 @@ pub async fn login(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    // A locked account answers 429: the documented contract tells the client
-    // to back off until `locked_until` passes (the QA lockout check drives
-    // exactly this path).
+    // A locked account answers 429 (not 401): the documented contract tells
+    // the client to back off until `locked_until` passes, and 429 is what
+    // master answered before the graft (the QA lockout check drives exactly
+    // this path). A locked account is therefore distinguishable from a wrong
+    // password — acceptable, because the account is already known to the
+    // caller and the lock is what protects it.
     if let Some(locked_until) = user.locked_until
         && locked_until > Utc::now()
     {
@@ -340,7 +343,7 @@ pub async fn login(
         .await
         .ok();
         login_failed(&state, &client_ip, &req.username);
-        return Err(StatusCode::UNAUTHORIZED);
+        return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
     // Verify password
@@ -1708,32 +1711,19 @@ pub async fn get_cluster_info(
         .filter(|n| n.status == common::node_registry::NodeStatus::Offline)
         .count();
 
-    // Aggregate GPU stats from the latest metrics snapshot per node instead
-    // of returning hardcoded placeholders.
-    let latest = storage::queries::get_latest_metrics_all(state.database.pool())
+    let total_gpus: u32 = nodes.iter().map(|n| n.gpu_count).sum();
+
+    // Real values from the latest metrics report per node. `None` when no
+    // metrics have arrived yet — reported as JSON null, never as fake 0s
+    // (README:442 promises exactly that). Busy = GPU with utilization
+    // >= 1% in its latest report.
+    let gpu_summary = storage::queries::get_gpu_utilization_summary(state.database.pool())
         .await
-        .unwrap_or_default();
-    let (mut total_gpus, mut busy_gpus, mut util_sum, mut util_count) = (0u32, 0u32, 0.0f64, 0u32);
-    for m in &latest {
-        if let Some(gpus) = m.gpu_metrics.as_ref().and_then(|v| v.as_array()) {
-            for g in gpus {
-                total_gpus += 1;
-                let util = g
-                    .get("utilization_gpu")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-                util_sum += util;
-                util_count += 1;
-                if util >= 1.0 {
-                    busy_gpus += 1;
-                }
-            }
-        }
-    }
-    let avg_gpu_utilization = if util_count > 0 {
-        util_sum / util_count as f64
-    } else {
-        0.0
+        .ok()
+        .flatten();
+    let (avg_gpu_utilization, idle_gpus) = match gpu_summary {
+        Some((avg, busy, total)) => (Some(avg), Some((total - busy).max(0))),
+        None => (None, None),
     };
 
     // Count running jobs (the count comes from the query's total — the row
@@ -1757,8 +1747,8 @@ pub async fn get_cluster_info(
         "degraded_nodes": degraded,
         "offline_nodes": offline,
         "total_gpus": total_gpus,
-        "idle_gpus": total_gpus.saturating_sub(busy_gpus),
-        "avg_gpu_utilization": (avg_gpu_utilization * 10.0).round() / 10.0,
+        "idle_gpus": idle_gpus,
+        "avg_gpu_utilization": avg_gpu_utilization.map(|v| (v * 10.0).round() / 10.0),
         "running_jobs": running_jobs,
         "active_alerts": active_alerts,
     })))

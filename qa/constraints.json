@@ -1402,4 +1402,26 @@
     "qa": "merge-m6.qa.md#8",
     "severity": "minor"
   }
+,
+  {
+    "id": "MRG6-23",
+    "text": "**勘误（追加，不改写 MRG6-10 / MRG6-22）**：MRG6-22 的勘误把旧口径（`NR_FIX_BASE=7ca587a`）下 F12 的失败写成「实测只有一条」，**该结论已作废** —— 它在 2026-10-07 19:40（合流提交产生之前）落笔，当时的 HEAD 相对 `7ca587a` 在 `crates/storage` / `crates/server` 上确实是零改动；合流提交（180f416…e8fd233）落地后，同一条断言必然翻红。**实测（2026-10-08，HEAD=25f475a）：旧口径 F12 的失败项是两条** ——`改动文件全部落在 nr-fixes 轮允许集内` 与 `crates/storage 与 crates/server 零改动`，即 MRG6-10 原文「F12 的两条范围断言 FAIL」才是可复现的结论；PASS=11 FAIL=1 不变。**断言集合一字不动、无任何放松**：本轮选择「改勘误文字」而不是「改脚本按轮次起点取样」，因为后者会把「本轮不许碰 storage/server」这个回归探测变成恒真的同义反复（按轮次起点取样时，轮次自身的合法改动也会被算成零改动）。M6 轮口径 12/12 不受影响。",
+    "basis": "2026-10-08 实跑：`NR_FIX_BASE=7ca587a sh qa/harness/no-root-fixes-checks.sh --no-slow` → F12 FAIL，失败项两条（见 gauntlet-out/qa/evidence/no-root-fixes-F12-scope.txt 与本轮 gauntlet-out/m6/rework2-no-root-oldround.log）；对照 `sh qa/harness/no-root-fixes-checks.sh --no-slow` → PASS=12 FAIL=0。第 5 阶段 finding F-26 与 qa/merge-m6.qa.md §8 同结论。",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/merge-m6 && NR_FIX_BASE=7ca587a sh qa/harness/no-root-fixes-checks.sh --no-slow（F12 的 SCOPE_ROUND=nr-fixes，失败项应为两条、逐字与 qa/mrg6-errata3.json 一致）；sh qa/harness/no-root-fixes-checks.sh --no-slow（M6 轮仍 12/12）",
+    "expect": "M6 轮 12/12；旧口径 11/12 且 F12 的失败项恰好两条：「改动文件全部落在 nr-fixes 轮允许集内」+「crates/storage 与 crates/server 零改动」",
+    "verdict": "must-hold",
+    "qa": "merge-m6.qa.md#8",
+    "severity": "minor"
+  }
+,
+  {
+    "id": "MRG6-24",
+    "text": "**处置记录（F-27，追加）**：A 的两样资产 `crates/common/src/metrics.rs`（含 `MetricsAggregation`）与 `crates/storage/src/conversions.rs`（`node_metrics_to_proto`）**目前只有测试与验收场景在调用，没有任何产品调用点**。本轮按「(b) 明确记为资产已就位、暂无消费者」处置，理由：① `MetricsAggregation` 的功能面（avg/max/min/p95/count）在本树由 `storage::aggregation` 用 SQL `percentile_cont` 实现并已被测试固定，把它接进聚合路径等于改写一条已测路径（超出本轮范围）；② `node_metrics_to_proto` 的逆向路径在本树不存在（REST 端点返回行自身的 JSON 形状），给它找消费者就要改一个已文档化的响应形状。两者都不是「接线改动小且语义正确」，因此**不为了消指标而删除测试或资产**（那正是 M3 判定「真丢失」要捡回的东西）：两个模块的文档头现在各自写明「asset in place, no product consumer yet」，并给出未来接线的前提；测试与 4 条 Gherkin 场景保持全绿。",
+    "basis": "第 5 阶段 finding F-27（qa/qa-report.json）与 qa/merge-m6.qa.md §4 的实测：`grep -rn 'MetricsAggregation' crates --include='*.rs'` 只命中 tests/ 与文件自身的单元测试；`grep -rn 'node_metrics_to_proto' crates --include='*.rs'` 只命中 crates/storage/tests/conversions_acceptance.rs。本轮的处置（b）与其理由见 qa/mrg6-errata3.json#MRG6-24 与两个模块的文档头。",
+    "verify": "cd /public/tianyuyang/code/ClusterScope-review/merge-m6 && grep -rn 'MetricsAggregation' crates --include='*.rs'（应仍只有 tests/ 与 metrics.rs 自身）；grep -n 'no product consumer' crates/common/src/metrics.rs crates/storage/src/conversions.rs（两处命中）；cargo test --workspace --offline（98 passed / 0 failed，两个模块的测试不得被删）",
+    "expect": "两个模块仍在、测试仍绿、文档头逐字写明「asset in place, no product consumer yet」；没有任何测试或资产被删除（M6-03 的「未删 #[test]」判据不受影响）",
+    "verdict": "must-hold",
+    "qa": "merge-m6.qa.md#4",
+    "severity": "minor"
+  }
 ]

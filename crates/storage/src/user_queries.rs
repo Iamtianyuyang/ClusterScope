@@ -96,6 +96,41 @@ pub async fn update_user(
     Ok(())
 }
 
+/// Lock every enabled admin row and read the target user inside the caller's
+/// transaction. `FOR UPDATE` serializes concurrent demotions/disables: the
+/// second transaction's count query re-evaluates after the lock wait
+/// (READ COMMITTED) and sees one fewer admin, so the cluster can never be
+/// left with zero enabled admins.
+///
+/// NOTE (M6 graft): B's original statement was
+/// `SELECT COUNT(*) ... FOR UPDATE`, which PostgreSQL rejects outright
+/// ("FOR UPDATE is not allowed with aggregate functions"), so the guard
+/// never ran. Locking the rows and counting them here keeps the intended
+/// semantics.
+///
+/// Returns `(enabled_admin_count, target)`; `target` is `None` when the user
+/// does not exist.
+async fn lock_admins_and_read_target(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user_id: &str,
+) -> Result<(i64, Option<(String, bool)>)> {
+    let locked_admins: Vec<(String,)> = sqlx::query_as(
+        "SELECT user_id FROM users WHERE role = 'admin' AND enabled = TRUE FOR UPDATE",
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .context("Failed to lock the enabled admins")?;
+    let admin_count = locked_admins.len() as i64;
+
+    let target: Option<(String, bool)> =
+        sqlx::query_as("SELECT role, enabled FROM users WHERE user_id = $1 FOR UPDATE")
+            .bind(user_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .context("Failed to read target user")?;
+    Ok((admin_count, target))
+}
+
 /// Update a user with an ATOMIC last-enabled-admin guard.
 ///
 /// Unlike the plain [`update_user`] (used by self-service password change,
@@ -123,20 +158,7 @@ pub async fn update_user_guarded(
     // never ran. Locking the rows and counting them here keeps the intended
     // semantics: the lock serializes concurrent demotions, and the count is
     // taken inside the same transaction.
-    let locked_admins: Vec<(String,)> = sqlx::query_as(
-        "SELECT user_id FROM users WHERE role = 'admin' AND enabled = TRUE FOR UPDATE",
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .context("Failed to lock the enabled admins")?;
-    let admin_count = locked_admins.len() as i64;
-
-    let target: Option<(String, bool)> =
-        sqlx::query_as("SELECT role, enabled FROM users WHERE user_id = $1 FOR UPDATE")
-            .bind(user_id)
-            .fetch_optional(&mut *tx)
-            .await
-            .context("Failed to read target user")?;
+    let (admin_count, target) = lock_admins_and_read_target(&mut tx, user_id).await?;
 
     let Some((target_role, target_enabled)) = target else {
         tx.rollback().await.ok();
@@ -191,20 +213,7 @@ pub async fn delete_user_guarded(pool: &PgPool, user_id: &str) -> Result<bool> {
     // never ran. Locking the rows and counting them here keeps the intended
     // semantics: the lock serializes concurrent demotions, and the count is
     // taken inside the same transaction.
-    let locked_admins: Vec<(String,)> = sqlx::query_as(
-        "SELECT user_id FROM users WHERE role = 'admin' AND enabled = TRUE FOR UPDATE",
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .context("Failed to lock the enabled admins")?;
-    let admin_count = locked_admins.len() as i64;
-
-    let target: Option<(String, bool)> =
-        sqlx::query_as("SELECT role, enabled FROM users WHERE user_id = $1 FOR UPDATE")
-            .bind(user_id)
-            .fetch_optional(&mut *tx)
-            .await
-            .context("Failed to read target user")?;
+    let (admin_count, target) = lock_admins_and_read_target(&mut tx, user_id).await?;
 
     let Some((target_role, target_enabled)) = target else {
         tx.rollback().await.ok();
