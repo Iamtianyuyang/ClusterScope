@@ -207,8 +207,15 @@ impl AgentClient {
                         let job_id = job.job_id.clone();
                         // Handle cancellation concurrently: the poll loop must
                         // keep consuming the stream.
+                        // A forced cancellation (`?force=true`) carries the
+                        // marker in error_message: SIGKILL straight away.
+                        let force = job.error_message == common::job::FORCE_CANCEL_MARKER;
                         tokio::spawn(async move {
-                            let running = runtime.request_cancel(&job_id).await;
+                            let running = if force {
+                                runtime.force_cancel(&job_id).await
+                            } else {
+                                runtime.request_cancel(&job_id).await
+                            };
                             if !running {
                                 // Nothing to kill — never started or already gone.
                                 let _ = client
