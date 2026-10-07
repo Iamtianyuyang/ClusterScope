@@ -132,10 +132,15 @@ async fn main() -> anyhow::Result<()> {
     let http_router = build_http_router(http_state);
 
     let http_addr = config.http_addr.parse::<SocketAddr>()?;
-    let mut http_handle =
-        tokio::spawn(
-            async move { axum::serve(TcpListener::bind(http_addr).await?, http_router).await },
-        );
+    let mut http_handle = tokio::spawn(async move {
+        axum::serve(
+            TcpListener::bind(http_addr).await?,
+            // B ws_handler needs the peer address for its per-IP connection
+            // cap, so the router must be served with ConnectInfo enabled.
+            http_router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+    });
 
     info!(addr = %config.http_addr, "HTTP server started");
 
