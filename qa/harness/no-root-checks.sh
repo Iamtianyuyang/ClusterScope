@@ -10,7 +10,9 @@
 # Every line is  "<CHECK-ID> PASS|FAIL - detail"; the exit code counts FAILs.
 # Constraint ids NR-01..NR-21 + MRG-02 are documented in qa/no-root.qa.md.
 
-R=/public/tianyuyang/code/ClusterScope-review/gh-line
+# 树定位（2026-10-07 M6 合流轮修正）：此前硬编码 gh-line，在别的工作树里跑会静默测旧树。
+# 现在按脚本自身位置解析，可用环境变量覆盖（R=<另一个树> sh qa/harness/no-root-checks.sh）。
+R="${R:-$(cd "$(dirname "$0")/../.." && pwd)}"
 BIN="$R/target/release"
 OUT="$R/gauntlet-out/qa/evidence"
 WORK=/tmp/nr-checks

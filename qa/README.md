@@ -153,3 +153,33 @@ F12 的允许集（`in_scope()`）写于第 1 阶段，里面没有 `demo/`。**
 复跑结果：**`PASS=12 FAIL=0`（退出码 0）** —— 上一节记录的 F12 FAIL 已消解，四处修复本身未被改动。
 证据：`qa/evidence/no-root-fixes-FIX15-scope-amendment.txt` 状态 C（复跑全文）、
 `qa/evidence/no-root-fixes-FIX15-F12-scope-after-amendment.txt`（F12 段的改动文件清单 + 正/负例自检）。
+
+## 本轮（M6 三线合流）—— 分支 `gauntlet/merge-m6`
+
+本分支把 **B 线**（`b/master` = `19d8fbc`，12 个未提交文件 + 修 F-01/F-16 的 `eac070e`）与 **A 线**
+（`../local-wip/`：`common/src/metrics.rs`、`storage/src/conversions.rs`、`tests/integration_test.rs`）合流进主线
+（基线 `master` @ `8601ac9`）。**M5 裁决 = 先 TUI-only**，所以 `web/` 与 `deploy/nginx.conf` 本轮不做；
+**M7 质量口径不动**（97 项欠账是已记录的审查结论，不还债、不重算成 PASS）。
+
+| 文件 | 内容 |
+|---|---|
+| `qa/merge-m6.qa.md` | **本轮的执行程序与判据**：合流前基线表、M6 步骤 1/2/3/5 的逐条检查、M9 行为等价清单、M10 不变量（NRM1–NRM8）、**PASS/FAIL 翻转登记表**、F12 的轮次口径、F-02/F-07/F-12 的取舍记录 |
+| `features/merge_m6_*.feature` | 22 个新验收场景（审计查询 / 登录限速与令牌吊销 / 任务参数上限与 SIGKILL 升级与配置键 / A 的指标类型），场景名一律 snake_case |
+| `qa/harness/merge-m6-checks.sh` | 判据程序 **M6-01…M6-15**（`--static` 只跑不需要 server/agent 的 10 段） |
+| `qa/constraints.json` | 追加 **`MRG6-01`…`MRG6-20`**（`must-hold`）；既有 118 条逐字节未动，合计 138 条，追加是纯插入（`--numstat` 第二列为 0） |
+
+```sh
+cd /public/tianyuyang/code/ClusterScope-review/merge-m6
+sh qa/harness/merge-m6-checks.sh --static      # 合流前：10 PASS / 1 FAIL（唯一 FAIL 是等合流来修的 M6-08）
+sh qa/harness/merge-m6-checks.sh               # 合流后：要求 0 FAIL
+sh qa/harness/no-root-fixes-checks.sh --no-slow # 四项无 root 修复 12/12（M6 轮口径）
+```
+
+**两条与本轮同时落地的 harness 修正**（沿用 `FIX-14`/`FIX-15` 的先例，断言集合一行未动，**需 Leader 追认**）：
+
+1. **树定位**：`env.sh` / `no-root-checks.sh` / `nr-verify*.sh` 原来把仓库根硬编码成 `.../gh-line` —— 在
+   `merge-m6` 里跑会静默地测**旧树**（假证据）。现在按脚本位置自解析，仍可用 `REPO=` / `R=` 覆盖（约束 `MRG6-16`）。
+2. **F12 的轮次口径**：`F12` 是「范围 vs 某一轮基线」的检查，而合流注定要改 `crates/server/**`、`crates/storage/**`
+   （在 no-root 轮的允许集里是越界）。现在按轮次选允许集：no-root 轮旧口径可用 `NR_FIX_BASE=7ca587a` 复跑，
+   M6 轮用 `m6_in_scope()`（另配 5 条负例自检 + 2 条正例自检）。**修脚本前的实测是 11/12**（F12 唯一失败项是
+   旧允许集没有 `report/*`），详见 `qa/merge-m6.qa.md` §8（约束 `MRG6-10`）。

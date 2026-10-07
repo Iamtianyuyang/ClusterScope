@@ -8,6 +8,13 @@
 # 用法：
 #   sh qa/harness/no-root-fixes-checks.sh              # 全量（含 release 构建与 systemd 真装真启）
 #   sh qa/harness/no-root-fixes-checks.sh --no-slow    # 跳过 F1 动态探针与 F5 的 systemd 起停
+#   NR_FIX_BASE=7ca587a sh qa/harness/no-root-fixes-checks.sh   # 显式用 no-root 修复轮的口径复跑
+#                                                      # （F11/F12 的范围基线随之切换，见下面「轮次口径」）
+#
+# 轮次口径（2026-10-07 M6 合流轮追加）：本脚本的 F11/F12 是「范围 vs 某一轮基线」的检查。
+#   * no-root 修复轮：基线 7ca587a，允许集 = FIX-13 + FIX-14/FIX-15 两次修订；
+#   * M6 合流轮：基线 8601ac9，允许集 = m6_in_scope()（合流要改 crates/**、Cargo 清单、tests/ 等）。
+#   默认取本树能解析到的最新一轮基线，所以这两轮的结论都可复跑、都不会被静默改写。
 #
 # 输出：每行 "<ID> PASS|FAIL - 说明"，退出码 = FAIL 条数；证据落 gauntlet-out/qa/evidence/。
 #
@@ -27,7 +34,26 @@ mkdir -p "$EVID"
 WORK="${TMPDIR:-/tmp}/nr-fixes-checks"
 rm -rf "$WORK"
 mkdir -p "$WORK"
-BASE="${NR_FIX_BASE:-7ca587a}"
+# 轮次口径（2026-10-07，M6 合流轮追加；理由、实测与裁决过程见 qa/merge-m6.qa.md「F12 的轮次口径」）：
+#   * no-root 修复轮：基线 7ca587a，允许集 = FIX-13 原文 + FIX-14 修订（gauntlet-tools/*）+ FIX-15 修订（demo/*）；
+#   * M6 合流轮：基线 8601ac9（审查产物 + 无 root 修复都在主线上的合流起点），允许集 = m6_in_scope()。
+# 默认取「本树能解析到的最新一轮基线」：M6 树上按 M6 口径（本树的本轮 = 合流轮）；没有 8601ac9 这个提交的树
+# （例如 gauntlet/no-root-fixes 本身）自动回落 no-root 轮，行为与本文件此前逐字相同。
+# 显式复跑旧口径（在本树上预期 F12 的两条范围断言 FAIL —— 本树相对 no-root 轮**合法地**改了
+# crates/server、crates/storage，那正是合流的内容；这不是修复回归）：
+#   NR_FIX_BASE=7ca587a sh qa/harness/no-root-fixes-checks.sh
+MRG6_BASE="${MRG6_BASE:-8601ac9}"
+if [ -n "${NR_FIX_BASE:-}" ]; then
+  BASE="$NR_FIX_BASE"
+elif git rev-parse --verify --quiet "${MRG6_BASE}^{commit}" >/dev/null 2>&1; then
+  BASE="$MRG6_BASE"
+else
+  BASE=7ca587a
+fi
+case "$BASE" in
+  "$MRG6_BASE"*) SCOPE_ROUND=m6 ;;
+  *) SCOPE_ROUND=nr-fixes ;;
+esac
 BIN="$REPO/target/release/clusterscope-agent"
 NO_SLOW=0
 [ "${1:-}" = "--no-slow" ] && NO_SLOW=1
@@ -586,39 +612,94 @@ in_scope() { # in_scope <仓库相对路径> → 0 = 允许改动，1 = 越界
   esac
 }
 
+# M6 合流轮的允许集（单一口径来源；理由与逐条依据见 qa/merge-m6.qa.md「F12 的轮次口径」）：
+# 合流本身要改的就是 crates/**（步骤 1 的 4 个审计文件、步骤 2 的 12 个 graft 文件、步骤 3 的
+# crates/common/src/metrics.rs + crates/storage/src/conversions.rs + 两处 lib.rs 的模块声明、
+# 以及转换所依赖的 models/protocol 适配）、Cargo 清单、A 的 tests/，加上本轮的规格 / QA / 报告产物。
+# 不在允许集里的（= M6 轮的冻结面）与 no-root 轮一样有 5 条负例自检守着。
+m6_in_scope() { # m6_in_scope <仓库相对路径> → 0 = 允许改动，1 = 越界
+  case "$1" in
+    # M5 裁决：web 面（web/ 与它的 nginx 反代配置）本轮**不做**（M6 步骤 4 = 不做），
+    # 所以即使 deploy/* 整体在允许集里，nginx.conf 也必须被判越界 —— 它是下面 5 条负例之一。
+    deploy/nginx.conf) return 1 ;;
+    crates/*|tests/*|Cargo.toml|Cargo.lock) return 0 ;;
+    # demo/* / report/*：QA 与报告阶段的法定产物（FIX-15 裁决 + 报告阶段的证据包）。
+    deploy/*|README.md|docs/*|features/*|qa/*|demo/*|report/*|GAUNTLET.md|gauntlet-tools/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 f12() {
   start_check "no-root-fixes-F12-scope.txt"
-  local changed bad f hs probe probe_bad probe_ok
+  local changed bad f frozen probe probe_bad probe_ok demo_ok
   changed="$( { git diff --name-only "$BASE" 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null; } | sort -u)"
   bad=""
-  while IFS= read -r f; do
-    [ -z "$f" ] && continue
-    in_scope "$f" || bad="$bad $f"
-  done <<< "$changed"
-  hs="$(git diff --name-only "$BASE" -- crates/storage crates/server 2>/dev/null || true)"
-  # 负例自检：允许集不能被放宽到吞掉真正的越界文件。这 5 条探测路径**必须**逐条判越界。
-  probe_bad=""
-  for probe in crates/storage/src/lib.rs crates/server/src/lib.rs Cargo.toml gauntlet.config.json .gauntlet/gauntlet.mjs; do
-    in_scope "$probe" || probe_bad="$probe_bad $probe"
-  done
-  # 正例自检（2026-10-07 修订新增）：demo/* 是本次加入的允许项，必须判**允许** —— 守住这条裁决，
-  # 防止允许集被下一次改动悄悄改回去（那会让 QA 阶段的法定产物再次被判越界）。负例 5 条与 5/5 计数不变。
-  in_scope demo/01-build-and-test-gates.json && probe_ok=允许 || probe_ok=越界
+  if [ "$SCOPE_ROUND" = m6 ]; then
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      m6_in_scope "$f" || bad="$bad $f"
+    done <<< "$changed"
+    # M6 轮的『冻结面』：M5 裁决先 TUI-only（web/ 与 deploy/nginx.conf 本轮**不做**），
+    # 加上任何阶段都不许碰的闸门配置与棘轮基线。
+    frozen="$(git diff --name-only "$BASE" -- web deploy/nginx.conf .gauntlet gauntlet.config.json gauntlet-baseline.json 2>/dev/null || true)"
+    # 负例自检（M6 轮）：允许集被放宽到吞掉这几条 = 失败。这 5 条必须逐条判越界。
+    probe_bad=""
+    for probe in .gauntlet/gauntlet.mjs gauntlet.config.json gauntlet-baseline.json web/src/main.tsx deploy/nginx.conf; do
+      m6_in_scope "$probe" || probe_bad="$probe_bad $probe"
+    done
+    # 正例自检（M6 轮）：合流的目标文件必须判允许，防止口径被下一次改动收窄。
+    m6_in_scope crates/server/src/handlers.rs && probe_ok=允许 || probe_ok=越界
+    # FIX-15 的正例在 M6 轮同样必须成立（demo/* 一直是法定产物）。
+    m6_in_scope demo/01-build-and-test-gates.json && demo_ok=允许 || demo_ok=越界
+  else
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      in_scope "$f" || bad="$bad $f"
+    done <<< "$changed"
+    frozen="$(git diff --name-only "$BASE" -- crates/storage crates/server 2>/dev/null || true)"
+    # 负例自检：允许集不能被放宽到吞掉真正的越界文件。这 5 条探测路径**必须**逐条判越界。
+    probe_bad=""
+    for probe in crates/storage/src/lib.rs crates/server/src/lib.rs Cargo.toml gauntlet.config.json .gauntlet/gauntlet.mjs; do
+      in_scope "$probe" || probe_bad="$probe_bad $probe"
+    done
+    # 正例自检（2026-10-07 修订新增）：demo/* 是本次加入的允许项，必须判**允许** —— 守住这条裁决，
+    # 防止允许集被下一次改动悄悄改回去（那会让 QA 阶段的法定产物再次被判越界）。负例 5 条与 5/5 计数不变。
+    in_scope crates/server/src/handlers.rs && probe_ok=允许 || probe_ok=越界
+    in_scope demo/01-build-and-test-gates.json && demo_ok=允许 || demo_ok=越界
+  fi
   {
+    echo "== 轮次（SCOPE_ROUND）=="; echo "$SCOPE_ROUND  (BASE=$BASE)"
     echo "== 本次改动/新增的文件 =="; echo "$changed"
     echo "== 允许集之外的 =="; echo "${bad:-<none>}"
-    echo "== crates/storage 与 crates/server 的改动 =="; echo "${hs:-<none>}"
+    if [ "$SCOPE_ROUND" = m6 ]; then
+      echo "== 冻结面（M5 先 TUI-only + 闸门配置）的改动 =="; echo "${frozen:-<none>}"
+    else
+      echo "== crates/storage 与 crates/server 的改动 =="; echo "${frozen:-<none>}"
+    fi
     echo "== 负例自检（这些必须全部判越界）=="; echo "${probe_bad:-<none>}"
-    echo "== 正例自检（demo/* 是 2026-10-07 修订加入的允许项，必须判允许）=="
-    echo "demo/01-build-and-test-gates.json -> $probe_ok"
+    if [ "$SCOPE_ROUND" = m6 ]; then
+      echo "== 正例自检（M6 轮）=="
+      echo "crates/server/src/handlers.rs -> $probe_ok （合流目标文件，必须允许）"
+      echo "demo/01-build-and-test-gates.json -> $demo_ok （FIX-15 裁决，必须允许）"
+    else
+      echo "== 正例自检（demo/* 是 2026-10-07 修订加入的允许项，必须判允许）=="
+      echo "demo/01-build-and-test-gates.json -> $demo_ok"
+    fi
   } >> "$CUR_LOG"
-  A "改动文件全部落在本轮允许集内" "$([ -z "$bad" ] && echo 0 || echo 1)"
-  A "crates/storage 与 crates/server 零改动" "$([ -z "$hs" ] && echo 0 || echo 1)"
-  A "负例自检：storage/server/Cargo.toml/gauntlet.config.json/.gauntlet 仍被判越界（实际 $(printf '%s' "$probe_bad" | wc -w)/5）" \
+  A "改动文件全部落在 ${SCOPE_ROUND} 轮允许集内" "$([ -z "$bad" ] && echo 0 || echo 1)"
+  if [ "$SCOPE_ROUND" = m6 ]; then
+    A "冻结面零改动（web/、deploy/nginx.conf、.gauntlet/、gauntlet.config.json、gauntlet-baseline.json）" \
+      "$([ -z "$frozen" ] && echo 0 || echo 1)"
+  else
+    A "crates/storage 与 crates/server 零改动" "$([ -z "$frozen" ] && echo 0 || echo 1)"
+  fi
+  A "负例自检：$(printf '%s' "$probe_bad" | wc -w)/5 条探测路径仍被判越界" \
     "$([ "$(printf '%s' "$probe_bad" | wc -w)" = 5 ] && echo 0 || echo 1)"
-  A "正例自检：demo/*（QA 阶段法定产物）判允许（实际 $probe_ok）" \
+  A "正例自检：crates/server/src/handlers.rs 判允许（实际 $probe_ok）" \
     "$([ "$probe_ok" = 允许 ] && echo 0 || echo 1)"
-  end_check F12 "改动范围仅限本轮四项相关文件 + 两处已准入的工具修复 + demo/*（2026-10-07 裁决）"
+  A "正例自检：demo/*（QA 阶段法定产物）判允许（实际 $demo_ok）" \
+    "$([ "$demo_ok" = 允许 ] && echo 0 || echo 1)"
+  end_check F12 "改动范围（${SCOPE_ROUND} 轮口径）落在允许集内、冻结面零改动、负例 5/5"
 }
 
 f1

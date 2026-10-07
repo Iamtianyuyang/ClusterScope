@@ -13,7 +13,9 @@
 #
 # Contract: only kill PIDs we started.
 
-R=/public/tianyuyang/code/ClusterScope-review/gh-line
+# 树定位（2026-10-07 M6 合流轮修正）：此前硬编码 gh-line，在别的工作树里跑会静默测旧树。
+# 现在按脚本自身位置解析，可用环境变量覆盖（R=<另一个树> sh qa/harness/nr-verify3.sh）。
+R="${R:-$(cd "$(dirname "$0")/../.." && pwd)}"
 BIN="$R/target/release"
 EV="$R/qa/evidence"
 W=/tmp/nr-verify3
