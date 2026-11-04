@@ -2,7 +2,7 @@
 
 ## Authentication
 
-All API endpoints (except `/api/health`, `/api/login`, `/api/refresh-token`) require a Bearer JWT token.
+When `auth_required: true`, API endpoints (except `/api/health`, `/api/login`, and `/api/refresh-token`) require a Bearer JWT token. When `auth_required: false`, read-only GET endpoints are public; write operations still require JWT authentication.
 
 ```
 Authorization: Bearer <token>

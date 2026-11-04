@@ -2,27 +2,27 @@
 
 ## Overview
 
-ClusterScope is a distributed GPU cluster monitoring and job control platform. It consists of:
+ClusterScope is a distributed CPU / GPU / process monitoring platform. It consists of:
 
-1. **Agent** - A lightweight Rust service running on each GPU node that collects metrics and executes jobs
-2. **Central Server** - A Rust service that aggregates data from all agents, serves REST APIs, and manages jobs/alerts
-3. **TUI** - A terminal dashboard (ratatui) for visualizing cluster state, metrics, jobs, and alerts
-4. **PostgreSQL** - Persistent storage for metrics history, jobs, alerts, users, and audit logs
+1. **Agent** — a lightweight Rust service on each compute node that collects metrics
+2. **Central Server** — aggregates Agent data, persists history, and serves REST / WebSocket APIs
+3. **Web** — a dependency-free read-only dashboard embedded in the Server binary
+4. **PostgreSQL** — persistent storage for metrics history and compatible management APIs
 
 ## Architecture Diagram
 
 ```
 ┌──────────────────┐
-│   TUI (ratatui)  │
+│  Web 浏览器       │
+│  CPU/GPU/进程     │
 └────────┬─────────┘
-         │ REST
+         │ REST + WebSocket
 ┌────────▼─────────┐
 │  Central Server  │
 │                  │
+│ Static Web UI    │
 │ Node Registry    │
 │ Metrics Service  │
-│ Job Service      │
-│ Alert Service    │
 │ Auth Service     │
 └───────┬──────────┘
         │ gRPC
@@ -40,40 +40,39 @@ ClusterScope is a distributed GPU cluster monitoring and job control platform. I
 
 ## Communication Protocols
 
-- **Agent → Server**: gRPC streaming (metrics, heartbeats, job logs, job status)
-- **TUI → Server**: REST API (read-only monitoring, login)
+- **Agent → Server**: gRPC streaming for metrics and heartbeats
+- **Web → Server**: same-origin REST polling plus WebSocket invalidation
 - **Server → DB**: PostgreSQL via sqlx
+
+## Web Dashboard
+
+The `web/` directory contains native HTML, CSS, and JavaScript modules. It has no runtime package or build-step dependency. `crates/server/src/web.rs` embeds those assets at compile time and serves them with a restrictive Content Security Policy.
+
+The product intentionally has only three concerns:
+
+1. Cluster CPU / GPU overview
+2. Live and historical trends
+3. GPU and Top CPU processes
+
+Job and alert management APIs remain available for compatibility, but are not part of the Web product surface. Unknown metrics are rendered as `—`, never fabricated as zero. The logo-themed dark palette, reduced-motion preference, keyboard, touch, and narrow-screen layouts are handled locally without a UI framework.
 
 ## Key Design Decisions
 
 ### gRPC for Agent Communication
 - Low overhead, streaming support
 - Strongly typed protocol via protobuf
-- Bidirectional streaming for real-time metrics
 
-### WebSocket for Real-Time Push
-- Real-time metric updates without polling (used by the removed web frontend; the TUI polls REST)
-- Subscription model (per-node or all nodes)
-- Slow client isolation with backlog limits
+### REST + WebSocket for Monitoring
+- REST provides complete snapshots and history
+- WebSocket messages trigger throttled refreshes when new metrics arrive
+- Polling remains a working fallback when WebSocket is unavailable
+
+### Embedded Static Web Assets
+- One portable Server binary; no Nginx or separate frontend process
+- Same-origin API avoids CORS and keeps authentication simple
+- Assets are cached with revalidation so updates take effect after Server upgrades
 
 ### Postgres for Persistence
-- ACID guarantees for job state
-- Efficient time-series queries with indexed columns
-- Aggregated retention policy (2s → 1min → 10min)
-
-### Alert State Machine
-- Normal → Pending → Firing → Resolved
-- Configurable duration prevents false positives from metric spikes
-- Per-node, per-GPU deduplication
-
-## Module Structure
-
-```
-crates/
-├── common/         # Shared types, config, alert engine, job state machine
-├── protocol/       # Generated protobuf code
-├── storage/        # PostgreSQL queries and models
-├── agent/          # Node agent (metrics collection, job execution, gRPC client)
-├── server/         # Central server (gRPC server, REST API, auth)
-└── scheduler/      # Job scheduling logic
-```
+- ACID guarantees
+- Indexed time-series queries
+- Raw, hourly, and daily retention tiers

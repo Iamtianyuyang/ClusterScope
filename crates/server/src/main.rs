@@ -18,6 +18,7 @@ use tracing::{info, warn};
 mod auth_middleware;
 mod grpc;
 mod handlers;
+mod web;
 mod ws_handler;
 
 use anyhow::Context;
@@ -536,6 +537,7 @@ fn build_http_router(state: Arc<AppState>) -> Router {
     };
 
     Router::new()
+        .merge(web::routes())
         .merge(public_routes)
         .nest("/api", authed_routes)
         .with_state(state)

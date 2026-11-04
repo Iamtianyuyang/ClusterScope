@@ -84,7 +84,7 @@ pub struct ServerConfig {
     pub default_admin_username: String,
     pub default_admin_password: String,
     /// When false, all GET (read-only) API endpoints skip JWT auth —
-    /// convenient for LAN monitoring dashboards (TUI/web) without login.
+    /// Convenient for LAN monitoring dashboards (Web) without login.
     pub auth_required: bool,
     /// Shared secret agents must present on every gRPC call.
     /// Empty = gRPC accepts any caller (insecure; trusted network only).

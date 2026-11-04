@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#06111d">
+  <meta name="description" content="ClusterScope — 轻量、清晰的 CPU 与 GPU 集群监控。">
+  <title>ClusterScope · 集群监控</title>
+  <link rel="icon" href="/icon.png" type="image/png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#app-view">跳到主要内容</a>
+  <header class="topbar">
+    <a class="brand" href="#overview" aria-label="ClusterScope 首页">
+      <img class="brand-mark" src="/icon.png" width="44" height="44" alt="">
+      <span>ClusterScope</span>
+    </a>
+    <div class="topbar-actions">
+      <div class="refresh-timer" title="下次自动刷新"><span>下次刷新</span><div id="countdown" aria-label="距下次刷新 3 秒"></div></div>
+      <button id="refresh-button" class="icon-button magnetic" type="button" title="立即刷新（R）" aria-label="立即刷新">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
+      </button>
+      <button id="account-button" class="text-button" type="button">登录</button>
+    </div>
+  </header>
+
+  <nav class="nav" aria-label="主要页面" role="tablist">
+    <button class="nav-item" data-page="overview" role="tab" aria-selected="true"><span>总览</span><kbd>1</kbd></button>
+    <button class="nav-item" data-page="trend" role="tab" aria-selected="false"><span>趋势</span><kbd>2</kbd></button>
+  </nav>
+
+  <main>
+    <section class="cluster-strip" aria-label="集群实时状态">
+      <p class="connection-status"><span id="live-dot" class="live-dot"></span><span id="live-label">正在连接</span></p>
+      <div id="cluster-stats" class="cluster-stats"></div>
+    </section>
+
+    <div id="error-banner" class="error-banner" role="alert" hidden></div>
+    <section id="app-view" class="app-view" tabindex="-1" aria-live="polite">
+      <div class="loading-state"><span class="spinner"></span><p>正在看清集群…</p></div>
+    </section>
+    <section id="process-section" class="process-section" aria-label="进程列表"></section>
+  </main>
+
+  <footer class="footer"><span>只做监控，不打扰计算。</span><span><kbd>R</kbd> 刷新 · <kbd>P</kbd> 切换进程 · <kbd>1–2</kbd> 切换页面</span></footer>
+
+  <dialog id="login-dialog" class="dialog small-dialog" aria-labelledby="login-title">
+    <form id="login-form" method="dialog" class="dialog-body">
+      <div class="dialog-heading"><div><p class="eyebrow">欢迎回来</p><h2 id="login-title">登录 ClusterScope</h2></div><button class="icon-button close-dialog" type="button" aria-label="关闭">×</button></div>
+      <p class="dialog-intro">Server 开启认证时，登录后即可查看集群。</p>
+      <label>用户名<input name="username" autocomplete="username" required maxlength="100"></label>
+      <label>密码<input name="password" type="password" autocomplete="current-password" required></label>
+      <p class="form-error" role="alert" hidden></p>
+      <button class="primary-button full-width" type="submit">登录</button>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

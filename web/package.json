@@ -1,0 +1,9 @@
+{
+  "name": "clusterscope-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test *.test.js",
+    "check": "node --check app.js && node --check api.js && node --check lib.js && node --check motion.js"
+  }
+}
