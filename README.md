@@ -7,7 +7,7 @@
 <p align="center"><strong>轻量级 Linux 集群监控平台</strong><br>Web 仪表盘 + 分布式采集，专注 CPU、GPU 与进程，普通用户即可运行，无需 root。</p>
 
 <p align="center">
-  <a href="https://github.com/Iamtianyuyang/ClusterScope/releases"><img alt="Release" src="https://img.shields.io/badge/release-v0.1.1-2aa198"></a>
+  <a href="https://github.com/Iamtianyuyang/ClusterScope/releases"><img alt="Release" src="https://img.shields.io/badge/release-v0.1.2-2aa198"></a>
   <a href="https://github.com/Iamtianyuyang/ClusterScope/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20x86__64-lightgrey">
   <img alt="No root" src="https://img.shields.io/badge/root-not%20required-success">

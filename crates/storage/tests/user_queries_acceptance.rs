@@ -1,10 +1,5 @@
-//! Acceptance tests for the storage half of
-//! `features/merge_m6_auth_hardening.feature` (M6 step 2, `user_queries.rs`:
-//! F-09 session revocation, single-use refresh tokens, digest storage,
-//! last-enabled-admin guard).
-//!
-//! Scenario names become the test function names verbatim (the `commands`
-//! adapter matches scenarios to JUnit test names by lowercased substring).
+//! Acceptance tests for session revocation, single-use refresh tokens,
+//! digest storage, and the last-enabled-admin guard.
 //!
 //! The tests drive the real PostgreSQL instance (`POSTGRES_URL`, defaulting to
 //! the local shared database). Fixture hygiene: only the six `m6-` usernames

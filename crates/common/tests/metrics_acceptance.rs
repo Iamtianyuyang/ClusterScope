@@ -1,6 +1,4 @@
-//! Acceptance tests for `features/merge_m6_legacy_assets.feature` (A's
-//! `MetricsAggregation`); the scenario names are the test function names
-//! verbatim.
+//! Acceptance tests for metric aggregation statistics.
 
 use common::metrics::MetricsAggregation;
 

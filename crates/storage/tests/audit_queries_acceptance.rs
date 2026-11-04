@@ -1,10 +1,4 @@
-//! Acceptance tests for `features/merge_m6_audit_queries.feature`
-//! (M6 step 1 -- F-01 the audit endpoint always returned 500, F-16 the COUNT
-//! statement never bound its parameters).
-//!
-//! Scenario names become the test function names verbatim: the `commands`
-//! adapter matches every Gherkin scenario to a passing JUnit test name by
-//! lowercased, whitespace-folded substring match.
+//! Acceptance tests for filtered, paginated audit-log queries.
 //!
 //! The tests drive the real PostgreSQL instance of this machine
 //! (`POSTGRES_URL`, defaulting to the local shared database) through the
@@ -145,7 +139,7 @@ async fn audit_listing_filters_rows_and_returns_a_matching_total() {
 
     let (rows, total) = list_audit_logs(&fixture.pool, Some(USER_AUDIT), None, None, None, 0, 50)
         .await
-        .expect("filtering by user must not fail (F-01/F-16 regression)");
+        .expect("filtering by user must not fail");
 
     assert_eq!(rows.len(), 3, "the three m6-audit rows must be returned");
     assert_eq!(total, 3, "total must match the filtered row count");

@@ -1,6 +1,4 @@
-//! Acceptance tests for `features/merge_m6_legacy_assets.feature` (A's
-//! `node_metrics_to_proto`); the scenario names are the test function names
-//! verbatim. No database needed: both scenarios are pure type behaviour.
+//! Tests for converting stored metrics to protocol reports without a database.
 
 use chrono::Utc;
 use protocol::NodeMetricsReport;

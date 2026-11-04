@@ -1,12 +1,4 @@
-//! A's `tests/integration_test.rs`, ported to this tree (M6 step 3).
-//!
-//! Two of A's ten cases are deliberately NOT ported, and this is not a
-//! deleted test: A's `common::dedup` / `common::sequence` modules were judged
-//! replaced in M3 (C's `seen_reports` LruCache and the agent-side `AtomicU64`
-//! sequence do the same job), so the product code those two cases exercised
-//! never enters this branch. Everything else is ported with this tree's API
-//! (the alert engine takes an explicit `now`, the metrics type comes from
-//! `common::metrics`).
+//! Integration tests for shared metric, authentication, alert, and node behavior.
 
 use chrono::{Duration as ChronoDuration, Utc};
 use common::alert::{AlertEngine, AlertKey, AlertOperator, AlertRule, AlertSeverity, AlertState};

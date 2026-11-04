@@ -488,10 +488,8 @@ impl AgentService for AgentServiceImpl {
                 } else {
                     Some(update.message.as_str())
                 };
-                // M6 adaptation: this tree's JobStatusUpdate carries neither
-                // `pid` nor `exit_code` (the proto is outside this round's
-                // change set), so both columns keep their previous value; the
-                // agent records them in its own log instead.
+                // JobStatusUpdate carries neither `pid` nor `exit_code`, so
+                // both columns keep their previous values; the agent logs them.
                 let pid: Option<i32> = None;
                 let finished = to.is_terminal();
                 let exit_code: Option<i32> = None;
@@ -576,8 +574,7 @@ impl AgentService for AgentServiceImpl {
         } else {
             Some(update.message.as_str())
         };
-        // M6 adaptation: no `pid` / `exit_code` on this tree's
-        // JobStatusUpdate, so both columns keep their previous value.
+        // JobStatusUpdate has no `pid` / `exit_code`; preserve the stored values.
         let pid: Option<i32> = None;
         let exit_code: Option<i32> = None;
         if let Err(e) = storage::job_queries::update_job_status(

@@ -10,7 +10,8 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.1"
+# 版本固定为 0.1.2；未经项目所有者明确授权不得修改。
+version = "0.1.2"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["ClusterScope Team"]

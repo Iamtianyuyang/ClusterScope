@@ -184,11 +184,8 @@ async fn report_status(
     pid: u32,
     exit_code: i32,
 ) {
-    // M6 adaptation: this tree's `JobStatusUpdate` message has no `pid` /
-    // `exit_code` fields (the proto is outside this round's change set), so
-    // the two values are recorded in the agent log -- which is where the
-    // F-03 evidence ("the agent log has the real pid") lives anyway. The
-    // follow-up round that extends the proto can lift them onto the wire.
+    // JobStatusUpdate has no `pid` / `exit_code` fields, so record both values
+    // in the agent log while the status is sent over the wire.
     tracing::debug!(job_id = %job_id, pid, exit_code, "reporting job status");
     let _ = client
         .update_job_status(crate::grpc_client::authed(
@@ -992,9 +989,9 @@ mod marker_tests {
     }
 }
 
-/// Acceptance tests for `features/merge_m6_job_safety.feature` (cancellation).
+/// End-to-end cancellation tests for real processes in isolated process groups.
 ///
-/// The scenario names are the test function names verbatim. Both tests drive
+/// Both tests drive
 /// the real `execute_job` path with real processes in their own process group
 /// (a session of its own), so the SIGTERM -> SIGKILL escalation of `JobRuntime` is
 /// exercised end to end, including the pid bookkeeping around `wait()`.

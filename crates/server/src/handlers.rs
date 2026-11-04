@@ -809,8 +809,7 @@ async fn node_is_known(state: &AppState, node_id: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Record a refused job submission (F-10: refusals are audited the same way
-/// failed logins are, so an operator can see who tried to submit what).
+/// Audit refused job submissions so operators can see who attempted each action.
 async fn audit_job_rejection(state: &AppState, claims: &Claims, client_ip: &str, reason: &str) {
     storage::audit_queries::insert_audit_log(
         state.database.pool(),
@@ -1879,16 +1878,10 @@ async fn stop_active_job(
     }
 }
 
-/// Acceptance tests for `features/merge_m6_auth_hardening.feature` (login
-/// rate limiting / client-address resolution, F-08) and
-/// `features/merge_m6_job_safety.feature` (submission caps, F-11).
-///
-/// The scenario names are the test function names verbatim. The limiter and
-/// the submission validator are driven directly (the feature file allows
-/// extracting them for exactly this reason): the handlers themselves only
-/// forward to `LoginLimiter` / `validate_job_request`.
+/// Acceptance tests for login rate limiting, client-address resolution,
+/// and job-submission limits.
 #[cfg(test)]
-mod merge_m6_acceptance_tests {
+mod acceptance_tests {
     use super::*;
     use axum::http::HeaderMap;
 

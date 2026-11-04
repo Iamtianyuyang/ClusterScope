@@ -412,9 +412,7 @@ pub async fn mark_stopping_if_active(pool: &PgPool, job_id: &str) -> Result<bool
 /// agent never reported the kill (crashed, or the process ignored
 /// SIGTERM+SIGKILL), and nothing else re-reads a `stopping` row.
 ///
-/// M6 adaptation: B keyed this on a `status_updated_at` column this tree does
-/// not have (adding it would need a real migration on the shared database),
-/// so the run start is the closest available "running for too long" marker.
+/// The run start is the available marker for how long the job has been active.
 pub async fn reset_stale_stopping_jobs(
     pool: &PgPool,
     cutoff: DateTime<Utc>,

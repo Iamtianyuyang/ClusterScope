@@ -1,6 +1,4 @@
-//! Acceptance tests for `features/merge_m6_job_safety.feature` (dead config
-//! keys, F-06) -- the scenarios about `ServerConfig` parsing and the pre-start
-//! validation of `tls_enabled`.
+//! Acceptance tests for `ServerConfig` parsing and pre-start TLS validation.
 //!
 //! The criterion is "the key is really read from the file", not "the field
 //! exists on the struct": the tests parse YAML the way the server does.

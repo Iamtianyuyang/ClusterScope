@@ -556,7 +556,7 @@ async fn run_background_tasks(state: Arc<AppState>) {
 
         // Drop rate-limit entries whose newest attempt fell out of the
         // window, so the login limiter map cannot grow unboundedly with
-        // distinct source IPs (F-08).
+        // distinct source IPs.
         handlers::prune_login_attempts(&state);
 
         if let Err(e) = storage::queries::prune_old_metrics(state.database.pool()).await {

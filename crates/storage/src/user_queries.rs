@@ -102,12 +102,6 @@ pub async fn update_user(
 /// (READ COMMITTED) and sees one fewer admin, so the cluster can never be
 /// left with zero enabled admins.
 ///
-/// NOTE (M6 graft): B's original statement was
-/// `SELECT COUNT(*) ... FOR UPDATE`, which PostgreSQL rejects outright
-/// ("FOR UPDATE is not allowed with aggregate functions"), so the guard
-/// never ran. Locking the rows and counting them here keeps the intended
-/// semantics.
-///
 /// Returns `(enabled_admin_count, target)`; `target` is `None` when the user
 /// does not exist.
 async fn lock_admins_and_read_target(
@@ -152,12 +146,8 @@ pub async fn update_user_guarded(
 ) -> Result<bool> {
     let mut tx = pool.begin().await.context("Failed to begin transaction")?;
 
-    // NOTE (M6 graft): B's original statement was
-    // `SELECT COUNT(*) ... FOR UPDATE`, which PostgreSQL rejects outright
-    // ("FOR UPDATE is not allowed with aggregate functions"), so the guard
-    // never ran. Locking the rows and counting them here keeps the intended
-    // semantics: the lock serializes concurrent demotions, and the count is
-    // taken inside the same transaction.
+    // Lock the admin rows and count them in this transaction so concurrent
+    // changes cannot remove the last enabled administrator.
     let (admin_count, target) = lock_admins_and_read_target(&mut tx, user_id).await?;
 
     let Some((target_role, target_enabled)) = target else {
@@ -207,12 +197,8 @@ pub async fn update_user_guarded(
 pub async fn delete_user_guarded(pool: &PgPool, user_id: &str) -> Result<bool> {
     let mut tx = pool.begin().await.context("Failed to begin transaction")?;
 
-    // NOTE (M6 graft): B's original statement was
-    // `SELECT COUNT(*) ... FOR UPDATE`, which PostgreSQL rejects outright
-    // ("FOR UPDATE is not allowed with aggregate functions"), so the guard
-    // never ran. Locking the rows and counting them here keeps the intended
-    // semantics: the lock serializes concurrent demotions, and the count is
-    // taken inside the same transaction.
+    // Lock the admin rows and count them in this transaction so concurrent
+    // changes cannot remove the last enabled administrator.
     let (admin_count, target) = lock_admins_and_read_target(&mut tx, user_id).await?;
 
     let Some((target_role, target_enabled)) = target else {

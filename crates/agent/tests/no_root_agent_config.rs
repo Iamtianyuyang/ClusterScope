@@ -1,9 +1,6 @@
-//! 验收测试:`features/no_root_agent_config.feature`(无 root 部署下 agent 的配置加载与身份文件)。
+//! 无 root 部署下的 Agent 配置加载与身份文件测试。
 //!
-//! 场景名 ↔ 测试名是硬契约:每个测试函数名逐字等于场景名(闸门把两边都转小写、折叠空白后做
-//! 子串匹配),并且都通过**真二进制**驱动,断言的是进程退出码与用户可见的输出。
-//!
-//! 覆盖约束:`FIX-02` / `FIX-03` / `FIX-04` / `FIX-05`。
+//! 测试通过真实二进制驱动，断言进程退出码与用户可见输出。
 
 use std::fs;
 use std::io::Read;
@@ -200,8 +197,7 @@ fn missing_config_is_not_silently_replaced_by_the_default_server_address() {
 #[test]
 fn agent_warns_about_the_missing_default_config_file_and_keeps_running() {
     if Path::new(DEFAULT_CONFIG_PATH).exists() {
-        // 这台机器上有 /etc/clusterscope/agent.yaml,"默认路径缺失"的前提不成立
-        // (qa/harness/no-root-fixes-checks.sh 的 F3 同样跳过;语义由 config_loader 的单测守住)。
+        // 本机存在默认配置时，“默认路径缺失”的前提不成立；配置解析另有单元测试覆盖。
         eprintln!("跳过:本机存在 {DEFAULT_CONFIG_PATH}");
         return;
     }
@@ -211,7 +207,7 @@ fn agent_warns_about_the_missing_default_config_file_and_keeps_running() {
 
     assert!(
         outcome.still_running,
-        "不带 -c 时 agent 不得被硬错误终止(守住 NR-06):\n{}",
+        "不带 -c 时 agent 不得被硬错误终止:\n{}",
         outcome.output
     );
     assert!(
