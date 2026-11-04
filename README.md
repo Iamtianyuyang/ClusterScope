@@ -40,20 +40,20 @@
 
 ## 目录
 
-- [快速开始](#quickstart) · [环境要求](#requirements) · [Web](#web) · [数据采集](#collection)
-- [配置](#config) · [安装方式](#install) · [服务管理](#services) · [数据保留](#retention)
-- [文档](#docs) · [项目结构](#structure) · [测试](#testing) · [常见问题](#faq) · [已知限制](#limitations)
+- [快速开始](#快速开始) · [环境要求](#环境要求) · [Web](#web) · [数据采集](#数据采集无-root)
+- [配置](#配置) · [安装方式](#安装方式) · [服务管理](#服务管理) · [数据保留](#数据保留)
+- [文档](#文档) · [项目结构](#项目结构) · [测试](#测试) · [常见问题](#常见问题) · [已知限制](#已知限制)
 
-## 环境要求 {#requirements}
+## 环境要求
 
 | 组件 | 要求 |
 |------|------|
 | 操作系统 | Linux x86_64(NVIDIA 驱动 + NVML 采集 GPU 指标) |
 | 权限 | 普通用户即可,**无需 root** |
-| PostgreSQL | v16+(server 必需;无需 root 的两条落地路径见[快速开始](#quickstart)第 2 步;`deploy/docker-compose.yml` 需要本机有 docker) |
+| PostgreSQL | v16+(server 必需;无需 root 的两条落地路径见[快速开始](#快速开始)第 2 步;`deploy/docker-compose.yml` 需要本机有 docker) |
 | 源码编译 | Rust 工具链 + `protoc` |
 
-## 快速开始 {#quickstart}
+## 快速开始
 
 ### 1. 源码编译
 
@@ -127,7 +127,7 @@ psql "postgresql://<用户>:<口令>@<主机>:5432/clusterscope" -c 'select vers
 
 Server 配置 `auth_required: false` 时可直接只读监控；开启认证时，在页面右上角登录。
 
-## Web {#web}
+## Web
 
 Server 将 Web 资源直接嵌入二进制并同源托管，默认每 3 秒刷新，同时通过 WebSocket 接收指标变更。无需构建前端，也没有第三方 Web 依赖。首屏直接呈现集群状态，没有引导页或宣传区。
 
@@ -174,7 +174,7 @@ Server 将 Web 资源直接嵌入二进制并同源托管，默认每 3 秒刷�
 | 离线 | 整卡弱化，状态点标红 |
 | 折线 | 利用率青色、显存灰色、CPU 主文字色 |
 
-## 数据采集(无 root) {#collection}
+## 数据采集(无 root)
 
 - **NVML**(nvml-wrapper):设备数、利用率、显存、温度、功耗、compute processes(pid + used VRAM)、per-process SM/memory/encoder/decoder 采样(驱动不支持时为 `—`)
 - **`/proc/<pid>/`**:USER(Uid → getpwuid)与 COMMAND(cmdline,识别 `python train.py` 模式)
@@ -184,7 +184,7 @@ Server 将 Web 资源直接嵌入二进制并同源托管，默认每 3 秒刷�
 - CPU 使用率由同一 sysinfo 实例跨周期计算(避免首刷恒 0),swap 等真实入库,采不到报不可用、不伪造 0
 - Top CPU 进程由同一 sysinfo 实例每采集周期(约 2s)扫描一次(仅读 CPU/内存,不解析 cmdline),首个周期为基线不产生数据,权限不足的进程显示 `—` / `<restricted>`
 
-## 配置 {#config}
+## 配置
 
 ### server.yaml 关键项
 
@@ -222,7 +222,7 @@ gRPC 控制面默认无认证(适合可信内网)。在不可信网络部署时,
 每个 agent 在 `agent.yaml` 里配置相同值(或 `--agent-token`),所有 gRPC 调用都会带上 `Authorization: Bearer <token>`;
 token 不匹配的调用被拒绝。生成随机 token:`openssl rand -hex 32`。
 
-## 安装方式(用户级 / 系统级) {#install}
+## 安装方式
 
 | 方式 | 需要 root? | 二进制 / 配置 | unit 文件(仓库里现成的) |
 |------|-----------|---------------|--------------------------|
@@ -271,7 +271,7 @@ sudo systemctl enable --now clusterscope-server clusterscope-agent
 
 没有 root 就只用用户级那套;两套不要混装(同名服务会互相顶掉)。
 
-## 服务管理 {#services}
+## 服务管理
 
 ```bash
 systemctl --user status  clusterscope-server    # 中央服务
@@ -287,7 +287,7 @@ journalctl --user -u clusterscope-agent         # 日志
 - 节点状态 online / degraded / offline 自动切换
 - 同一台机器只应运行一个 agent(重复实例会互相挤掉上报数据)
 
-## 数据保留 {#retention}
+## 数据保留
 
 | 数据 | 保留 |
 |------|------|
@@ -299,19 +299,19 @@ journalctl --user -u clusterscope-agent         # 日志
 
 Web 与 REST 的历史查询自动合并三档粒度；超过 24h 的历史只有平均利用率，无逐 GPU 明细。
 
-## 文档 {#docs}
+## 文档
 
 - `docs/api.md` — REST API 完整参考(认证、节点、指标、任务、告警、WebSocket)
 - `docs/architecture.md` — 架构与关键设计决策
 - `deploy/*.example` — server / agent 完整配置模板
 
-## 常见问题 {#faq}
+## 常见问题
 
 - **节点迟迟不出现**:`systemctl --user status clusterscope-agent` 是否运行、`journalctl --user -u clusterscope-agent` 有无报错、server 的 50051 端口是否可达、`agent_token` 是否与 server 一致
 - **Web 提示需要登录**：Server 未开 `auth_required: false`，在页面右上角使用账号密码登录
 - **GPU 指标缺失**:agent 所在节点需 NVIDIA 驱动(NVML 初始化失败自动回退 nvidia-smi);纯 CPU 节点仍正常上报 CPU/内存
 
-## 项目结构 {#structure}
+## 项目结构
 
 ```
 crates/
@@ -327,7 +327,7 @@ assets/          # 项目图标
 docs/            # 架构与 API 文档
 ```
 
-## 测试 {#testing}
+## 测试
 
 ```bash
 cargo fmt --check
@@ -337,7 +337,7 @@ npm --prefix web test
 npm --prefix web run check
 ```
 
-## 已知限制 {#limitations}
+## 已知限制
 
 - 进程级 SM 采样依赖驱动持续提供样本(本机 NVIDIA GPU 驱动下为 `—`,优雅降级)
 - gRPC 未启用 TLS(`tls_enabled` 已预留),生产建议配合内网/VPN 或自行加 TLS
