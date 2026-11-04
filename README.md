@@ -4,17 +4,17 @@
   <img src="assets/icon.png" width="96" height="96" alt="ClusterScope" />
 </p>
 
-<p align="center">
-  <a href="docs/images/web-overview.png"><img src="docs/images/web-overview.png" alt="ClusterScope Web 总览：节点、CPU、GPU 与进程" width="1000" /></a>
-</p>
-
-**ClusterScope** — 轻量级 Linux 集群监控平台。Web 仪表盘 + 分布式采集，专注 CPU、GPU 与进程，普通用户即可运行，**无需 root**。
+<p align="center"><strong>轻量级 Linux 集群监控平台</strong><br>Web 仪表盘 + 分布式采集，专注 CPU、GPU 与进程，普通用户即可运行，无需 root。</p>
 
 <p align="center">
   <a href="https://github.com/Iamtianyuyang/ClusterScope/releases"><img alt="Release" src="https://img.shields.io/badge/release-v0.1.1-2aa198"></a>
   <a href="https://github.com/Iamtianyuyang/ClusterScope/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20x86__64-lightgrey">
   <img alt="No root" src="https://img.shields.io/badge/root-not%20required-success">
+</p>
+
+<p align="center">
+  <a href="docs/images/web-overview.png"><img src="docs/images/web-overview.png" alt="ClusterScope Web 总览：节点、CPU、GPU 与进程" width="960" /></a>
 </p>
 
 - **Agent**:部署在每台 GPU 节点,通过 **NVML** 采集 GPU 利用率/显存/温度/功耗/进程,`/proc` 尽力读取进程用户名与命令行(权限不足自动降级)
@@ -55,21 +55,15 @@
 
 ## 快速开始 {#quickstart}
 
-### 1. 获取二进制
+### 1. 源码编译
 
-**方式 A:直接下载 Release 包**
-
-```bash
-curl -L -O https://github.com/Iamtianyuyang/ClusterScope/releases/download/v0.1.1/clusterscope-v0.1.1-linux-x86_64.tar.gz
-tar xzf clusterscope-v0.1.1-linux-x86_64.tar.gz
-# 得到 clusterscope-agent / clusterscope-server（Web 已内嵌）
-```
-
-**方式 B:源码编译**(需要 Rust 工具链与 `protoc`,proto 由 `crates/protocol/build.rs` 编译)
+当前 Web 版请从源码构建；需要 Rust 工具链与 `protoc`，proto 由 `crates/protocol/build.rs` 自动编译。旧版 Release 不包含本文展示的 Web 界面。
 
 ```bash
+git clone https://github.com/Iamtianyuyang/ClusterScope.git
+cd ClusterScope
 cargo build --release
-# 产物:target/release/clusterscope-{agent,server}（Web 已内嵌）
+# 产物：target/release/clusterscope-{agent,server}（Web 已内嵌）
 ```
 
 ### 2. 启动 Server(需要 PostgreSQL)
@@ -114,8 +108,7 @@ psql "postgresql://<用户>:<口令>@<主机>:5432/clusterscope" -c 'select vers
 `postgres_url` 填 `postgresql://clusterscope:<口令>@127.0.0.1:5432/clusterscope`;
 `initdb` / `pg_ctl` / `psql` 不在 PATH 时用 `$HOME/pg16/bin/` 下的完整路径。
 
-> `docker compose up`(`deploy/docker-compose.yml`,只含 postgres + server)**需要本机有 docker**:
-> 本集群实测 `docker` 与 `docker-compose` 都不存在(podman 也没有镜像),因此走的是上面路径 B。
+> 已有 Docker 时，也可运行 `docker compose -f deploy/docker-compose.yml up --build`，同时启动 PostgreSQL 与 Server。
 
 ### 3. 部署 Agent(免密 ssh,无需 root)
 
