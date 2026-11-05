@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// 被测二进制(集成测试由 cargo 提供路径)。
-const AGENT_BIN: &str = env!("CARGO_BIN_EXE_clusterscope-agent");
+const AGENT_BIN: &str = env!("CARGO_BIN_EXE_clusterscope");
 
 /// 不带 `-c` 时的默认配置路径,与 `config_loader::DEFAULT_CONFIG_PATH` 一致。
 const DEFAULT_CONFIG_PATH: &str = "/etc/clusterscope/agent.yaml";
@@ -22,7 +22,7 @@ struct Scratch {
 impl Scratch {
     fn new(tag: &str) -> Self {
         let dir = std::env::temp_dir().join(format!(
-            "clusterscope-agent-accept-{tag}-{}",
+            "clusterscope-accept-{tag}-{}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&dir);
@@ -71,6 +71,7 @@ struct Outcome {
 /// 启动 agent(真进程),等它退出或等满 `grace`,收集输出。
 fn run_agent(args: &[&str], home: &Path, grace: Duration) -> Outcome {
     let mut child = Command::new(AGENT_BIN)
+        .arg("agent")
         .args(args)
         .env("HOME", home)
         .env_remove("XDG_CONFIG_HOME")
@@ -79,7 +80,7 @@ fn run_agent(args: &[&str], home: &Path, grace: Duration) -> Outcome {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("spawn clusterscope-agent");
+        .expect("spawn clusterscope agent");
 
     let mut stdout = child.stdout.take().expect("stdout pipe");
     let mut stderr = child.stderr.take().expect("stderr pipe");
@@ -183,7 +184,7 @@ fn missing_config_is_not_silently_replaced_by_the_default_server_address() {
     let outcome = run_agent(&["-c", &config], scratch.dir(), Duration::from_secs(15));
 
     assert!(
-        !outcome.output.contains("http://localhost:50051"),
+        !outcome.output.contains("http://localhost:10203"),
         "显式路径缺失时不得出现默认服务器地址(静默回退):\n{}",
         outcome.output
     );
@@ -278,7 +279,7 @@ fn configured_server_address_is_the_address_the_agent_uses() {
         outcome.output
     );
     assert!(
-        !outcome.output.contains("http://localhost:50051"),
+        !outcome.output.contains("http://localhost:10203"),
         "不得出现默认地址(配置被忽略):\n{}",
         outcome.output
     );

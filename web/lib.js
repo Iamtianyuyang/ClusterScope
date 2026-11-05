@@ -27,9 +27,23 @@ export function fmtUptime(seconds) {
   const days = Math.floor(value / 86400);
   const hours = Math.floor(value % 86400 / 3600);
   const minutes = Math.floor(value % 3600 / 60);
-  if (days) return `${days} 天 ${hours} 小时`;
-  if (hours) return `${hours} 小时 ${minutes} 分`;
-  return `${minutes} 分钟`;
+  if (days) return `${days}d ${String(hours).padStart(2, '0')}h`;
+  if (hours) return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+  return `${minutes}m`;
+}
+
+export function fmtClock(date = new Date()) {
+  return [date.getHours(), date.getMinutes(), date.getSeconds()]
+    .map(value => String(value).padStart(2, '0')).join(':');
+}
+
+export function fmtTime(ms, long = false) {
+  const date = new Date(Number(ms));
+  if (!Number.isFinite(date.getTime())) return '—';
+  if (long) {
+    return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  }
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
 export function memoryPercent(gpu) {
@@ -38,6 +52,25 @@ export function memoryPercent(gpu) {
   const used = Number(gpu.memory_used_bytes);
   const total = Number(gpu.memory_total_bytes);
   return Number.isFinite(used) && Number.isFinite(total) && total > 0 ? used / total * 100 : null;
+}
+
+export function gpuUtil(gpu) {
+  const value = Number(gpu?.utilization_gpu);
+  return Number.isFinite(value) ? value : null;
+}
+
+export function gpuTemp(gpu) {
+  const value = Number(gpu?.temperature_celsius);
+  return Number.isFinite(value) ? value : null;
+}
+
+export function gpuTone(gpu) {
+  const util = gpuUtil(gpu);
+  const temp = gpuTemp(gpu);
+  if (temp !== null && temp >= 80) return 'critical';
+  if ((util !== null && util >= 85) || (temp !== null && temp >= 70)) return 'hot';
+  if (util !== null && util < 5) return 'idle';
+  return '';
 }
 
 export function normalizeMetrics(raw) {
@@ -75,12 +108,24 @@ export function linePath(values) {
   return path;
 }
 
+export function areaPath(values) {
+  const line = linePath(values);
+  return line ? `${line} L 590 170 L 10 170 Z` : '';
+}
+
 export function historySample(raw) {
   const gpus = raw?.gpus || raw?.gpu_metrics || [];
+  const memoryTotal = Number(raw?.memory_total_bytes);
+  const memoryUsed = Number(raw?.memory_used_bytes);
+  const systemMem = Number.isFinite(raw?.memory_usage_percent)
+    ? raw.memory_usage_percent
+    : Number.isFinite(memoryTotal) && memoryTotal > 0 && Number.isFinite(memoryUsed)
+      ? memoryUsed / memoryTotal * 100 : null;
   return {
     cpu: Number.isFinite(raw?.cpu_usage_percent) ? raw.cpu_usage_percent : null,
     gpuAverage: Number.isFinite(raw?.gpu_utilization_percent) ? raw.gpu_utilization_percent : null,
-    gpus: gpus.map(gpu => ({ util: gpu.utilization_gpu, mem: memoryPercent(gpu) })),
+    systemMem,
+    gpus: gpus.map(gpu => ({ util: gpuUtil(gpu), mem: memoryPercent(gpu) })),
     timestamp: raw?.timestamp_ms || Date.now(),
   };
 }

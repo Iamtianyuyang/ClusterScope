@@ -2,7 +2,7 @@
 # Copy to ~/.config/clusterscope/agent.yaml (shared across nodes is fine).
 
 # Central server gRPC address
-server_addr: "http://127.0.0.1:50051"
+server_addr: "http://127.0.0.1:10203"
 
 # Optional: fixed node id. Leave EMPTY to auto-use the local hostname —
 # recommended on shared-HOME clusters where this file is shared by many nodes.

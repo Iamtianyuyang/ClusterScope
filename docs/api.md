@@ -17,6 +17,34 @@ Authorization: Bearer <token>
 | POST | `/api/login` | Login with username/password |
 | POST | `/api/refresh-token` | Refresh JWT tokens |
 
+### Server onboarding
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/servers/install` | **Admin only.** SSH into a host, upload this same `clusterscope` binary, install and start its Agent role |
+
+Request body:
+
+```json
+{
+  "username": "gpu",
+  "host": "192.168.0.20",
+  "password": "ssh-password",
+  "port": 22,
+  "node_id": "gpu-09",
+  "server_addr": "192.168.10.100:10203"
+}
+```
+
+- `node_id` is optional; the target hostname is used when it is empty.
+- `server_addr` accepts `host:port` or an explicit `http://` / `https://` URL.
+- Success returns `{"node_id": "gpu-09", "message": "Agent 已安装并通过 systemd --user 启动。"}`.
+- `400` validation error, `401` missing/expired admin token, `502` SSH login or remote command failure, `500` local binary read/generation failure.
+
+The SSH password is used only for this request. It is not written to disk, stored in PostgreSQL, or logged. The endpoint logs in as the supplied **ordinary user** (never root), uploads the currently running `clusterscope` executable to `~/.local/bin/clusterscope`, writes `~/.config/clusterscope/agent.yaml`, and starts `clusterscope agent -c …` through `systemd --user` (falling back to `nohup`). It never calls `sudo` and never writes `/etc` or `/usr/local`.
+
+The admin check is an application role, not OS root. Use the endpoint only on a trusted network; the Web UI warns when the page is served over plain HTTP.
+
 ### Nodes
 
 | Method | Path | Description |

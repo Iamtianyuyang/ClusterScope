@@ -1,0 +1,25 @@
+# User-level systemd unit -- the default, no root required.
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/clusterscope.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now clusterscope
+#
+# %h expands to the installing user's home directory. No system-wide variant is
+# supported: everything lives under the user's HOME and no step needs root/sudo.
+#
+# Requires a running user manager (systemd --user). To survive logout, enable
+# linger for this user when the system allows it (`loginctl enable-linger $USER`);
+# otherwise use a user crontab @reboot entry. Do not escalate to root.
+[Unit]
+Description=ClusterScope GPU Agent (user)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/clusterscope agent -c %h/.config/clusterscope/agent.yaml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

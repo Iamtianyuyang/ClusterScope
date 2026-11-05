@@ -2,12 +2,14 @@
 
 ## Overview
 
-ClusterScope is a distributed CPU / GPU / process monitoring platform. It consists of:
+ClusterScope is a distributed CPU / GPU / process monitoring platform. It ships as one executable with two roles:
 
-1. **Agent** — a lightweight Rust service on each compute node that collects metrics
-2. **Central Server** — aggregates Agent data, persists history, and serves REST / WebSocket APIs
-3. **Web** — a dependency-free read-only dashboard embedded in the Server binary
+1. **`clusterscope server`** — the central service: Agent aggregation, PostgreSQL persistence, REST / WebSocket APIs, and the embedded dashboard
+2. **`clusterscope agent`** — the lightweight role on each compute node that collects metrics
+3. **Web** — a dependency-free read-only dashboard embedded in the same binary
 4. **PostgreSQL** — persistent storage for metrics history and compatible management APIs
+
+There are no separate `clusterscope-server` or `clusterscope-agent` executables. The server role can install the agent role on another host over password-authenticated SSH, uploading the same binary and starting it with `agent -c`.
 
 ## Architecture Diagram
 

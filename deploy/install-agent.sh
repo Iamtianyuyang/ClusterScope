@@ -1,12 +1,12 @@
 #!/bin/bash
-# Install clusterscope-agent on another host via passwordless SSH, no root needed.
+# Install ClusterScope on another host via passwordless SSH, no root needed.
 #
 # Usage:
 #   ./install-agent.sh user@host <server-addr> [node-id]
 #
 # Examples:
-#   ./install-agent.sh worker1@192.168.1.20 http://203.0.113.1:50051
-#   ./install-agent.sh worker2@192.168.1.21 http://203.0.113.1:50051 gpu-node-2
+#   ./install-agent.sh worker1@192.168.1.20 http://203.0.113.1:10203
+#   ./install-agent.sh worker2@192.168.1.21 http://203.0.113.1:10203 gpu-node-2
 #
 # The agent is installed under ~/.local/bin and ~/.config/clusterscope on the
 # remote host and started via systemd --user (or nohup as a fallback).
@@ -22,13 +22,13 @@
 set -euo pipefail
 
 TARGET="${1:?usage: install-agent.sh user@host <server-addr> [node-id]}"
-SERVER_ADDR="${2:?server-addr is required, e.g. http://203.0.113.1:50051}"
+SERVER_ADDR="${2:?server-addr is required, e.g. http://203.0.113.1:10203}"
 NODE_ID="${3:-}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BIN="$ROOT/target/release/clusterscope-agent"
-[ -f "$BIN" ] || BIN="$ROOT/target/debug/clusterscope-agent"
-[ -f "$BIN" ] || { echo "build the agent first: cargo build --release -p agent"; exit 1; }
+BIN="$ROOT/target/release/clusterscope"
+[ -f "$BIN" ] || BIN="$ROOT/target/debug/clusterscope"
+[ -f "$BIN" ] || { echo "build clusterscope first: cargo build --release --bin clusterscope"; exit 1; }
 
 echo "==> testing passwordless ssh to $TARGET"
 ssh -o BatchMode=yes "$TARGET" 'echo ok' >/dev/null
@@ -36,8 +36,8 @@ ssh -o BatchMode=yes "$TARGET" 'echo ok' >/dev/null
 echo "==> uploading agent binary"
 ssh -o BatchMode=yes "$TARGET" 'mkdir -p ~/.local/bin ~/.config/clusterscope'
 # Copy to /tmp first, then move: overwriting a running binary in place can fail.
-scp -q "$BIN" "$TARGET:/tmp/clusterscope-agent.new"
-ssh -o BatchMode=yes "$TARGET" 'mv -f /tmp/clusterscope-agent.new ~/.local/bin/clusterscope-agent && chmod +x ~/.local/bin/clusterscope-agent'
+scp -q "$BIN" "$TARGET:/tmp/clusterscope.new"
+ssh -o BatchMode=yes "$TARGET" 'mv -f /tmp/clusterscope.new ~/.local/bin/clusterscope && chmod +x ~/.local/bin/clusterscope'
 
 # Default: empty node_id -> each agent uses its own local hostname.
 # (Works on shared-HOME clusters where one config file is shared by all nodes.)
@@ -66,7 +66,7 @@ echo "==> starting agent on $TARGET"
 ssh "$TARGET" 'bash -s' <<'EOF'
 set -eu
 mkdir -p ~/.config/clusterscope/logs
-BIN="$HOME/.local/bin/clusterscope-agent"
+BIN="$HOME/.local/bin/clusterscope"
 CONF="$HOME/.config/clusterscope/agent.yaml"
 PIDFILE="$HOME/.config/clusterscope/agent.pid"
 
@@ -106,14 +106,14 @@ stop_previous_agent() {
 if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
     stop_previous_agent
     mkdir -p ~/.config/systemd/user
-    cat > ~/.config/systemd/user/clusterscope-agent.service <<SVC
+    cat > ~/.config/systemd/user/clusterscope.service <<SVC
 [Unit]
 Description=ClusterScope GPU Agent
 After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$BIN -c $CONF
+ExecStart=$BIN agent -c $CONF
 Restart=always
 RestartSec=5
 
@@ -121,11 +121,11 @@ RestartSec=5
 WantedBy=default.target
 SVC
     systemctl --user daemon-reload
-    systemctl --user enable --now clusterscope-agent.service
+    systemctl --user enable --now clusterscope.service
     echo "started via systemd --user"
 else
     stop_previous_agent
-    nohup "$BIN" -c "$CONF" >> "$HOME/.config/clusterscope/logs/agent.log" 2>&1 &
+    nohup "$BIN" agent -c "$CONF" >> "$HOME/.config/clusterscope/logs/agent.log" 2>&1 &
     echo "$!" > "$PIDFILE"
     echo "started via nohup (pid $(cat "$PIDFILE"))"
 fi

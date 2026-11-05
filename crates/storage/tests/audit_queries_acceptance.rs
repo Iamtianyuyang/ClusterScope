@@ -15,7 +15,7 @@ use storage::audit_queries::{insert_audit_log, list_audit_logs};
 use tokio::sync::{Mutex, MutexGuard};
 
 const DEFAULT_POSTGRES_URL: &str =
-    "postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope";
+    "postgresql://clusterscope:clusterscope@127.0.0.1:10204/clusterscope";
 
 /// The three records of the scenario background belong to this user.
 const USER_AUDIT: &str = "m6-audit";

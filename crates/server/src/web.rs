@@ -1,6 +1,6 @@
 //! Built-in, dependency-free Web dashboard.
 //!
-//! Assets are embedded at compile time so `clusterscope-server` remains one
+//! Assets are embedded at compile time so `clusterscope` remains one
 //! portable binary and the UI is always served from the same origin as its API.
 
 use axum::{
@@ -20,6 +20,8 @@ const API: &str = include_str!("../../../web/api.js");
 const LIB: &str = include_str!("../../../web/lib.js");
 const MOTION: &str = include_str!("../../../web/motion.js");
 const ICON: &[u8] = include_bytes!("../../../assets/icon.png");
+const FONT_MEDIUM: &[u8] = include_bytes!("../../../web/fonts/barlow-condensed-500.woff2");
+const FONT_SEMIBOLD: &[u8] = include_bytes!("../../../web/fonts/barlow-condensed-600.woff2");
 
 macro_rules! asset_handler {
     ($name:ident, $body:expr, $content_type:expr) => {
@@ -40,6 +42,14 @@ async fn icon() -> Response {
     with_asset_headers(ICON.into_response(), "image/png")
 }
 
+async fn font_medium() -> Response {
+    with_asset_headers(FONT_MEDIUM.into_response(), "font/woff2")
+}
+
+async fn font_semibold() -> Response {
+    with_asset_headers(FONT_SEMIBOLD.into_response(), "font/woff2")
+}
+
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(index))
@@ -49,6 +59,8 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/lib.js", get(lib))
         .route("/motion.js", get(motion))
         .route("/icon.png", get(icon))
+        .route("/fonts/barlow-condensed-500.woff2", get(font_medium))
+        .route("/fonts/barlow-condensed-600.woff2", get(font_semibold))
 }
 
 fn asset_response(body: &'static str, content_type: &'static str) -> Response {
@@ -103,6 +115,8 @@ mod tests {
         assert!(INDEX.contains("id=\"app-view\""));
         assert!(INDEX.contains("src=\"/icon.png\""));
         assert_eq!(&ICON[..8], b"\x89PNG\r\n\x1a\n");
+        assert_eq!(&FONT_MEDIUM[..4], b"wOF2");
+        assert_eq!(&FONT_SEMIBOLD[..4], b"wOF2");
         assert!(!INDEX.contains("job-dialog"));
     }
 }

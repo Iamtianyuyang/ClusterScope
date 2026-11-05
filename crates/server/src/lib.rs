@@ -10,6 +10,7 @@ use protocol::AgentServiceServer;
 use scheduler::Scheduler;
 
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tonic::transport::Server;
@@ -18,6 +19,7 @@ use tracing::{info, warn};
 mod auth_middleware;
 mod grpc;
 mod handlers;
+mod install;
 mod web;
 mod ws_handler;
 
@@ -42,9 +44,8 @@ struct AppState {
     login_concurrency: std::sync::Arc<tokio::sync::Semaphore>,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = load_config()?;
+pub async fn run(config_path: Option<PathBuf>) -> anyhow::Result<()> {
+    let config = load_config(config_path.as_deref())?;
 
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
@@ -239,20 +240,19 @@ async fn main() -> anyhow::Result<()> {
 ///   CLUSTERSCOPE_GRPC_ADDR / GRPC_ADDR
 ///   CLUSTERSCOPE_AUTH_REQUIRED / AUTH_REQUIRED
 ///   CLUSTERSCOPE_AGENT_TOKEN / AGENT_TOKEN
-fn load_config() -> anyhow::Result<ServerConfig> {
-    let args: Vec<String> = std::env::args().collect();
-    let config_path = args
-        .get(1)
-        .map(|s| s.as_str())
-        .unwrap_or("/etc/clusterscope/server.yaml");
+fn load_config(config_path: Option<&Path>) -> anyhow::Result<ServerConfig> {
+    let (config_path, explicit) = match config_path {
+        Some(path) => (path, true),
+        None => (Path::new("/etc/clusterscope/server.yaml"), false),
+    };
 
-    let mut config = if std::path::Path::new(config_path).exists() {
+    let mut config = if config_path.exists() {
         let content = std::fs::read_to_string(config_path)
-            .map_err(|e| anyhow::anyhow!("Failed to read config {}: {}", config_path, e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to read config {}: {}", config_path.display(), e))?;
         serde_yaml::from_str::<ServerConfig>(&content)
-            .map_err(|e| anyhow::anyhow!("Failed to parse config {}: {}", config_path, e))?
-    } else if args.len() > 1 {
-        anyhow::bail!("Config file not found: {}", config_path);
+            .map_err(|e| anyhow::anyhow!("Failed to parse config {}: {}", config_path.display(), e))?
+    } else if explicit {
+        anyhow::bail!("Config file not found: {}", config_path.display());
     } else {
         info!("No config file given — using defaults + environment overrides");
         ServerConfig::default()
@@ -473,6 +473,7 @@ fn build_http_router(state: Arc<AppState>) -> Router {
                 .patch(handlers::update_user)
                 .delete(handlers::delete_user),
         )
+        .route("/servers/install", post(install::install_agent))
         .route("/alerts/rules", post(handlers::create_alert_rule))
         .route(
             "/alerts/rules/{rule_id}",

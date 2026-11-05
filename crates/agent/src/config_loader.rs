@@ -107,7 +107,7 @@ mod tests {
 
     fn scratch(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "clusterscope-agent-config-{tag}-{}",
+            "clusterscope-config-{tag}-{}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&dir);

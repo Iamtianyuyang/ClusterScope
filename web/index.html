@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#06111d">
+  <meta name="theme-color" content="#0d0e0f">
   <meta name="description" content="ClusterScope — 轻量、清晰的 CPU 与 GPU 集群监控。">
   <title>ClusterScope · 集群监控</title>
   <link rel="icon" href="/icon.png" type="image/png">
@@ -11,51 +11,81 @@
 </head>
 <body>
   <a class="skip-link" href="#app-view">跳到主要内容</a>
-  <header class="topbar">
-    <a class="brand" href="#overview" aria-label="ClusterScope 首页">
-      <img class="brand-mark" src="/icon.png" width="44" height="44" alt="">
-      <span>ClusterScope</span>
-    </a>
-    <div class="topbar-actions">
-      <div class="refresh-timer" title="下次自动刷新"><span>下次刷新</span><div id="countdown" aria-label="距下次刷新 3 秒"></div></div>
-      <button id="refresh-button" class="icon-button magnetic" type="button" title="立即刷新（R）" aria-label="立即刷新">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
-      </button>
-      <button id="account-button" class="text-button" type="button">登录</button>
-    </div>
-  </header>
+  <div class="frame">
+    <header class="topbar">
+      <a class="brand" href="#overview" aria-label="ClusterScope 首页">
+        <img class="brand-mark" src="/icon.png" width="30" height="30" alt="">
+        <span class="brand-word">CLUSTERSCOPE</span>
+        <span class="brand-sub">集群监控</span>
+      </a>
+      <nav class="view-tabs" aria-label="主要页面" role="tablist">
+        <button class="view-tab" data-view="overview" role="tab" aria-selected="true" aria-controls="app-view">总览<kbd>1</kbd></button>
+        <button class="view-tab" data-view="trend" role="tab" aria-selected="false" aria-controls="app-view">趋势<kbd>2</kbd></button>
+      </nav>
+      <div class="top-actions">
+        <span class="conn" id="conn" title="实时连接状态"><i id="live-dot" class="lamp"></i><span id="live-label">连接中</span></span>
+        <time class="clock" id="clock">--:--:--</time>
+        <span class="countdown" title="下次自动刷新"><span id="countdown">3</span><small>s</small></span>
+        <button id="refresh-button" class="icon-button" type="button" title="立即刷新（R）" aria-label="立即刷新">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
+        </button>
+        <button id="account-button" class="text-button" type="button">登录</button>
+      </div>
+    </header>
 
-  <nav class="nav" aria-label="主要页面" role="tablist">
-    <button class="nav-item" data-page="overview" role="tab" aria-selected="true"><span>总览</span><kbd>1</kbd></button>
-    <button class="nav-item" data-page="trend" role="tab" aria-selected="false"><span>趋势</span><kbd>2</kbd></button>
-  </nav>
+    <main id="app-view" class="app-view" tabindex="-1" role="tabpanel" aria-label="集群视图">
+      <div class="loading-board" aria-label="正在加载集群状态">
+        <div class="loading-head"></div>
+        <div class="loading-row"></div>
+        <div class="loading-row"></div>
+        <div class="loading-row"></div>
+      </div>
+    </main>
 
-  <main>
-    <section class="cluster-strip" aria-label="集群实时状态">
-      <p class="connection-status"><span id="live-dot" class="live-dot"></span><span id="live-label">正在连接</span></p>
-      <div id="cluster-stats" class="cluster-stats"></div>
-    </section>
+    <footer class="footer">
+      <span>只做监控，不打扰计算。</span>
+      <span id="footer-source">NVML · /proc · 3s</span>
+      <span class="footer-keys"><kbd>R</kbd> 刷新 <kbd>1–2</kbd> 页面 <kbd>J/K</kbd> GPU</span>
+    </footer>
+  </div>
 
-    <div id="error-banner" class="error-banner" role="alert" hidden></div>
-    <section id="app-view" class="app-view" tabindex="-1" aria-live="polite">
-      <div class="loading-state"><span class="spinner"></span><p>正在看清集群…</p></div>
-    </section>
-    <section id="process-section" class="process-section" aria-label="进程列表"></section>
-  </main>
-
-  <footer class="footer"><span>只做监控，不打扰计算。</span><span><kbd>R</kbd> 刷新 · <kbd>P</kbd> 切换进程 · <kbd>1–2</kbd> 切换页面</span></footer>
-
-  <dialog id="login-dialog" class="dialog small-dialog" aria-labelledby="login-title">
+  <dialog id="login-dialog" class="board-dialog" aria-labelledby="login-title">
     <form id="login-form" method="dialog" class="dialog-body">
-      <div class="dialog-heading"><div><p class="eyebrow">欢迎回来</p><h2 id="login-title">登录 ClusterScope</h2></div><button class="icon-button close-dialog" type="button" aria-label="关闭">×</button></div>
-      <p class="dialog-intro">Server 开启认证时，登录后即可查看集群。</p>
-      <label>用户名<input name="username" autocomplete="username" required maxlength="100"></label>
+      <div class="dialog-heading">
+        <div><h2 id="login-title">登录 ClusterScope</h2><p id="login-subtitle">Server 开启认证后，需要登录才能查看集群。</p></div>
+        <button class="icon-button close-dialog" type="button" aria-label="关闭"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <label>用户名<input name="username" autocomplete="username" autofocus required maxlength="100"></label>
       <label>密码<input name="password" type="password" autocomplete="current-password" required></label>
       <p class="form-error" role="alert" hidden></p>
       <button class="primary-button full-width" type="submit">登录</button>
     </form>
   </dialog>
+  <dialog id="add-server-dialog" class="board-dialog add-server-dialog" aria-labelledby="add-server-title">
+    <form id="add-server-form" method="dialog" class="dialog-body" autocomplete="off">
+      <div class="dialog-heading">
+        <div><h2 id="add-server-title">添加服务器</h2><p>通过 SSH 登录目标机器，自动安装并启动 Agent。</p></div>
+        <button class="icon-button close-dialog" type="button" aria-label="关闭"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="field-grid">
+        <label>SSH 用户名<input name="username" autocomplete="username" spellcheck="false" required maxlength="128" autofocus></label>
+        <label>IP / 主机名<input name="host" autocomplete="off" spellcheck="false" required maxlength="255" placeholder="192.168.0.20"></label>
+        <label class="full">SSH 密码<input name="password" type="password" autocomplete="new-password" required maxlength="1024"></label>
+        <label>SSH 端口<input name="port" type="number" min="1" max="65535" value="22" inputmode="numeric"></label>
+        <label>节点 ID（可选）<input name="node_id" autocomplete="off" spellcheck="false" maxlength="255" placeholder="留空则用目标主机名"></label>
+        <label class="full">Server gRPC 地址<input name="server_addr" autocomplete="off" spellcheck="false" required maxlength="255" placeholder="192.168.10.100:10203"></label>
+      </div>
+      <p class="form-note">Server 用这组 SSH 凭据以普通用户身份登录目标机器，把 Agent 装进该用户的 HOME，不需要 sudo/root。密码只用于本次安装，不保存。</p>
+      <p class="form-note warn" data-http-warning>只在可信内网使用；当前 Web 连接是 HTTP。</p>
+      <p class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button class="text-button close-dialog" type="button">取消</button>
+        <button class="primary-button" type="submit">登录并安装</button>
+      </div>
+    </form>
+  </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <div id="sr-status" class="sr-only" role="status" aria-live="polite"></div>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

@@ -1,0 +1,523 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-05T13:32:50.236+08:00",
+  "title": "Design System: ClusterScope",
+  "extensions": {
+    "colorMeta": {
+      "void": {
+        "role": "neutral",
+        "displayName": "Board Void",
+        "canonical": "#0d0e0f",
+        "tonalRamp": [
+          "#1d1f20",
+          "#3a3d41",
+          "#565c62",
+          "#727a83",
+          "#9299a0",
+          "#b4b8bc",
+          "#d4d6d8",
+          "#f4f5f5"
+        ]
+      },
+      "frame": {
+        "role": "neutral",
+        "displayName": "Case Steel",
+        "canonical": "#17191b",
+        "tonalRamp": [
+          "#1d1f20",
+          "#393d41",
+          "#555c62",
+          "#717a84",
+          "#9299a0",
+          "#b3b8bc",
+          "#d4d6d8",
+          "#f4f5f5"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Instrument Panel",
+        "canonical": "#121416",
+        "tonalRamp": [
+          "#1d1f21",
+          "#393d42",
+          "#545c64",
+          "#6e7a86",
+          "#9099a2",
+          "#b2b8bd",
+          "#d3d6d9",
+          "#f4f5f5"
+        ]
+      },
+      "cell": {
+        "role": "neutral",
+        "displayName": "Flap Black",
+        "canonical": "#0f1011",
+        "tonalRamp": [
+          "#1d1f20",
+          "#3a3d40",
+          "#575c61",
+          "#737a82",
+          "#93999f",
+          "#b4b8bb",
+          "#d4d6d8",
+          "#f4f5f5"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Signal Ivory",
+        "canonical": "#f2efe6",
+        "tonalRamp": [
+          "#252218",
+          "#4c452e",
+          "#756842",
+          "#a08d54",
+          "#b6a87c",
+          "#cac1a6",
+          "#dfdbcd",
+          "#f7f6f3"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Steel",
+        "canonical": "#a7aca9",
+        "tonalRamp": [
+          "#1e1f1e",
+          "#3c3f3d",
+          "#595e5b",
+          "#777e7a",
+          "#969c98",
+          "#b6b9b7",
+          "#d5d7d6",
+          "#f5f5f5"
+        ]
+      },
+      "dim": {
+        "role": "neutral",
+        "displayName": "Dim Steel",
+        "canonical": "#8b9194",
+        "tonalRamp": [
+          "#1e1f1f",
+          "#3b3e3f",
+          "#595d5f",
+          "#767c7f",
+          "#959a9d",
+          "#b5b8ba",
+          "#d5d7d7",
+          "#f5f5f5"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#2c2f31",
+        "tonalRamp": [
+          "#1e1f20",
+          "#3b3e40",
+          "#575d60",
+          "#747c81",
+          "#949a9e",
+          "#b5b8bb",
+          "#d5d7d8",
+          "#f4f5f5"
+        ]
+      },
+      "line-soft": {
+        "role": "neutral",
+        "displayName": "Soft Hairline",
+        "canonical": "#212427",
+        "tonalRamp": [
+          "#1d1f20",
+          "#393d41",
+          "#555c62",
+          "#707a84",
+          "#9199a1",
+          "#b3b8bc",
+          "#d4d6d9",
+          "#f4f5f5"
+        ]
+      },
+      "steel": {
+        "role": "neutral",
+        "displayName": "Steel Edge",
+        "canonical": "#3a3d40",
+        "tonalRamp": [
+          "#1e1f20",
+          "#3b3d40",
+          "#585c60",
+          "#747a80",
+          "#94999e",
+          "#b5b8ba",
+          "#d5d6d8",
+          "#f5f5f5"
+        ]
+      },
+      "steel-hi": {
+        "role": "neutral",
+        "displayName": "Steel Highlight",
+        "canonical": "#41464a",
+        "tonalRamp": [
+          "#1d1f20",
+          "#3a3e40",
+          "#575c61",
+          "#737b82",
+          "#939a9f",
+          "#b4b8bb",
+          "#d4d6d8",
+          "#f4f5f5"
+        ]
+      },
+      "steel-lo": {
+        "role": "neutral",
+        "displayName": "Steel Shadow",
+        "canonical": "#1f2326",
+        "tonalRamp": [
+          "#1d1f21",
+          "#383e42",
+          "#545d64",
+          "#6e7c87",
+          "#909aa2",
+          "#b2b8bd",
+          "#d3d7d9",
+          "#f4f5f5"
+        ]
+      },
+      "amber": {
+        "role": "primary",
+        "displayName": "Signal Amber",
+        "canonical": "#f0b429",
+        "tonalRamp": [
+          "#30260d",
+          "#664d14",
+          "#a27716",
+          "#e3a412",
+          "#eab948",
+          "#e9cb86",
+          "#efe0be",
+          "#faf7f0"
+        ]
+      },
+      "amber-soft": {
+        "role": "primary",
+        "displayName": "Amber Wash",
+        "canonical": "#3a2f13",
+        "tonalRamp": [
+          "#292314",
+          "#554825",
+          "#846e33",
+          "#b7953e",
+          "#c8ad6a",
+          "#d5c49b",
+          "#e5dcc8",
+          "#f8f6f2"
+        ]
+      },
+      "red": {
+        "role": "secondary",
+        "displayName": "Fault Red",
+        "canonical": "#ef6b6b",
+        "tonalRamp": [
+          "#2f0e0e",
+          "#631717",
+          "#9c1b1b",
+          "#db1a1a",
+          "#e44e4e",
+          "#e68a8a",
+          "#edbfbf",
+          "#faf0f0"
+        ]
+      },
+      "green": {
+        "role": "secondary",
+        "displayName": "Online Green",
+        "canonical": "#6fcf9f",
+        "tonalRamp": [
+          "#15291f",
+          "#26553d",
+          "#34845c",
+          "#3eb67a",
+          "#6bc799",
+          "#9bd4b8",
+          "#c8e4d6",
+          "#f2f8f5"
+        ]
+      },
+      "core-idle": {
+        "role": "neutral",
+        "displayName": "Core Trough",
+        "canonical": "#24272a",
+        "tonalRamp": [
+          "#1d1f20",
+          "#3a3d41",
+          "#565c62",
+          "#717a84",
+          "#9299a0",
+          "#b3b8bc",
+          "#d4d6d8",
+          "#f4f5f5"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The four summary values; the largest data voice."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The live clock."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "View headings; CJK falls through."
+      },
+      "board-data": {
+        "displayName": "Board Data",
+        "purpose": "Flap values, node names, GPU numbers, detail rows."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Column headers, tabs, summary labels, metadata."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Document, dialog and explanatory copy."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Process commands and the process table."
+      }
+    },
+    "shadows": [
+      {
+        "name": "flap-inset",
+        "value": "inset 0 1px 0 rgb(255 255 255 / .1), inset 0 -1px 0 #000, inset 0 7px 10px rgb(0 0 0 / .26), inset 0 -7px 10px rgb(255 255 255 / .02)",
+        "purpose": "Every flap cell reads as an inset two-leaf module."
+      },
+      {
+        "name": "case-seam",
+        "value": "inset 0 0 0 1px #0b0c0d, inset 0 1px 0 rgb(255 255 255 / .06)",
+        "purpose": "Inner dark seam of the beveled steel case."
+      },
+      {
+        "name": "dialog-lift",
+        "value": "0 30px 90px #000",
+        "purpose": "The login dialog above the board."
+      },
+      {
+        "name": "toast-lift",
+        "value": "0 14px 40px rgb(0 0 0 / .55)",
+        "purpose": "The transient status message."
+      }
+    ],
+    "motion": [
+      {
+        "name": "flap-turn",
+        "value": "180ms cubic-bezier(.4, 0, .2, 1)",
+        "purpose": "A changed value on the focused row or selected GPU."
+      },
+      {
+        "name": "view-in",
+        "value": "160ms cubic-bezier(.23, 1, .32, 1)",
+        "purpose": "View switch; skipped for keyboard navigation and reduced motion."
+      },
+      {
+        "name": "state-hover",
+        "value": "140ms ease",
+        "purpose": "Border and text colour on pointer hover."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "board-tight",
+        "value": "1180px"
+      },
+      {
+        "name": "stacked-board",
+        "value": "940px"
+      },
+      {
+        "name": "phone",
+        "value": "640px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled amber action, used for login.",
+      "html": "<button class=\"ds-btn-primary\">登录</button>",
+      "css": ".ds-btn-primary{background:var(--amber);color:var(--void);border:1px solid var(--amber);border-radius:0;padding:9px 14px;font-family:var(--display);font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:filter 140ms ease,transform 120ms cubic-bezier(.23,1,.32,1)}.ds-btn-primary:hover{filter:brightness(1.08)}.ds-btn-primary:active{transform:scale(.98)}.ds-btn-primary:focus-visible{outline:2px solid var(--amber);outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Hairline control for refresh and account actions.",
+      "html": "<button class=\"ds-btn-secondary\">刷新 <kbd>R</kbd></button>",
+      "css": ".ds-btn-secondary{background:#1d1f21;color:var(--muted);border:1px solid var(--line);border-radius:0;padding:7px 10px;font-family:var(--display);font-size:11px;letter-spacing:.08em;cursor:pointer;transition:border-color 140ms ease,color 140ms ease,background 140ms ease,transform 120ms cubic-bezier(.23,1,.32,1)}.ds-btn-secondary:hover{border-color:var(--steel);color:var(--ink);background:#222528}.ds-btn-secondary:active{transform:scale(.96)}.ds-btn-secondary kbd{border:1px solid var(--line);padding:2px 4px;color:var(--dim);font-family:var(--mono);font-size:9px}"
+    },
+    {
+      "name": "View Tabs",
+      "kind": "nav",
+      "refersTo": "tab",
+      "description": "Two text tabs with keycap hints and a 2px amber underline.",
+      "html": "<nav class=\"ds-tabs\"><button class=\"ds-tab is-active\">总览 <kbd>1</kbd></button><button class=\"ds-tab\">趋势 <kbd>2</kbd></button></nav>",
+      "css": ".ds-tabs{display:flex;gap:2px;background:var(--frame);border-bottom:1px solid var(--line);font-family:var(--display)}.ds-tab{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 16px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font-size:11px;letter-spacing:.12em;cursor:pointer}.ds-tab:hover{color:var(--ink);background:#1d1f21}.ds-tab.is-active{color:var(--ink);border-bottom-color:var(--amber)}.ds-tab kbd{padding:2px 4px;border:1px solid var(--line);color:var(--dim);font-family:var(--mono);font-size:10px}.ds-tab.is-active kbd{border-color:#4a3d1e;color:var(--amber)}"
+    },
+    {
+      "name": "Flap Cell",
+      "kind": "card",
+      "refersTo": "flap",
+      "description": "The signature split-flap data cell: two leaves, a hinge seam, tabular condensed numerals.",
+      "html": "<div class=\"ds-flaps\"><span class=\"ds-flap\">12%</span><span class=\"ds-flap ds-flap--hot\">98%</span><span class=\"ds-flap ds-flap--critical\">95°</span><span class=\"ds-flap ds-flap--selected\">64%</span></div>",
+      "css": ".ds-flaps{display:flex;gap:6px;padding:12px;background:var(--panel)}.ds-flap{position:relative;display:inline-grid;place-items:center;height:34px;min-width:48px;overflow:hidden;border:1px solid #2a2d2f;border-radius:0;background:linear-gradient(180deg,#17191b 0%,#101213 47%,#0b0c0d 50%,#141618 100%);box-shadow:inset 0 1px 0 rgb(255 255 255 / .1),inset 0 -1px 0 #000,inset 0 7px 10px rgb(0 0 0 / .26),inset 0 -7px 10px rgb(255 255 255 / .02);color:var(--ink);font-family:var(--display);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.02em}.ds-flap::after{content:\"\";position:absolute;left:0;right:0;top:50%;height:2px;background:linear-gradient(180deg,#000 0 50%,#3a3e41 50% 100%);opacity:.9;pointer-events:none}.ds-flap--hot{color:var(--amber)}.ds-flap--critical{color:var(--red)}.ds-flap--selected{border-color:var(--amber)}"
+    },
+    {
+      "name": "Summary Cell",
+      "kind": "card",
+      "refersTo": "summary-cell",
+      "description": "One of four equal measurement cells; label, display value, side note.",
+      "html": "<div class=\"ds-sum\"><span class=\"ds-sum-label\">GPU 忙碌</span><span class=\"ds-sum-value\">22<small> / 40</small></span><span class=\"ds-sum-side\">55% 占用</span></div>",
+      "css": ".ds-sum{display:flex;flex-direction:column;gap:3px;min-width:180px;padding:9px 14px;background:var(--frame);border:1px solid var(--line);border-radius:0}.ds-sum-label{color:var(--dim);font-family:var(--display);font-size:10px;letter-spacing:.12em;text-transform:uppercase}.ds-sum-value{color:var(--ink);font-family:var(--display);font-size:27px;font-weight:600;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}.ds-sum-value small{color:var(--dim);font-size:11px}.ds-sum-side{color:var(--dim);font-family:var(--display);font-size:10px}"
+    },
+    {
+      "name": "Selected Board Row",
+      "kind": "card",
+      "refersTo": "board-row",
+      "description": "A node row with one amber lamp, amber node name, and fixed data cells.",
+      "html": "<div class=\"ds-row is-selected\"><span class=\"ds-lamp\"></span><div class=\"ds-node\"><b>gpu-03</b><span>8 GPU · 192.168.0.13</span></div><span class=\"ds-status\">在线</span><span class=\"ds-flap\">64%</span><span class=\"ds-flap\">71%</span><span class=\"ds-flap\">94%</span><span class=\"ds-cell-note\">6.42<br><small>LOAD</small></span></div>",
+      "css": ".ds-row{display:flex;align-items:center;gap:10px;min-height:58px;padding:6px 12px;background:var(--panel);border-bottom:1px solid var(--line-soft);color:var(--ink);font-family:var(--display)}.ds-row.is-selected{background:#211f19;box-shadow:inset 0 1px 0 rgb(240 180 41 / .22),inset 0 -1px 0 rgb(240 180 41 / .22)}.ds-lamp{width:5px;height:5px;border-radius:50%;background:var(--amber);flex:none}.ds-node{display:flex;flex-direction:column;min-width:160px}.ds-node b{color:var(--amber);font-size:13px;font-weight:600}.ds-node span{color:var(--dim);font-size:10px}.ds-status{color:var(--green);font-size:10px;letter-spacing:.06em}.ds-row .ds-flap{height:33px;min-width:44px}.ds-cell-note{color:var(--muted);font-size:11px;line-height:1.3;text-align:right}.ds-cell-note small{color:var(--dim);font-size:9px;letter-spacing:.08em}"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Square dark field with a hairline and amber focus.",
+      "html": "<label class=\"ds-field\">用户名<input class=\"ds-input\" value=\"tianyy\"></label>",
+      "css": ".ds-field{display:grid;gap:5px;color:var(--dim);font-family:var(--display);font-size:11px;letter-spacing:.04em;text-transform:uppercase}.ds-input{width:100%;min-height:38px;padding:8px 10px;border:1px solid var(--line);border-radius:0;background:var(--cell);color:var(--ink);font-family:var(--display);font-size:12px;outline:none;transition:border-color 140ms ease,box-shadow 140ms ease}.ds-input:focus{border-color:var(--amber);box-shadow:0 0 0 2px rgb(240 180 41 / .12)}"
+    },
+    {
+      "name": "Status Lamp",
+      "kind": "chip",
+      "refersTo": "status-lamp",
+      "description": "A solid 6px state dot; no bloom.",
+      "html": "<div class=\"ds-lamps\"><span class=\"ds-slamp ds-slamp--online\"></span><span class=\"ds-slamp ds-slamp--warn\"></span><span class=\"ds-slamp ds-slamp--bad\"></span></div>",
+      "css": ".ds-lamps{display:flex;align-items:center;gap:14px;padding:12px;background:var(--panel)}.ds-slamp{display:inline-block;width:6px;height:6px;border-radius:50%}.ds-slamp--online{background:var(--green)}.ds-slamp--warn{background:var(--amber)}.ds-slamp--bad{background:var(--red)}"
+    },
+    {
+      "name": "Process Divider Entry",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Mobile process row: a divider list entry with the full command wrapped, never a nested card.",
+      "html": "<ul class=\"ds-process\"><li class=\"ds-entry\"><div class=\"ds-entry-meta\"><b>34192</b><span>liwei</span><span>SM 96%</span><span>显存 18.4G</span></div><p class=\"ds-entry-command\">python train.py --config configs/vit_b16.yaml --epochs 120</p></li></ul>",
+      "css": ".ds-process{list-style:none;margin:0;padding:0;background:var(--panel);font-family:var(--mono)}.ds-entry{padding:7px 2px;border-top:1px solid var(--line-soft)}.ds-entry:first-child{border-top:0}.ds-entry-meta{display:flex;flex-wrap:wrap;gap:3px 10px;color:var(--dim);font-size:10px;line-height:1.4}.ds-entry-meta b{color:var(--ink);font-weight:500}.ds-entry-command{margin:3px 0 0;color:var(--muted);font-size:11px;line-height:1.5;white-space:normal;overflow-wrap:anywhere}"
+    },
+    {
+      "name": "CPU Core Strip",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "A per-core snapshot at the foot of the process pane and under the trend legend: 32 or 64 square blocks with idle/busy/hot state.",
+      "html": "<div class=\"ds-cores\"><span class=\"ds-cores-label\">CPU 核心 · 32</span><div class=\"ds-core-strip\" role=\"img\" aria-label=\"每核 CPU 使用率\"><i class=\"ds-core\"></i><i class=\"ds-core is-busy\"></i><i class=\"ds-core is-hot\"></i><i class=\"ds-core is-busy\"></i><i class=\"ds-core\"></i><i class=\"ds-core is-busy\"></i><i class=\"ds-core is-busy\"></i><i class=\"ds-core is-hot\"></i></div><span class=\"ds-cores-note\">平均 26% · 最高 94%</span></div>",
+      "css": ".ds-cores{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding-top:7px;border-top:1px solid var(--line-soft);color:var(--dim);font-family:var(--display);font-size:10px;line-height:1.3}.ds-cores-label{flex:none;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}.ds-core-strip{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:2px}.ds-core{display:block;width:6px;height:12px;background:#24272a}.ds-core.is-busy{background:var(--muted)}.ds-core.is-hot{background:var(--amber)}.ds-cores-note{flex:none;white-space:nowrap}"
+    },
+    {
+      "name": "Trend Card",
+      "kind": "card",
+      "refersTo": null,
+      "description": "Square plot card with a solid utilization line, dashed memory, and a 9px axis.",
+      "html": "<figure class=\"ds-chart\"><figcaption><b>GPU 0</b><span>利用率 12% · 显存 15%</span></figcaption><svg viewBox=\"0 0 600 180\" preserveAspectRatio=\"none\"><path d=\"M10 120 C80 80 140 140 220 90 C300 45 380 120 460 70 C520 35 560 90 590 60\" fill=\"none\" stroke=\"#f0b429\" stroke-width=\"2\" vector-effect=\"non-scaling-stroke\"/><path d=\"M10 100 C90 70 160 110 230 84 C310 56 390 100 470 76 C530 60 570 82 590 70\" fill=\"none\" stroke=\"#8b9194\" stroke-width=\"1\" stroke-dasharray=\"3 3\" vector-effect=\"non-scaling-stroke\"/></svg></figure>",
+      "css": ".ds-chart{width:340px;margin:0;padding:9px 10px 6px;border:1px solid var(--line);border-radius:0;background:var(--panel);display:flex;flex-direction:column;gap:6px}.ds-chart figcaption{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-family:var(--display);font-size:11px;letter-spacing:.06em;text-transform:uppercase}.ds-chart figcaption span{color:var(--dim);font-size:10px;text-transform:none;letter-spacing:0}.ds-chart svg{width:100%;height:140px;display:block;background:repeating-linear-gradient(0deg,transparent 0 34px,var(--line) 34px 35px)}"
+    },
+    {
+      "name": "Pending Node Row",
+      "kind": "card",
+      "refersTo": null,
+      "description": "A quiet receipt for a server that is installing or has not reported yet: same board columns, dim lamp, dashed values, one inline remove action.",
+      "html": "<div class=\"ds-pending\"><span class=\"ds-pending-lamp\"></span><div class=\"ds-pending-id\"><b>gpu-09</b><span>gpu@192.168.0.99:22 · 等待 Agent 上报</span></div><span class=\"ds-pending-status\">待接入</span><span class=\"ds-pending-value\">—</span><span class=\"ds-pending-value\">—</span><div class=\"ds-pending-note\"><span>Agent 启动后自动出现在这里</span><button class=\"ds-pending-remove\">移除</button></div></div>",
+      "css": ".ds-pending{display:grid;grid-template-columns:14px minmax(0,1fr) 86px 82px 82px;align-items:center;gap:6px;min-height:58px;padding:6px 12px;background:#101214;border-top:1px solid #212427;border-bottom:1px solid #212427;color:#8b9194;font-family:var(--display)}.ds-pending-lamp{width:5px;height:5px;border-radius:50%;background:#8b9194}.ds-pending-id{min-width:0}.ds-pending-id b{display:block;color:#a7aca9;font:600 13px/1.3 var(--mono)}.ds-pending-id span{display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:10px/1.3 var(--mono)}.ds-pending-status{font:10px/1 var(--mono);letter-spacing:.06em}.ds-pending-value{font:600 14px/1 var(--display);text-align:center;opacity:.75}.ds-pending-note{grid-column:span 8;display:flex;align-items:center;justify-content:space-between;gap:10px;font:10px/1.4 var(--display)}.ds-pending-remove{min-height:26px;padding:4px 8px;border:1px solid #2c2f31;border-radius:0;background:#17191b;color:#8b9194;font:9px/1 var(--display);letter-spacing:.08em;cursor:pointer}.ds-pending-remove:hover{border-color:#3a3d40;color:#f2efe6}"
+    },
+    {
+      "name": "Add Server Dialog",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "The server onboarding form: a 560px square steel dialog with a two-column field grid, an HTTP warning, and an amber install action.",
+      "html": "<dialog class=\"ds-onboard\" open><form class=\"ds-onboard-form\"><div class=\"ds-onboard-head\"><div><h2>添加服务器</h2><p>通过 SSH 登录目标机器，自动安装并启动 Agent。</p></div><button class=\"ds-onboard-close\" type=\"button\">×</button></div><div class=\"ds-onboard-grid\"><label>SSH 用户名<input value=\"gpu\"></label><label>IP / 主机名<input value=\"192.168.0.20\"></label><label class=\"ds-full\">SSH 密码<input type=\"password\" value=\"secret\"></label><label>SSH 端口<input value=\"22\"></label><label>节点 ID（可选）<input placeholder=\"留空则用目标主机名\"></label><label class=\"ds-full\">Server gRPC 地址<input value=\"192.168.10.100:10203\"></label></div><p class=\"ds-onboard-note\">密码只用于本次安装，不保存。</p><p class=\"ds-onboard-warn\">只在可信内网使用；当前 Web 连接是 HTTP。</p><div class=\"ds-onboard-actions\"><button class=\"ds-onboard-cancel\" type=\"button\">取消</button><button class=\"ds-onboard-submit\" type=\"submit\">登录并安装</button></div></form></dialog>",
+      "css": ".ds-onboard{width:min(560px,calc(100vw - 24px));padding:0;border:1px solid #3a3d40;border-radius:0;background:#17191b;color:#f2efe6;box-shadow:0 30px 90px #000}.ds-onboard-form{padding:18px}.ds-onboard-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:12px}.ds-onboard-head h2{margin:0;font:600 17px/1.2 var(--display)}.ds-onboard-head p{margin:5px 0 0;color:#8b9194;font:12px/1.6 var(--mono)}.ds-onboard-close{width:30px;min-height:30px;border:1px solid #2c2f31;border-radius:0;background:#1d1f21;color:#a7aca9;cursor:pointer}.ds-onboard-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px}.ds-onboard-grid label{display:grid;gap:5px;margin-top:10px;color:#8b9194;font:11px/1.4 var(--display);letter-spacing:.04em;text-transform:uppercase}.ds-onboard-grid .ds-full{grid-column:1/-1}.ds-onboard-grid input{min-height:38px;padding:8px 10px;border:1px solid #2c2f31;border-radius:0;background:#0f1011;color:#f2efe6;font:12px/1.3 var(--display);outline:none}.ds-onboard-grid input:focus{border-color:#f0b429;box-shadow:0 0 0 2px rgb(240 180 41 / .12)}.ds-onboard-note{margin:12px 0 0;color:#8b9194;font:11px/1.6 var(--display)}.ds-onboard-warn{margin:6px 0 0;color:#f0b429;font:11px/1.6 var(--display)}.ds-onboard-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}.ds-onboard-cancel,.ds-onboard-submit{min-height:38px;padding:9px 14px;border-radius:0;font:600 11px/1 var(--display);letter-spacing:.12em;text-transform:uppercase;cursor:pointer}.ds-onboard-cancel{border:1px solid #2c2f31;background:#1d1f21;color:#a7aca9}.ds-onboard-submit{min-width:128px;border:1px solid #f0b429;background:#f0b429;color:#0d0e0f}@media(max-width:640px){.ds-onboard-grid{grid-template-columns:1fr}.ds-onboard-grid .ds-full{grid-column:auto}.ds-onboard-actions{flex-direction:column-reverse}.ds-onboard-cancel,.ds-onboard-submit{width:100%}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Concourse Board",
+    "overview": "ClusterScope is a live departure board for a GPU cluster, not a dashboard of cards. Every node is a fixed row, every GPU a fixed cell, and every value changes in place. The page sits inside a beveled steel case; the data is printed on matte flaps in condensed ivory type; a single amber lamp marks the row you are reading. The world is a rail concourse status board seen from a working desk, not a control-room fantasy.\n\nDensity is the product. The board is designed so a lab member can read cluster health, GPU occupancy, temperature, and who owns a card in one gaze, then open a node's detail without losing column positions. The trend view is the same board language applied to plot cards: solid for utilization, dashed for memory, fixed cells, no floating chrome.\n\nThe system refuses the rounded card grid with a cyan glow, the hero-metric strip, and the \"control panel\" costume. It also refuses animated values on every refresh: the flip is a focused, rare signal, not a decorative loop. Data that does not move does not animate.",
+    "keyCharacteristics": [
+      "Fixed 14-column board with 8 GPU cells per node.",
+      "Near-black field, ivory condensed data, amber selection, state-only green/red.",
+      "Steel case with corner fasteners; inset flap depth and a 2px hinge seam.",
+      "One authored motion: a 180ms flap turn on the focused row and selected GPU.",
+      "A per-core CPU strip at the foot of the process pane, repeated under the trend legend.",
+      "Square corners and hairlines; circles only for lamps and fasteners."
+    ],
+    "rules": [
+      {
+        "name": "The One Lamp Rule",
+        "body": "Selection is a single amber row lamp, an amber node name, and at most a 1px amber border on the selected GPU cell. No second glow, no halo, no second accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The State-Only Colour Rule",
+        "body": "Green, amber, and red only carry online, attention, and offline/critical meaning. They never become a decorative series.",
+        "section": "colors"
+      },
+      {
+        "name": "The Near-Black Rule",
+        "body": "The ground runs #0d0e0f to #17191b. Do not drift to blue-slate or warm cream; the board is neutral charcoal with a bevel, not a tech tint.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flap Face Rule",
+        "body": "All Latin and digits on the board use Barlow Condensed with tnum; the process table and command strings use mono. A system display face is a fallback only for scripts the condensed face does not cover.",
+        "section": "typography"
+      },
+      {
+        "name": "The Chinese Fallthrough Rule",
+        "body": "Never fake condensed Chinese. Set the CJK stack after the Latin face and let the browser fall through; the label keeps its weight and tracking.",
+        "section": "typography"
+      },
+      {
+        "name": "The Board-in-a-Case Rule",
+        "body": "The steel case and inset flap are the depth system. A soft floating card in the middle of the board is a different world.",
+        "section": "elevation"
+      },
+      {
+        "name": "The No-Halo Rule",
+        "body": "A selected cell is a 1px amber border, not a zero-offset glow. A state lamp is a solid dot, not a bloom.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Square Rule",
+        "body": "If a corner needs a radius to look friendly, it is the wrong container for this world.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do keep every column fixed and every value in place; update the cell, never reflow the board.",
+      "Do use amber for one selected row, one selected GPU, and state; keep the rest charcoal and ivory.",
+      "Do keep the board inside the steel case and the flap cells inset; the material is the identity.",
+      "Do set Latin and digits in Barlow Condensed with tnum; let Chinese fall through to the CJK face.",
+      "Do reserve the flip for the focused row and selected GPU; respect prefers-reduced-motion.",
+      "Do use divider lists for mobile process rows and wrap the full command."
+    ],
+    "donts": [
+      "Don't turn the board into a rounded card grid with a cyan accent.",
+      "Don't add a zero-offset glow to a lamp, a selected cell, or a button.",
+      "Don't animate every value on a 3-second refresh; the board would become noise.",
+      "Don't use a system display face for the board's Latin lettering; the condensed signage face is the voice.",
+      "Don't nest cards inside the detail pane; use one pane and divider rows.",
+      "Don't use a hero-metric strip, a kicker above a heading, gradient text, or a decorative side stripe."
+    ]
+  }
+}

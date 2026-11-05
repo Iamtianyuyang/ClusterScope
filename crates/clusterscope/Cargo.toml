@@ -1,0 +1,16 @@
+[package]
+name = "clusterscope"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "clusterscope"
+path = "src/main.rs"
+
+[dependencies]
+agent = { path = "../agent" }
+server = { path = "../server" }
+anyhow.workspace = true
+clap.workspace = true
+tokio.workspace = true

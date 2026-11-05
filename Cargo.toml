@@ -7,6 +7,7 @@ members = [
     "crates/agent",
     "crates/server",
     "crates/scheduler",
+    "crates/clusterscope",
 ]
 
 [workspace.package]

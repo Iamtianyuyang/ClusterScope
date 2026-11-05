@@ -16,7 +16,7 @@ use storage::user_queries::{
 use tokio::sync::{Mutex, MutexGuard};
 
 const DEFAULT_POSTGRES_URL: &str =
-    "postgresql://clusterscope:clusterscope@127.0.0.1:5432/clusterscope";
+    "postgresql://clusterscope:clusterscope@127.0.0.1:10204/clusterscope";
 
 const USER_REVOKE: &str = "m6-revoke";
 const USER_ONCE: &str = "m6-once";

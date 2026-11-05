@@ -1,11 +1,11 @@
 # ClusterScope Central Server configuration
 # Copy to /etc/clusterscope/server.yaml (or pass as argv[1]).
 
-grpc_addr: "0.0.0.0:50051"
-http_addr: "0.0.0.0:8080"
+grpc_addr: "0.0.0.0:10203"
+http_addr: "0.0.0.0:10202"
 # WebSocket is served on http_addr (same port as the REST API).
 
-postgres_url: "postgresql://clusterscope:clusterscope@localhost:5432/clusterscope"
+postgres_url: "postgresql://clusterscope:clusterscope@localhost:10204/clusterscope"
 # redis_url: "redis://localhost:6379"   # optional, currently unused
 
 jwt_secret: "change-me-to-a-long-random-string"

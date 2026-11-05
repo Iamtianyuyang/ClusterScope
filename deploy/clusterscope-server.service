@@ -7,17 +7,18 @@
 #
 # %h expands to the installing user's home directory; the server reads its
 # config (postgres_url, ports, jwt_secret) from %h/.config/clusterscope/server.yaml.
-# The optional system-wide variant (needs root) is deploy/server.service.
+# No system-wide variant is supported: no step needs root/sudo.
 #
-# Requires a running user manager (systemd --user) and, to survive logout,
-# logind linger for this user (`loginctl show-user $USER` / `Linger=yes`).
+# Requires a running user manager (systemd --user). To survive logout, enable
+# linger for this user when the system allows it (`loginctl enable-linger $USER`);
+# otherwise use a user crontab @reboot entry. Do not escalate to root.
 [Unit]
 Description=ClusterScope Central Server (user)
 After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/clusterscope-server %h/.config/clusterscope/server.yaml
+ExecStart=%h/.local/bin/clusterscope server %h/.config/clusterscope/server.yaml
 Restart=always
 RestartSec=5
 

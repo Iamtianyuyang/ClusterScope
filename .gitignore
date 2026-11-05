@@ -3,6 +3,7 @@ node_modules/
 *.log
 .DS_Store
 *.tar.gz
+dist/
 
 # Local agent configuration and installed skills
 .agents/

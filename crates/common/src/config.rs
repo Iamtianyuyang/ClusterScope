@@ -32,7 +32,7 @@ pub struct AgentConfig {
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
-            server_addr: "http://localhost:50051".to_string(),
+            server_addr: "http://localhost:10203".to_string(),
             node_id: None,
             node_id_file: dirs::config_dir()
                 .unwrap_or_else(|| PathBuf::from("/etc/clusterscope"))
@@ -43,7 +43,7 @@ impl Default for AgentConfig {
             reconnect_max_delay_secs: 60,
             log_dir: dirs::state_dir()
                 .unwrap_or_else(|| PathBuf::from("/var/log"))
-                .join("clusterscope-agent"),
+                .join("clusterscope"),
             log_level: "info".to_string(),
             node_labels: vec![],
             disk_mounts: vec!["/".to_string()],
@@ -121,11 +121,11 @@ impl ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            grpc_addr: "0.0.0.0:50051".to_string(),
-            http_addr: "0.0.0.0:8080".to_string(),
-            postgres_url: "postgresql://clusterscope:clusterscope@localhost:5432/clusterscope"
+            grpc_addr: "0.0.0.0:10203".to_string(),
+            http_addr: "0.0.0.0:10202".to_string(),
+            postgres_url: "postgresql://clusterscope:clusterscope@localhost:10204/clusterscope"
                 .to_string(),
-            redis_url: "redis://localhost:6379".to_string(),
+            redis_url: "redis://localhost:10206".to_string(),
             jwt_secret: "default-secret-change-me".to_string(),
             jwt_access_expiry_secs: 3600,
             jwt_refresh_expiry_secs: 604800,
@@ -142,7 +142,7 @@ impl Default for ServerConfig {
             tls_cert_path: None,
             tls_key_path: None,
             prometheus_enabled: false,
-            prometheus_addr: "0.0.0.0:9090".to_string(),
+            prometheus_addr: "0.0.0.0:10205".to_string(),
             default_admin_username: "admin".to_string(),
             default_admin_password: "admin".to_string(),
             auth_required: true,

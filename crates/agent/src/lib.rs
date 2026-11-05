@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::Args;
 use std::path::PathBuf;
 use tokio::signal;
 use tracing::{error, info, warn};
@@ -9,9 +9,8 @@ mod job_executor;
 mod metrics;
 mod node_identity;
 
-#[derive(Parser)]
-#[command(name = "clusterscope-agent", about = "ClusterScope GPU Node Agent")]
-struct Cli {
+#[derive(Args)]
+pub struct Cli {
     /// Config file. Omitted = `/etc/clusterscope/agent.yaml`, and the agent warns
     /// and keeps running with built-in defaults when that file is missing.
     /// A path given here explicitly must exist (a missing one is a hard error).
@@ -52,10 +51,7 @@ async fn connect_with_retry(
     }
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
-
+pub async fn run(cli: Cli) -> anyhow::Result<()> {
     // Initialize tracing first: config loading warns when the default config file
     // is missing (FIX-04) and that warning has to reach the user.
     tracing_subscriber::fmt()

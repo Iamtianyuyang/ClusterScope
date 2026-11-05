@@ -3,16 +3,17 @@ version: '3.8'
 services:
   postgres:
     image: postgres:16-alpine
+    command: ["-c", "port=10204"]
     environment:
       POSTGRES_DB: clusterscope
       POSTGRES_USER: clusterscope
       POSTGRES_PASSWORD: clusterscope
     ports:
-      - "5432:5432"
+      - "10204:10204"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U clusterscope"]
+      test: ["CMD-SHELL", "pg_isready -U clusterscope -p 10204"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -22,11 +23,12 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile.server
     ports:
-      - "8080:8080"
-      - "50051:50051"
+      - "10202:10202"
+      - "10203:10203"
+      - "10205:10205"
     environment:
       # The server reads these env vars (POSTGRES_URL / JWT_SECRET / ...)
-      POSTGRES_URL: postgresql://clusterscope:clusterscope@postgres:5432/clusterscope
+      POSTGRES_URL: postgresql://clusterscope:clusterscope@postgres:10204/clusterscope
       JWT_SECRET: clusterscope-secret-change-me
       AUTH_REQUIRED: "false"
       # Shared secret for agent <-> server gRPC. Change it and set the same

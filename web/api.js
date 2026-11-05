@@ -3,16 +3,16 @@ const REFRESH_KEY = 'cs_web_refresh';
 let refreshPromise = null;
 
 export class ApiError extends Error {
-  constructor(status) {
+  constructor(status, detail = '') {
     const messages = {
       400: '提交的内容有误，请检查后重试。',
       401: '登录已失效，请重新登录。',
-      403: '当前账号没有执行此操作的权限。',
-      404: '没有找到这项内容，它可能已被删除。',
+      403: '当前账号没有权限执行这个操作。',
+      404: '没有找到这项内容，可能已被删除。',
       409: '内容刚刚发生变化，请刷新后重试。',
-      429: '操作太频繁，请稍等片刻再试。',
+      429: '操作太频繁，请稍后再试。',
     };
-    super(messages[status] || `暂时无法连接服务（HTTP ${status}），请稍后重试。`);
+    super(detail || messages[status] || `暂时无法连接服务（HTTP ${status}），请稍后重试。`);
     this.status = status;
   }
 }
@@ -49,13 +49,22 @@ export async function request(path, options = {}, retry = true) {
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   let response;
   try { response = await fetch(path, { cache: 'no-store', ...options, headers }); }
-  catch { throw new Error('无法连接 Server，请检查网络或服务是否运行。'); }
+  catch { throw new Error('无法连接 Server，请检查网络连接和 Server 状态。'); }
   if (response.status === 401 && retry && sessionStorage.getItem(REFRESH_KEY)) {
     refreshPromise ||= refreshSession().finally(() => { refreshPromise = null; });
     await refreshPromise;
     return request(path, options, false);
   }
-  if (!response.ok) throw new ApiError(response.status);
+  if (!response.ok) {
+    let detail = '';
+    try {
+      const body = await response.json();
+      detail = body?.error || body?.message || '';
+    } catch {
+      /* Non-JSON error bodies keep the status-based message. */
+    }
+    throw new ApiError(response.status, detail);
+  }
   if (response.status === 204) return null;
   const text = await response.text();
   return text ? JSON.parse(text) : null;
